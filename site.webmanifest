@@ -1,0 +1,17 @@
+{
+  "name": "Hermest Board",
+  "short_name": "Hermest",
+  "description": "Interactive AI-agent board for learning videos, scripts, roadmaps, voiceover, and publish packs.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#05070d",
+  "theme_color": "#05070d",
+  "icons": [
+    {
+      "src": "/hermest-board.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

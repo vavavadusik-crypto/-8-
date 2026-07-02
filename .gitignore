@@ -1,0 +1,13 @@
+node_modules/
+dist/
+tmp/
+.env
+.env.*
+!.env.example
+npm-debug.log*
+.DS_Store
+*.webm
+*.mp4
+*.mov
+*.log
+.vercel

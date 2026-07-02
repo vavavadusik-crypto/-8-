@@ -1,1 +1,61 @@
-# -8-
+# Hermest Board
+
+Локальный интерактивный борд для записи обучающих видео про Hermest.
+
+Открытие:
+
+```bash
+xdg-open /home/architect/ai-dev-station/workspace/hermest-board/index.html
+```
+
+Локальный dev-сервер:
+
+```bash
+npm install
+npm run dev
+```
+
+Проверка перед деплоем:
+
+```bash
+npm run check
+```
+
+Возможности:
+
+- перетаскивание карточек;
+- изменение размера карточек;
+- прикрепление фото к каждой карточке;
+- редактирование текста прямо в карточке;
+- поворот карточек;
+- масштаб и панорамирование всей сцены;
+- связи между карточками;
+- удаление карточки прямо с карточки;
+- встроенные тематические визуалы для стартовых карточек;
+- прикрепление плана проекта и roadmap;
+- загрузка плана и roadmap из `.md`, `.txt` или `.json`;
+- сборка сценария из борда, плана и roadmap;
+- озвучка сценария голосом браузера;
+- авто-тур по карточкам;
+- запись WebM через выбор окна в Chrome;
+- подготовка publish pack для TikTok, YouTube, YouTube Shorts и Instagram Reels;
+- очередь агента после генерации видео: парсер, переводчик, медиа-поиск, медиа-генерация, проверка прав, публикация и отчёт;
+- экспорт публикационного пакета в JSON;
+- Vercel API skeleton: health, connector status, publish-pack validation;
+- public/free research API skeleton: Wikipedia, Crossref, arXiv, GitHub public search, optional OpenAlex;
+- per-user OAuth start skeleton for YouTube, TikTok, Instagram;
+- режим записи;
+- автосохранение в браузере;
+- экспорт и импорт JSON.
+
+Данные сохраняются в `localStorage` браузера. Для переноса используй кнопку экспорта JSON.
+
+Автопубликация требует подключённых аккаунтов и OAuth/API-доступов. Пока коннекторы не подключены, борд готовит структурированный пакет публикации и очередь действий агента.
+
+Документы:
+
+- `docs/DEPLOYMENT.md` - Vercel, Netlify, Docker, static hosting;
+- `docs/ARCHITECTURE.md` - текущая архитектура и backend boundary;
+- `docs/CONNECTORS.md` - что нужно для TikTok, YouTube, Shorts, Instagram;
+- `docs/PUBLIC_APIS.md` - публичные/free API и правила безопасности;
+- `docs/PRODUCT_READINESS.md` - что готово и что нужно до beta/launch.

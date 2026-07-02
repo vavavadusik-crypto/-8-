@@ -1,0 +1,2279 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hermest Board</title>
+  <meta name="description" content="Interactive AI-agent board for learning videos, scripts, roadmaps, voiceover, and publish packs.">
+  <meta name="theme-color" content="#05070d">
+  <link rel="icon" href="./hermest-board.svg" type="image/svg+xml">
+  <link rel="manifest" href="./site.webmanifest">
+  <style>
+    :root {
+      color-scheme: dark;
+      --board-w: 3000px;
+      --board-h: 1800px;
+      --bg: #05070d;
+      --grid: rgba(108, 231, 255, 0.08);
+      --panel: rgba(9, 14, 26, 0.86);
+      --panel-strong: rgba(11, 18, 33, 0.94);
+      --line: rgba(123, 220, 255, 0.22);
+      --text: #e9f7ff;
+      --muted: #8ea9ba;
+      --accent: #5eead4;
+      --accent-2: #f0abfc;
+      --warn: #facc15;
+      --danger: #fb7185;
+      --shadow: rgba(0, 0, 0, 0.42);
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button,
+    input,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      color: var(--text);
+      border: 1px solid var(--line);
+      background: rgba(8, 16, 31, 0.72);
+      min-width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-grid;
+      place-items: center;
+      transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+    }
+
+    button:hover {
+      border-color: rgba(94, 234, 212, 0.72);
+      background: rgba(20, 36, 58, 0.88);
+    }
+
+    button:active { transform: translateY(1px); }
+
+    .shell {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 25% 18%, rgba(94, 234, 212, 0.12), transparent 30%),
+        radial-gradient(circle at 78% 68%, rgba(240, 171, 252, 0.12), transparent 32%),
+        linear-gradient(180deg, #06101c, #03050b 58%, #020308);
+    }
+
+    .shell::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: linear-gradient(180deg, rgba(0,0,0,.95), rgba(0,0,0,.72));
+    }
+
+    .topbar {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      height: 54px;
+      z-index: 30;
+      display: grid;
+      grid-template-columns: minmax(170px, 260px) 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      box-shadow: 0 18px 44px var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      padding-left: 8px;
+      font-weight: 800;
+      letter-spacing: 0;
+      color: #dffcff;
+    }
+
+    .brand-mark {
+      width: 31px;
+      height: 31px;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      background:
+        linear-gradient(135deg, rgba(94,234,212,.28), rgba(240,171,252,.2)),
+        rgba(3, 9, 18, .9);
+      border: 1px solid rgba(94, 234, 212, .42);
+      color: var(--accent);
+      font-weight: 950;
+    }
+
+    .deck-title {
+      width: 100%;
+      min-width: 0;
+      height: 38px;
+      border-radius: 8px;
+      border: 1px solid rgba(123, 220, 255, .18);
+      outline: none;
+      color: var(--text);
+      background: rgba(3, 9, 18, .62);
+      padding: 0 12px;
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .toolbar button[data-active="true"] {
+      color: #031012;
+      background: linear-gradient(135deg, var(--accent), #93c5fd);
+      border-color: transparent;
+      font-weight: 900;
+    }
+
+    .board-wrap {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      cursor: grab;
+    }
+
+    .board-wrap.panning { cursor: grabbing; }
+
+    .board {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: var(--board-w);
+      height: var(--board-h);
+      transform-origin: 0 0;
+    }
+
+    body.touring .board {
+      transition: transform 620ms cubic-bezier(.2, .86, .22, 1);
+    }
+
+    .card {
+      position: absolute;
+      width: 320px;
+      min-width: 220px;
+      min-height: 230px;
+      border: 1px solid rgba(123, 220, 255, 0.24);
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(11, 25, 42, 0.9), rgba(5, 9, 18, 0.92)),
+        rgba(4, 9, 18, 0.94);
+      box-shadow: 0 20px 48px rgba(0, 0, 0, .45);
+      overflow: hidden;
+      transform-origin: 50% 50%;
+      touch-action: none;
+    }
+
+    .card.selected {
+      border-color: rgba(94, 234, 212, 0.86);
+      box-shadow:
+        0 0 0 1px rgba(94, 234, 212, 0.38),
+        0 24px 54px rgba(0, 0, 0, .52),
+        0 0 44px rgba(94, 234, 212, .12);
+    }
+
+    .card-head {
+      height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 9px 0 12px;
+      cursor: grab;
+      border-bottom: 1px solid rgba(123, 220, 255, .16);
+      background: rgba(3, 10, 20, .76);
+      user-select: none;
+    }
+
+    .card-head:active { cursor: grabbing; }
+
+    .card-kicker {
+      min-width: 0;
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 850;
+      text-transform: uppercase;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .card-tools {
+      display: flex;
+      gap: 5px;
+      flex: 0 0 auto;
+    }
+
+    .card-tools button {
+      width: 28px;
+      min-width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      font-size: 13px;
+      background: rgba(6, 16, 30, .68);
+    }
+
+    .card-tools button[data-act="delete"] {
+      color: #fecdd3;
+      border-color: rgba(251, 113, 133, .34);
+    }
+
+    .media {
+      position: relative;
+      height: 128px;
+      margin: 10px 10px 0;
+      border-radius: 7px;
+      overflow: hidden;
+      border: 1px solid rgba(123, 220, 255, .18);
+      background:
+        linear-gradient(135deg, rgba(94, 234, 212, .18), rgba(240, 171, 252, .12)),
+        radial-gradient(circle at 50% 20%, rgba(255,255,255,.12), transparent 36%),
+        rgba(5, 12, 22, .76);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+
+    .media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .media-placeholder {
+      color: rgba(233, 247, 255, .72);
+      font-size: 12px;
+      font-weight: 750;
+      display: grid;
+      place-items: center;
+      gap: 5px;
+      text-align: center;
+      padding: 10px;
+    }
+
+    .media-placeholder span:first-child {
+      font-size: 24px;
+      line-height: 1;
+      color: var(--accent);
+    }
+
+    .card-body {
+      padding: 11px 12px 15px;
+    }
+
+    .card-title {
+      outline: none;
+      font-size: 18px;
+      line-height: 1.16;
+      font-weight: 850;
+      color: #f6fbff;
+      min-height: 25px;
+      overflow-wrap: anywhere;
+    }
+
+    .card-text {
+      outline: none;
+      margin-top: 8px;
+      color: #b8d3e6;
+      font-size: 13px;
+      line-height: 1.42;
+      min-height: 52px;
+      overflow-wrap: anywhere;
+    }
+
+    .card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .tag {
+      border: 1px solid rgba(94, 234, 212, .28);
+      border-radius: 999px;
+      padding: 3px 8px;
+      color: #a7f3d0;
+      background: rgba(5, 25, 29, .46);
+      font-size: 11px;
+      font-weight: 750;
+    }
+
+    .resize-handle {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 26px;
+      height: 26px;
+      cursor: nwse-resize;
+      opacity: .72;
+      background:
+        linear-gradient(135deg, transparent 48%, rgba(94, 234, 212, .55) 49%, rgba(94, 234, 212, .55) 56%, transparent 57%),
+        linear-gradient(135deg, transparent 62%, rgba(94, 234, 212, .36) 63%, rgba(94, 234, 212, .36) 70%, transparent 71%);
+    }
+
+    .side-panel {
+      position: fixed;
+      right: 12px;
+      top: 78px;
+      width: 308px;
+      max-height: calc(100vh - 96px);
+      z-index: 25;
+      overflow: auto;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      box-shadow: 0 18px 44px var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+
+    .side-panel h2 {
+      margin: 0 0 10px;
+      font-size: 14px;
+      color: #dffcff;
+    }
+
+    .field {
+      margin: 12px 0;
+    }
+
+    .field label {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+      margin-bottom: 6px;
+    }
+
+    .field input[type="range"],
+    .field input[type="color"] {
+      width: 100%;
+    }
+
+    .field input[type="text"] {
+      width: 100%;
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid rgba(123, 220, 255, .18);
+      background: rgba(3, 9, 18, .62);
+      color: var(--text);
+      outline: none;
+      padding: 0 9px;
+    }
+
+    .field select {
+      width: 100%;
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid rgba(123, 220, 255, .18);
+      background: rgba(3, 9, 18, .82);
+      color: var(--text);
+      outline: none;
+      padding: 0 9px;
+    }
+
+    .field textarea {
+      width: 100%;
+      min-height: 96px;
+      resize: vertical;
+      border-radius: 8px;
+      border: 1px solid rgba(123, 220, 255, .18);
+      background: rgba(3, 9, 18, .62);
+      color: var(--text);
+      outline: none;
+      padding: 9px;
+      line-height: 1.42;
+      font-size: 12px;
+    }
+
+    .field textarea.script-output {
+      min-height: 154px;
+      color: #cfefff;
+    }
+
+    .panel-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .panel-row.two {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .panel-row.wide {
+      grid-template-columns: 1fr;
+    }
+
+    .check-grid {
+      display: grid;
+      gap: 7px;
+    }
+
+    .check-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      padding: 7px 9px;
+      border: 1px solid rgba(123, 220, 255, .16);
+      border-radius: 8px;
+      background: rgba(3, 9, 18, .5);
+      color: #cfefff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .check-item input {
+      accent-color: var(--accent);
+    }
+
+    .mini-note {
+      color: #7894a9;
+      font-size: 11px;
+      line-height: 1.35;
+      margin-top: 7px;
+    }
+
+    .panel-section {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(123, 220, 255, .14);
+    }
+
+    .panel-section h2 {
+      margin-bottom: 8px;
+    }
+
+    .hint {
+      color: #7894a9;
+      font-size: 12px;
+      line-height: 1.4;
+      border-top: 1px solid rgba(123, 220, 255, .14);
+      padding-top: 12px;
+      margin-top: 12px;
+    }
+
+    .status {
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      z-index: 34;
+      border: 1px solid rgba(123, 220, 255, .2);
+      border-radius: 999px;
+      padding: 7px 11px;
+      background: rgba(4, 10, 19, .76);
+      color: #8cc7d8;
+      font-size: 12px;
+      pointer-events: none;
+    }
+
+    .wire {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    .wire line {
+      stroke: rgba(94, 234, 212, .3);
+      stroke-width: 2;
+      stroke-dasharray: 9 9;
+    }
+
+    .hidden-input { display: none; }
+
+    body.recording .topbar,
+    body.recording .side-panel,
+    body.recording .status {
+      display: none;
+    }
+
+    body.recording .shell::before {
+      opacity: .58;
+    }
+
+    body.recording .card {
+      box-shadow: 0 28px 68px rgba(0,0,0,.58);
+    }
+
+    @media (max-width: 860px) {
+      .topbar {
+        grid-template-columns: 1fr auto;
+        height: auto;
+      }
+      .deck-title { grid-column: 1 / -1; }
+      .side-panel {
+        left: 12px;
+        right: 12px;
+        width: auto;
+        top: auto;
+        bottom: 12px;
+        max-height: 34vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="board-wrap" id="boardWrap">
+      <div class="board" id="board">
+        <svg class="wire" id="wire"></svg>
+      </div>
+    </section>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">H</div>
+        <span>Hermest Board</span>
+      </div>
+      <input class="deck-title" id="deckTitle" value="Hermest: оболочка над ИИ-агентами" aria-label="Название борда">
+      <nav class="toolbar" aria-label="Инструменты">
+        <button id="addCard" title="Добавить карточку">＋</button>
+        <button id="connectMode" title="Соединить выбранные карточки">⛓</button>
+        <button id="fitView" title="Показать все карточки">⌖</button>
+        <button id="togglePanel" title="Панель настроек">☰</button>
+        <button id="recordMode" title="Режим записи">◉</button>
+        <button id="exportJson" title="Экспорт JSON">⇩</button>
+        <button id="importJson" title="Импорт JSON">⇧</button>
+      </nav>
+    </header>
+
+    <aside class="side-panel" id="sidePanel">
+      <h2>Выбранный блок</h2>
+      <div class="field">
+        <label><span>Поворот</span><span id="rotateValue">0°</span></label>
+        <input id="rotateInput" type="range" min="-24" max="24" value="0">
+      </div>
+      <div class="field">
+        <label><span>Масштаб сцены</span><span id="zoomValue">100%</span></label>
+        <input id="zoomInput" type="range" min="45" max="160" value="100">
+      </div>
+      <div class="field">
+        <label><span>Тег</span></label>
+        <input id="tagInput" type="text" placeholder="agent wrapper, open layer">
+      </div>
+      <div class="field">
+        <label><span>Акцент</span></label>
+        <input id="colorInput" type="color" value="#5eead4">
+      </div>
+      <div class="panel-row">
+        <button id="bringFront" title="Наверх">⇧</button>
+        <button id="duplicateCard" title="Дублировать">⧉</button>
+        <button id="deleteCard" title="Удалить">×</button>
+      </div>
+      <div class="hint">
+        Перетаскивай блок за верхнюю полосу. Фото добавляется кликом по верхней зоне карточки. Пустое поле сцены можно двигать мышкой. Колесо мыши меняет масштаб.
+      </div>
+      <section class="panel-section">
+        <h2>План / Roadmap / Видео</h2>
+        <div class="field">
+          <label><span>План проекта</span></label>
+          <textarea id="planInput" placeholder="Вставь сюда план или загрузи .md/.txt файл"></textarea>
+        </div>
+        <div class="panel-row two">
+          <button id="loadPlanFile" title="Прицепить файл плана">План</button>
+          <button id="loadRoadmapFile" title="Прицепить файл roadmap">Roadmap</button>
+        </div>
+        <div class="field">
+          <label><span>Roadmap</span></label>
+          <textarea id="roadmapInput" placeholder="Этапы, сроки, MVP, что делать дальше"></textarea>
+        </div>
+        <div class="panel-row two">
+          <button id="buildScript" title="Собрать сценарий из борда">Сценарий</button>
+          <button id="speakScript" title="Озвучить сценарий">Озвучить</button>
+        </div>
+        <div class="panel-row two">
+          <button id="playTour" title="Авто-показ карточек с озвучкой">Тур</button>
+          <button id="stopPlayback" title="Остановить озвучку и тур">Стоп</button>
+        </div>
+        <div class="panel-row wide">
+          <button id="recordVideo" title="Записать WebM через выбор окна Chrome">Записать WebM</button>
+        </div>
+        <div class="field">
+          <label><span>Сценарий озвучки</span></label>
+          <textarea id="scriptOutput" class="script-output" placeholder="Здесь появится текст для озвучки и видео"></textarea>
+        </div>
+        <div class="panel-section">
+          <h2>Площадки и агент</h2>
+          <div class="field">
+            <label><span>Публиковать на</span></label>
+            <div class="check-grid" id="platformChecks">
+              <label class="check-item"><input type="checkbox" value="tiktok"> TikTok</label>
+              <label class="check-item"><input type="checkbox" value="youtube_video"> YouTube видео</label>
+              <label class="check-item"><input type="checkbox" value="youtube_shorts"> YouTube Shorts</label>
+              <label class="check-item"><input type="checkbox" value="instagram_reels"> Instagram Reels</label>
+            </div>
+            <div class="mini-note">Автопубликация включится после подключения OAuth/API. Сейчас борд готовит пакет и очередь действий.</div>
+          </div>
+          <div class="field">
+            <label><span>Языки перевода</span></label>
+            <input id="languageInput" type="text" placeholder="ru, en, de, uk, es">
+          </div>
+          <div class="field">
+            <label><span>Запрос для public parser</span></label>
+            <input id="researchQueryInput" type="text" placeholder="Hermest AI agents, open source automation">
+          </div>
+          <div class="field">
+            <label><span>Инструменты агента</span></label>
+            <div class="check-grid" id="toolChecks">
+              <label class="check-item"><input type="checkbox" value="parser"> Парсер источников</label>
+              <label class="check-item"><input type="checkbox" value="translator"> Переводчик</label>
+              <label class="check-item"><input type="checkbox" value="web_media"> Фото/видео из интернета</label>
+              <label class="check-item"><input type="checkbox" value="generated_media"> Генерация фото/видео</label>
+              <label class="check-item"><input type="checkbox" value="rights_check"> Проверка прав и источников</label>
+              <label class="check-item"><input type="checkbox" value="scheduler"> Очередь публикаций</label>
+            </div>
+          </div>
+          <div class="field">
+            <label><span>Media brief</span></label>
+            <textarea id="mediaBriefInput" placeholder="Что агент должен найти или сгенерировать: стиль, кадры, референсы, ограничения"></textarea>
+          </div>
+          <div class="panel-row two">
+            <button id="buildMediaBrief" title="Собрать ТЗ на медиа">Медиа ТЗ</button>
+            <button id="buildTranslationPack" title="Собрать задачу перевода">Перевод</button>
+          </div>
+          <div class="panel-row two">
+            <button id="runResearchSearch" title="Искать через публичные web API">Public search</button>
+            <button id="showConnectorGuide" title="Показать как пользователю подключить аккаунты">Аккаунты</button>
+          </div>
+          <div class="panel-row two">
+            <button id="buildPublishPack" title="Собрать пакет публикации">Пакет</button>
+            <button id="downloadPublishPack" title="Скачать пакет публикации JSON">JSON</button>
+          </div>
+          <div class="field">
+            <label><span>Пакет публикации / очередь агента</span></label>
+            <textarea id="publishOutput" class="script-output" placeholder="Здесь появятся заголовки, описания, хэштеги, языки, площадки, медиа-задачи и очередь действий"></textarea>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <div class="status" id="status">Автосохранение включено</div>
+    <input class="hidden-input" id="imageInput" type="file" accept="image/*">
+    <input class="hidden-input" id="jsonInput" type="file" accept="application/json,.json">
+    <input class="hidden-input" id="planFileInput" type="file" accept=".md,.txt,.json,text/markdown,text/plain,application/json">
+    <input class="hidden-input" id="roadmapFileInput" type="file" accept=".md,.txt,.json,text/markdown,text/plain,application/json">
+  </main>
+
+  <script>
+    const STORAGE_KEY = "hermest-board:v1";
+    const CONTENT_VERSION = 4;
+    const BOARD_WIDTH = 3000;
+    const BOARD_HEIGHT = 1800;
+    const board = document.getElementById("board");
+    const boardWrap = document.getElementById("boardWrap");
+    const wire = document.getElementById("wire");
+    const deckTitle = document.getElementById("deckTitle");
+    const imageInput = document.getElementById("imageInput");
+    const jsonInput = document.getElementById("jsonInput");
+    const sidePanel = document.getElementById("sidePanel");
+    const statusEl = document.getElementById("status");
+    const rotateInput = document.getElementById("rotateInput");
+    const rotateValue = document.getElementById("rotateValue");
+    const zoomInput = document.getElementById("zoomInput");
+    const zoomValue = document.getElementById("zoomValue");
+    const tagInput = document.getElementById("tagInput");
+    const colorInput = document.getElementById("colorInput");
+    const planInput = document.getElementById("planInput");
+    const roadmapInput = document.getElementById("roadmapInput");
+    const scriptOutput = document.getElementById("scriptOutput");
+    const planFileInput = document.getElementById("planFileInput");
+    const roadmapFileInput = document.getElementById("roadmapFileInput");
+    const platformChecks = document.getElementById("platformChecks");
+    const toolChecks = document.getElementById("toolChecks");
+    const languageInput = document.getElementById("languageInput");
+    const mediaBriefInput = document.getElementById("mediaBriefInput");
+    const publishOutput = document.getElementById("publishOutput");
+    const researchQueryInput = document.getElementById("researchQueryInput");
+
+    const state = loadState();
+    let selectedId = state.cards[0]?.id || null;
+    let zCounter = Math.max(...state.cards.map(c => c.z || 1), 10);
+    let mediaTargetId = null;
+    let connectMode = false;
+    let connectFirst = null;
+    let tourAbort = false;
+    let activeRecorder = null;
+    let activeStream = null;
+    let drag = null;
+    let raf = null;
+
+    function starterState() {
+      return {
+        schemaVersion: CONTENT_VERSION,
+        title: "Hermest: оболочка над ИИ-агентами",
+        view: { x: -120, y: -120, zoom: 1 },
+        plan: [
+          "1. Объяснить проблему: один чат быстро превращается в хаос, если в нем смешаны роли, память, инструменты и задачи.",
+          "2. Показать Hermest как оболочку: один управляемый слой над агентами, файлами, API, памятью и логами.",
+          "3. Разложить архитектуру по карточкам: вход пользователя, ядро Hermest, маршрутизатор, агенты, инструменты, память, контроль, безопасность, результат.",
+          "4. В конце показать, как из борда получается сценарий, озвучка, видео и roadmap продукта."
+        ].join("\n"),
+        roadmap: [
+          "MVP: интерактивный борд, карточки, фото, связи, план, roadmap, сценарий и озвучка.",
+          "Следующий шаг: подключить локальную память, Graphify, шаблоны ролей агентов и импорт материалов.",
+          "Дальше: автосборка видео из борда, планов, найденных материалов и озвучки.",
+          "Цель: инструмент, который помогает быстро превращать знания и разработки в обучающий контент и продукт."
+        ].join("\n"),
+        script: "",
+        publish: {
+          platforms: ["tiktok", "youtube_video", "youtube_shorts", "instagram_reels"],
+          tools: ["parser", "translator", "web_media", "generated_media", "rights_check", "scheduler"],
+          languages: "ru, en, de",
+          mediaBrief: "Собрать или сгенерировать вертикальные 9:16 фрагменты: нейросеть как рабочая среда, агентская маршрутизация, граф памяти, публикация контента. Стиль: техно-борд, киберпанель, чистая обучающая подача.",
+          researchQuery: "Hermest AI agents automation knowledge graph content publishing",
+          packageText: ""
+        },
+        links: [
+          ["user", "hermest"],
+          ["hermest", "router"],
+          ["hermest", "agents"],
+          ["hermest", "openlayer"],
+          ["router", "tools"],
+          ["router", "agents"],
+          ["agents", "memory"],
+          ["memory", "logs"],
+          ["logs", "guardrails"],
+          ["openlayer", "tools"],
+          ["plan", "roadmap"],
+          ["roadmap", "workflow"],
+          ["workflow", "video"],
+          ["video", "result"],
+          ["video", "publish_agent"],
+          ["publish_agent", "parser"],
+          ["publish_agent", "translator"],
+          ["publish_agent", "media_generator"],
+          ["publish_agent", "platforms"],
+          ["platforms", "auto_publish"],
+          ["auto_publish", "business"],
+          ["result", "business"]
+        ],
+        cards: [
+          {
+            id: "user", x: 110, y: 150, w: 310, h: 318, z: 2, rot: -3, color: "#5eead4",
+            kicker: "идея",
+            title: "Пользователь",
+            text: "Ставит цель обычным языком: что объяснить, что собрать, что проверить, что снять на видео.",
+            tags: ["input", "story"],
+            image: visual("user", "USER INPUT", "цель, вопрос, контекст")
+          },
+          {
+            id: "hermest", x: 500, y: 125, w: 380, h: 350, z: 12, rot: 0, color: "#f0abfc",
+            kicker: "центр",
+            title: "Hermest как оболочка",
+            text: "Единый слой над ИИ-агентами: маршрутизация задач, роли, память, инструменты, права, логи и результат в одном управляемом контуре.",
+            tags: ["agent wrapper", "control"],
+            image: visual("core", "HERMEST CORE", "управляющий слой")
+          },
+          {
+            id: "router", x: 970, y: 145, w: 330, h: 318, z: 7, rot: 2, color: "#38bdf8",
+            kicker: "маршрутизация",
+            title: "Маршрутизатор задач",
+            text: "Разбирает запрос, выбирает нужного агента, модель, инструмент и формат результата. Так система работает предсказуемо.",
+            tags: ["routing", "models"],
+            image: visual("router", "TASK ROUTER", "выбор роли и инструмента")
+          },
+          {
+            id: "agents", x: 1385, y: 135, w: 330, h: 330, z: 4, rot: 4, color: "#93c5fd",
+            kicker: "агенты",
+            title: "ИИ-агенты",
+            text: "Каждый агент получает роль, контекст, инструменты и границы. Hermest держит их в системе, а не в хаотичном чате.",
+            tags: ["roles", "tools"],
+            image: visual("agents", "AI AGENTS", "команда ролей")
+          },
+          {
+            id: "tools", x: 1800, y: 140, w: 330, h: 330, z: 5, rot: -2, color: "#60a5fa",
+            kicker: "инструменты",
+            title: "Инструменты и API",
+            text: "Файлы, терминал, браузер, локальные сервисы, плагины и внешние API подключаются как управляемые способности.",
+            tags: ["api", "terminal"],
+            image: visual("tools", "TOOLS + API", "действия во внешнем мире")
+          },
+          {
+            id: "workflow", x: 120, y: 555, w: 330, h: 330, z: 1, rot: -4, color: "#fb7185",
+            kicker: "съёмка",
+            title: "Сценарий видео",
+            text: "Во время записи можно двигать блоки, показывать связи, приближать важное и постепенно раскрывать историю.",
+            tags: ["video", "board"],
+            image: visual("workflow", "VIDEO STORY", "объяснение через движение")
+          },
+          {
+            id: "memory", x: 525, y: 555, w: 330, h: 330, z: 3, rot: 3, color: "#a7f3d0",
+            kicker: "память",
+            title: "Память и навыки",
+            text: "Удачные решения превращаются в заметки, навыки, правила и повторяемые сценарии, чтобы не тратить токены заново.",
+            tags: ["memory", "skills"],
+            image: visual("memory", "MEMORY GRAPH", "знания и навыки")
+          },
+          {
+            id: "openlayer", x: 940, y: 550, w: 360, h: 338, z: 6, rot: -2, color: "#facc15",
+            kicker: "open layer",
+            title: "Hermest как OpenClove",
+            text: "Открытый слой, куда можно подключать плагины, локальные файлы, память, API, граф знаний и свои workflow.",
+            tags: ["open", "plugins"],
+            image: visual("open", "OPENCLOVE LAYER", "открытая оболочка")
+          },
+          {
+            id: "logs", x: 1370, y: 545, w: 330, h: 330, z: 8, rot: 2, color: "#c084fc",
+            kicker: "контроль",
+            title: "Логи и проверка",
+            text: "Каждое действие фиксируется: что сделано, почему, где результат, какие ошибки повторять нельзя.",
+            tags: ["logs", "audit"],
+            image: visual("logs", "TRACE LOGS", "проверяемость")
+          },
+          {
+            id: "guardrails", x: 1790, y: 545, w: 330, h: 330, z: 9, rot: -3, color: "#f97316",
+            kicker: "границы",
+            title: "Права и безопасность",
+            text: "Hermest должен понимать, что можно делать самому, где нужен контроль, какие действия опасны и что нельзя трогать.",
+            tags: ["permissions", "safety"],
+            image: visual("guard", "PERMISSION GATES", "границы действий")
+          },
+          {
+            id: "plan", x: 295, y: 975, w: 360, h: 330, z: 10, rot: 1, color: "#22c55e",
+            kicker: "план",
+            title: "План проекта",
+            text: "План прицеплен к борду: из него система понимает порядок объяснения, цель ролика и что нужно раскрыть подробно.",
+            tags: ["plan", "attached"],
+            image: visual("plan", "PROJECT PLAN", "структура объяснения")
+          },
+          {
+            id: "roadmap", x: 745, y: 970, w: 360, h: 330, z: 11, rot: -2, color: "#eab308",
+            kicker: "roadmap",
+            title: "Roadmap",
+            text: "Roadmap показывает этапы: MVP, подключение памяти, импорт материалов, генерация сценария, озвучка и видео.",
+            tags: ["mvp", "roadmap"],
+            image: visual("roadmap", "ROADMAP", "этапы продукта")
+          },
+          {
+            id: "video", x: 1190, y: 970, w: 360, h: 330, z: 13, rot: 2, color: "#f472b6",
+            kicker: "генератор",
+            title: "Озвучка и видео",
+            text: "Борд собирает сценарий из карточек, плана и roadmap, потом запускает авто-тур, озвучку и запись WebM.",
+            tags: ["voice", "webm"],
+            image: visual("voice", "VOICE + VIDEO", "авто-объяснение")
+          },
+          {
+            id: "result", x: 1635, y: 965, w: 340, h: 330, z: 14, rot: -1, color: "#2dd4bf",
+            kicker: "результат",
+            title: "Готовый продукт",
+            text: "На выходе получается не просто красивый борд, а производственная система: идея, знания, сценарий, видео и следующий шаг.",
+            tags: ["output", "product"],
+            image: visual("result", "FINAL OUTPUT", "контент и продукт")
+          },
+          {
+            id: "business", x: 2045, y: 965, w: 330, h: 330, z: 15, rot: 3, color: "#fda4af",
+            kicker: "монетизация",
+            title: "Работа и заработок",
+            text: "Цель системы - ускорять обучение, упаковку идей, демонстрации, поиск полезных инструментов и создание продаваемых материалов.",
+            tags: ["business", "content"],
+            image: visual("business", "VALUE LOOP", "знания в результат")
+          },
+          {
+            id: "publish_agent", x: 115, y: 1350, w: 350, h: 330, z: 16, rot: -2, color: "#67e8f9",
+            kicker: "агент",
+            title: "Агент публикации",
+            text: "Не останавливается на видео: собирает пакет, проверяет площадки, готовит версии и ведет очередь публикации.",
+            tags: ["publishing", "agent"],
+            image: visual("tools", "PUBLISH AGENT", "после генерации видео")
+          },
+          {
+            id: "parser", x: 545, y: 1355, w: 330, h: 330, z: 17, rot: 2, color: "#34d399",
+            kicker: "парсер",
+            title: "Парсер источников",
+            text: "Ищет материалы по теме, вытаскивает тезисы, ссылки, изображения, видео-референсы и складывает их в медиа-задачи.",
+            tags: ["parser", "sources"],
+            image: visual("logs", "SOURCE PARSER", "материалы и ссылки")
+          },
+          {
+            id: "translator", x: 950, y: 1350, w: 330, h: 330, z: 18, rot: -1, color: "#a78bfa",
+            kicker: "перевод",
+            title: "Переводчик",
+            text: "Готовит версии сценария, описаний, заголовков, субтитров и хэштегов под разные языки и аудитории.",
+            tags: ["translate", "localize"],
+            image: visual("open", "TRANSLATION", "мультиязычные версии")
+          },
+          {
+            id: "media_generator", x: 1355, y: 1355, w: 350, h: 330, z: 19, rot: 1, color: "#fb7185",
+            kicker: "медиа",
+            title: "Генерация контекстного видео",
+            text: "Создает или подбирает кадры под смысл: фон, b-roll, иллюстрации, вертикальные клипы, превью и обложки.",
+            tags: ["video gen", "assets"],
+            image: visual("voice", "MEDIA ENGINE", "контекстные кадры")
+          },
+          {
+            id: "platforms", x: 1805, y: 1350, w: 350, h: 330, z: 20, rot: -2, color: "#facc15",
+            kicker: "коннекторы",
+            title: "TikTok / YouTube / Instagram",
+            text: "Площадки подключаются через OAuth/API. До подключения борд готовит publish pack, после подключения агент сможет выкладывать сам.",
+            tags: ["tiktok", "youtube", "instagram"],
+            image: visual("roadmap", "PLATFORM CONNECTORS", "аккаунты и API")
+          },
+          {
+            id: "auto_publish", x: 2245, y: 1348, w: 350, h: 330, z: 21, rot: 2, color: "#2dd4bf",
+            kicker: "автопостинг",
+            title: "Автопубликация и отчёт",
+            text: "Агент публикует, сохраняет ссылки, статус, ошибки, метрики и задачу на следующий выпуск.",
+            tags: ["queue", "metrics"],
+            image: visual("result", "AUTO PUBLISH", "постинг и отчёт")
+          }
+        ]
+      };
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) return normalize(JSON.parse(raw));
+      } catch (_) {}
+      return starterState();
+    }
+
+    function normalize(input) {
+      const base = starterState();
+      const shouldUpgrade = Number(input.schemaVersion || 0) < CONTENT_VERSION;
+      const cards = Array.isArray(input.cards) && input.cards.length ? input.cards : [];
+      const knownCards = new Map(cards.map(card => [card.id, card]));
+      const mergedCards = cards.length ? [...cards] : [];
+      for (const baseCard of base.cards) {
+        const existing = knownCards.get(baseCard.id);
+        if (existing) {
+          if (!existing.image) existing.image = baseCard.image;
+          if (!existing.color) existing.color = baseCard.color;
+          if (!Array.isArray(existing.tags) || !existing.tags.length) existing.tags = baseCard.tags;
+        } else if (shouldUpgrade) {
+          mergedCards.push(JSON.parse(JSON.stringify(baseCard)));
+        }
+      }
+      const links = Array.isArray(input.links) ? [...input.links] : [];
+      if (shouldUpgrade) {
+        for (const baseLink of base.links) {
+          const exists = links.some(link => link[0] === baseLink[0] && link[1] === baseLink[1]);
+          if (!exists) links.push([...baseLink]);
+        }
+      }
+      return {
+        schemaVersion: CONTENT_VERSION,
+        title: input.title || base.title,
+        view: input.view || base.view,
+        plan: typeof input.plan === "string" && input.plan.trim() ? input.plan : base.plan,
+        roadmap: typeof input.roadmap === "string" && input.roadmap.trim() ? input.roadmap : base.roadmap,
+        script: typeof input.script === "string" ? input.script : base.script,
+        publish: normalizePublish(input.publish, base.publish),
+        links,
+        cards: mergedCards.length ? mergedCards : base.cards
+      };
+    }
+
+    function normalizePublish(input, fallback) {
+      const source = input && typeof input === "object" ? input : {};
+      return {
+        platforms: Array.isArray(source.platforms) ? source.platforms : fallback.platforms,
+        tools: Array.isArray(source.tools) ? source.tools : fallback.tools,
+        languages: typeof source.languages === "string" && source.languages.trim() ? source.languages : fallback.languages,
+        mediaBrief: typeof source.mediaBrief === "string" && source.mediaBrief.trim() ? source.mediaBrief : fallback.mediaBrief,
+        researchQuery: typeof source.researchQuery === "string" && source.researchQuery.trim() ? source.researchQuery : fallback.researchQuery,
+        packageText: typeof source.packageText === "string" ? source.packageText : fallback.packageText
+      };
+    }
+
+    function saveState(message = "Сохранено") {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        statusEl.textContent = message;
+      } catch (_) {
+        statusEl.textContent = "Слишком много данных: уменьши фото или сделай экспорт JSON";
+      }
+      clearTimeout(saveState.timer);
+      saveState.timer = setTimeout(() => statusEl.textContent = "Автосохранение включено", 1200);
+    }
+
+    function cardById(id) {
+      return state.cards.find(c => c.id === id);
+    }
+
+    function setSelected(id) {
+      selectedId = id;
+      const card = cardById(id);
+      document.querySelectorAll(".card").forEach(el => el.classList.toggle("selected", el.dataset.id === id));
+      if (card) {
+        rotateInput.value = card.rot || 0;
+        rotateValue.textContent = `${Math.round(card.rot || 0)}°`;
+        tagInput.value = (card.tags || []).join(", ");
+        colorInput.value = card.color || "#5eead4";
+      }
+    }
+
+    function render() {
+      deckTitle.value = state.title;
+      planInput.value = state.plan || "";
+      roadmapInput.value = state.roadmap || "";
+      scriptOutput.value = state.script || "";
+      languageInput.value = state.publish?.languages || "";
+      mediaBriefInput.value = state.publish?.mediaBrief || "";
+      publishOutput.value = state.publish?.packageText || "";
+      researchQueryInput.value = state.publish?.researchQuery || "";
+      syncChecks(platformChecks, state.publish?.platforms || []);
+      syncChecks(toolChecks, state.publish?.tools || []);
+      board.querySelectorAll(".card").forEach(el => el.remove());
+      for (const card of state.cards) {
+        board.appendChild(createCard(card));
+      }
+      applyView();
+      setSelected(selectedId);
+      drawLinks();
+    }
+
+    function createCard(card) {
+      const el = document.createElement("article");
+      el.className = "card";
+      el.dataset.id = card.id;
+      el.style.left = `${card.x}px`;
+      el.style.top = `${card.y}px`;
+      el.style.width = `${card.w}px`;
+      el.style.height = `${card.h}px`;
+      el.style.zIndex = card.z || 1;
+      el.style.transform = `rotate(${card.rot || 0}deg)`;
+      el.style.setProperty("--card-accent", card.color || "#5eead4");
+      el.innerHTML = `
+        <div class="card-head">
+          <div class="card-kicker" contenteditable="true" spellcheck="false"></div>
+          <div class="card-tools">
+            <button type="button" data-act="left" title="Повернуть влево">↺</button>
+            <button type="button" data-act="right" title="Повернуть вправо">↻</button>
+            <button type="button" data-act="photo" title="Фото">▧</button>
+            <button type="button" data-act="delete" title="Удалить карточку">×</button>
+          </div>
+        </div>
+        <div class="media" title="Добавить или заменить фото"></div>
+        <div class="card-body">
+          <div class="card-title" contenteditable="true" spellcheck="false"></div>
+          <div class="card-text" contenteditable="true" spellcheck="false"></div>
+          <div class="card-tags"></div>
+        </div>
+        <div class="resize-handle" title="Изменить размер"></div>
+      `;
+      const kicker = el.querySelector(".card-kicker");
+      const title = el.querySelector(".card-title");
+      const text = el.querySelector(".card-text");
+      const media = el.querySelector(".media");
+      const tags = el.querySelector(".card-tags");
+      kicker.textContent = card.kicker || "блок";
+      title.textContent = card.title || "Новый блок";
+      text.textContent = card.text || "Текст можно редактировать прямо здесь.";
+      media.innerHTML = card.image
+        ? `<img src="${card.image}" alt="">`
+        : `<div class="media-placeholder"><span>▧</span><span>добавить фото</span></div>`;
+      tags.innerHTML = (card.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join("");
+
+      el.addEventListener("pointerdown", event => {
+        if (event.target.closest("button") || event.target.isContentEditable || event.target.classList.contains("media")) return;
+        setSelected(card.id);
+        bringToFront(card.id);
+      });
+
+      el.querySelector(".card-head").addEventListener("pointerdown", event => {
+        if (event.target.closest("button") || event.target.isContentEditable) return;
+        startCardDrag(event, card.id);
+      });
+      el.querySelector(".resize-handle").addEventListener("pointerdown", event => startResize(event, card.id));
+      media.addEventListener("click", () => pickImage(card.id));
+
+      kicker.addEventListener("input", () => {
+        card.kicker = kicker.textContent.trim();
+        saveState();
+      });
+      title.addEventListener("input", () => {
+        card.title = title.textContent.trim();
+        saveState();
+      });
+      text.addEventListener("input", () => {
+        card.text = text.textContent.trim();
+        saveState();
+      });
+
+      el.addEventListener("click", event => {
+        const act = event.target.closest("button")?.dataset.act;
+        if (!act) return;
+        event.stopPropagation();
+        setSelected(card.id);
+        if (act === "left") rotateCard(card.id, -6);
+        if (act === "right") rotateCard(card.id, 6);
+        if (act === "photo") pickImage(card.id);
+        if (act === "delete") deleteCard(card.id);
+      });
+
+      return el;
+    }
+
+    function startCardDrag(event, id) {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      const card = cardById(id);
+      if (!card) return;
+      setSelected(id);
+      bringToFront(id);
+      drag = {
+        type: "card",
+        id,
+        sx: event.clientX,
+        sy: event.clientY,
+        x: card.x,
+        y: card.y
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+
+    function startResize(event, id) {
+      event.preventDefault();
+      event.stopPropagation();
+      const card = cardById(id);
+      if (!card) return;
+      setSelected(id);
+      drag = {
+        type: "resize",
+        id,
+        sx: event.clientX,
+        sy: event.clientY,
+        w: card.w,
+        h: card.h
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+
+    boardWrap.addEventListener("pointerdown", event => {
+      if (event.target !== boardWrap && event.target !== board) return;
+      drag = {
+        type: "pan",
+        sx: event.clientX,
+        sy: event.clientY,
+        x: state.view.x,
+        y: state.view.y
+      };
+      boardWrap.classList.add("panning");
+      boardWrap.setPointerCapture(event.pointerId);
+    });
+
+    window.addEventListener("pointermove", event => {
+      if (!drag) return;
+      if (drag.type === "card") {
+        const card = cardById(drag.id);
+        const dx = (event.clientX - drag.sx) / state.view.zoom;
+        const dy = (event.clientY - drag.sy) / state.view.zoom;
+        card.x = Math.round(drag.x + dx);
+        card.y = Math.round(drag.y + dy);
+        scheduleRenderCard(card);
+      }
+      if (drag.type === "resize") {
+        const card = cardById(drag.id);
+        const dx = (event.clientX - drag.sx) / state.view.zoom;
+        const dy = (event.clientY - drag.sy) / state.view.zoom;
+        card.w = Math.max(220, Math.round(drag.w + dx));
+        card.h = Math.max(230, Math.round(drag.h + dy));
+        scheduleRenderCard(card);
+      }
+      if (drag.type === "pan") {
+        state.view.x = Math.round(drag.x + event.clientX - drag.sx);
+        state.view.y = Math.round(drag.y + event.clientY - drag.sy);
+        applyView();
+      }
+    });
+
+    window.addEventListener("pointerup", () => {
+      if (!drag) return;
+      drag = null;
+      boardWrap.classList.remove("panning");
+      saveState();
+    });
+
+    function scheduleRenderCard(card) {
+      const el = board.querySelector(`.card[data-id="${card.id}"]`);
+      if (!el) return;
+      el.style.left = `${card.x}px`;
+      el.style.top = `${card.y}px`;
+      el.style.width = `${card.w}px`;
+      el.style.height = `${card.h}px`;
+      el.style.transform = `rotate(${card.rot || 0}deg)`;
+      drawLinks();
+    }
+
+    boardWrap.addEventListener("wheel", event => {
+      event.preventDefault();
+      const oldZoom = state.view.zoom;
+      const next = clamp(oldZoom * (event.deltaY < 0 ? 1.08 : 0.92), 0.45, 1.6);
+      const rect = boardWrap.getBoundingClientRect();
+      const mx = event.clientX - rect.left;
+      const my = event.clientY - rect.top;
+      state.view.x = mx - ((mx - state.view.x) / oldZoom) * next;
+      state.view.y = my - ((my - state.view.y) / oldZoom) * next;
+      state.view.zoom = next;
+      zoomInput.value = Math.round(next * 100);
+      zoomValue.textContent = `${Math.round(next * 100)}%`;
+      applyView();
+      saveState();
+    }, { passive: false });
+
+    function applyView() {
+      board.style.transform = `translate(${state.view.x}px, ${state.view.y}px) scale(${state.view.zoom})`;
+      zoomInput.value = Math.round(state.view.zoom * 100);
+      zoomValue.textContent = `${Math.round(state.view.zoom * 100)}%`;
+    }
+
+    function drawLinks() {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        wire.setAttribute("viewBox", `0 0 ${BOARD_WIDTH} ${BOARD_HEIGHT}`);
+        wire.innerHTML = "";
+        for (const [a, b] of state.links) {
+          const ca = cardById(a);
+          const cb = cardById(b);
+          if (!ca || !cb) continue;
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          line.setAttribute("x1", ca.x + ca.w / 2);
+          line.setAttribute("y1", ca.y + ca.h / 2);
+          line.setAttribute("x2", cb.x + cb.w / 2);
+          line.setAttribute("y2", cb.y + cb.h / 2);
+          wire.appendChild(line);
+        }
+      });
+    }
+
+    function bringToFront(id) {
+      const card = cardById(id);
+      if (!card) return;
+      card.z = ++zCounter;
+      const el = board.querySelector(`.card[data-id="${id}"]`);
+      if (el) el.style.zIndex = card.z;
+      saveState();
+    }
+
+    function rotateCard(id, delta) {
+      const card = cardById(id);
+      if (!card) return;
+      card.rot = clamp((card.rot || 0) + delta, -24, 24);
+      rotateInput.value = card.rot;
+      rotateValue.textContent = `${Math.round(card.rot)}°`;
+      scheduleRenderCard(card);
+      saveState();
+    }
+
+    function pickImage(id) {
+      mediaTargetId = id;
+      imageInput.value = "";
+      imageInput.click();
+    }
+
+    imageInput.addEventListener("change", () => {
+      const file = imageInput.files?.[0];
+      if (!file || !mediaTargetId) return;
+      statusEl.textContent = "Фото сжимается";
+      prepareImage(file).then(dataUrl => {
+        const card = cardById(mediaTargetId);
+        if (!card) return;
+        card.image = dataUrl;
+        render();
+        saveState("Фото добавлено");
+      }).catch(() => {
+        statusEl.textContent = "Фото не прочитано";
+      });
+    });
+
+    document.getElementById("addCard").addEventListener("click", () => {
+      const id = `card_${Date.now()}`;
+      const card = {
+        id,
+        x: Math.round((window.innerWidth / 2 - state.view.x) / state.view.zoom - 160),
+        y: Math.round((window.innerHeight / 2 - state.view.y) / state.view.zoom - 140),
+        w: 330,
+        h: 310,
+        z: ++zCounter,
+        rot: 0,
+        color: "#5eead4",
+        kicker: "новое",
+        title: "Новый блок",
+        text: "Впиши сюда тезис, который нужно показать в видео.",
+        tags: ["draft"],
+        image: ""
+      };
+      state.cards.push(card);
+      selectedId = id;
+      render();
+      saveState("Карточка добавлена");
+    });
+
+    document.getElementById("duplicateCard").addEventListener("click", () => {
+      const card = cardById(selectedId);
+      if (!card) return;
+      const copy = JSON.parse(JSON.stringify(card));
+      copy.id = `card_${Date.now()}`;
+      copy.x += 38;
+      copy.y += 38;
+      copy.z = ++zCounter;
+      copy.title = `${copy.title} копия`;
+      state.cards.push(copy);
+      selectedId = copy.id;
+      render();
+      saveState("Карточка скопирована");
+    });
+
+    function deleteCard(id = selectedId) {
+      if (!id) return;
+      const idx = state.cards.findIndex(c => c.id === id);
+      if (idx < 0) return;
+      state.cards.splice(idx, 1);
+      state.links = state.links.filter(([a, b]) => a !== id && b !== id);
+      selectedId = state.cards[0]?.id || null;
+      render();
+      saveState("Карточка удалена");
+    }
+
+    document.getElementById("deleteCard").addEventListener("click", () => deleteCard(selectedId));
+
+    document.getElementById("bringFront").addEventListener("click", () => bringToFront(selectedId));
+
+    document.getElementById("connectMode").addEventListener("click", event => {
+      connectMode = !connectMode;
+      connectFirst = null;
+      event.currentTarget.dataset.active = String(connectMode);
+      statusEl.textContent = connectMode ? "Выбери две карточки для связи" : "Режим связей выключен";
+    });
+
+    board.addEventListener("click", event => {
+      const cardEl = event.target.closest(".card");
+      if (!connectMode || !cardEl) return;
+      const id = cardEl.dataset.id;
+      if (!connectFirst) {
+        connectFirst = id;
+        statusEl.textContent = "Выбери вторую карточку";
+        return;
+      }
+      if (connectFirst !== id && !state.links.some(([a, b]) => a === connectFirst && b === id)) {
+        state.links.push([connectFirst, id]);
+        drawLinks();
+        saveState("Связь добавлена");
+      }
+      connectFirst = null;
+    });
+
+    rotateInput.addEventListener("input", () => {
+      const card = cardById(selectedId);
+      if (!card) return;
+      card.rot = Number(rotateInput.value);
+      rotateValue.textContent = `${Math.round(card.rot)}°`;
+      scheduleRenderCard(card);
+      saveState();
+    });
+
+    zoomInput.addEventListener("input", () => {
+      state.view.zoom = Number(zoomInput.value) / 100;
+      zoomValue.textContent = `${Math.round(state.view.zoom * 100)}%`;
+      applyView();
+      saveState();
+    });
+
+    tagInput.addEventListener("change", () => {
+      const card = cardById(selectedId);
+      if (!card) return;
+      card.tags = tagInput.value.split(",").map(t => t.trim()).filter(Boolean);
+      render();
+      saveState();
+    });
+
+    colorInput.addEventListener("input", () => {
+      const card = cardById(selectedId);
+      if (!card) return;
+      card.color = colorInput.value;
+      render();
+      saveState();
+    });
+
+    deckTitle.addEventListener("input", () => {
+      state.title = deckTitle.value;
+      saveState();
+    });
+
+    planInput.addEventListener("input", () => {
+      state.plan = planInput.value;
+      saveState();
+    });
+
+    roadmapInput.addEventListener("input", () => {
+      state.roadmap = roadmapInput.value;
+      saveState();
+    });
+
+    scriptOutput.addEventListener("input", () => {
+      state.script = scriptOutput.value;
+      saveState();
+    });
+
+    platformChecks.addEventListener("change", () => {
+      state.publish.platforms = selectedChecks(platformChecks);
+      saveState("Площадки обновлены");
+    });
+
+    toolChecks.addEventListener("change", () => {
+      state.publish.tools = selectedChecks(toolChecks);
+      saveState("Инструменты обновлены");
+    });
+
+    languageInput.addEventListener("input", () => {
+      state.publish.languages = languageInput.value;
+      saveState();
+    });
+
+    mediaBriefInput.addEventListener("input", () => {
+      state.publish.mediaBrief = mediaBriefInput.value;
+      saveState();
+    });
+
+    researchQueryInput.addEventListener("input", () => {
+      state.publish.researchQuery = researchQueryInput.value;
+      saveState();
+    });
+
+    publishOutput.addEventListener("input", () => {
+      state.publish.packageText = publishOutput.value;
+      saveState();
+    });
+
+    document.getElementById("loadPlanFile").addEventListener("click", () => {
+      planFileInput.value = "";
+      planFileInput.click();
+    });
+
+    document.getElementById("loadRoadmapFile").addEventListener("click", () => {
+      roadmapFileInput.value = "";
+      roadmapFileInput.click();
+    });
+
+    planFileInput.addEventListener("change", () => readTextFile(planFileInput, "plan"));
+    roadmapFileInput.addEventListener("change", () => readTextFile(roadmapFileInput, "roadmap"));
+
+    document.getElementById("buildScript").addEventListener("click", () => {
+      state.script = buildScriptFromState();
+      scriptOutput.value = state.script;
+      saveState("Сценарий собран");
+    });
+
+    document.getElementById("speakScript").addEventListener("click", async () => {
+      const text = state.script?.trim() || buildScriptFromState();
+      state.script = text;
+      scriptOutput.value = text;
+      saveState("Озвучка запущена");
+      await speakText(text);
+      if (!tourAbort) statusEl.textContent = "Озвучка завершена";
+    });
+
+    document.getElementById("playTour").addEventListener("click", () => {
+      playTour({ speak: true });
+    });
+
+    document.getElementById("stopPlayback").addEventListener("click", stopPlayback);
+    document.getElementById("recordVideo").addEventListener("click", recordVideo);
+    document.getElementById("buildMediaBrief").addEventListener("click", () => {
+      state.publish.packageText = buildMediaBrief();
+      publishOutput.value = state.publish.packageText;
+      saveState("Медиа ТЗ собрано");
+    });
+    document.getElementById("buildTranslationPack").addEventListener("click", () => {
+      state.publish.packageText = buildTranslationPack();
+      publishOutput.value = state.publish.packageText;
+      saveState("Задача перевода собрана");
+    });
+    document.getElementById("runResearchSearch").addEventListener("click", runResearchSearch);
+    document.getElementById("showConnectorGuide").addEventListener("click", showConnectorGuide);
+    document.getElementById("buildPublishPack").addEventListener("click", () => {
+      state.publish.packageText = buildPublishPackageText();
+      publishOutput.value = state.publish.packageText;
+      saveState("Пакет публикации собран");
+    });
+    document.getElementById("downloadPublishPack").addEventListener("click", () => {
+      const pack = buildPublishPackageObject();
+      downloadBlob(new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" }), `hermest-publish-pack-${timestampSlug()}.json`);
+      saveState("JSON пакета скачан");
+    });
+
+    document.getElementById("fitView").addEventListener("click", fitView);
+    document.getElementById("togglePanel").addEventListener("click", () => {
+      sidePanel.hidden = !sidePanel.hidden;
+    });
+    document.getElementById("recordMode").addEventListener("click", event => {
+      document.body.classList.toggle("recording");
+      event.currentTarget.dataset.active = String(document.body.classList.contains("recording"));
+    });
+
+    document.getElementById("exportJson").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "hermest-board.json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    document.getElementById("importJson").addEventListener("click", () => {
+      jsonInput.value = "";
+      jsonInput.click();
+    });
+
+    jsonInput.addEventListener("change", () => {
+      const file = jsonInput.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const incoming = normalize(JSON.parse(reader.result));
+          state.title = incoming.title;
+          state.view = incoming.view;
+          state.plan = incoming.plan;
+          state.roadmap = incoming.roadmap;
+          state.script = incoming.script;
+          state.publish = incoming.publish;
+          state.links = incoming.links;
+          state.cards = incoming.cards;
+          selectedId = state.cards[0]?.id || null;
+          render();
+          saveState("Импортировано");
+        } catch (_) {
+          statusEl.textContent = "JSON не прочитан";
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    window.addEventListener("keydown", event => {
+      if (event.target.isContentEditable || ["INPUT", "TEXTAREA"].includes(event.target.tagName)) return;
+      if (event.key === "Delete") document.getElementById("deleteCard").click();
+      if (event.key.toLowerCase() === "r") document.getElementById("recordMode").click();
+      if (event.key === "0") fitView();
+      if (event.key === "[") rotateCard(selectedId, -3);
+      if (event.key === "]") rotateCard(selectedId, 3);
+    });
+
+    function orderedCards() {
+      const order = [
+        "user", "hermest", "router", "agents", "tools", "openlayer", "memory",
+        "logs", "guardrails", "plan", "roadmap", "workflow", "video", "publish_agent",
+        "parser", "translator", "media_generator", "platforms", "auto_publish", "result", "business"
+      ];
+      return [...state.cards].sort((a, b) => {
+        const ai = order.indexOf(a.id);
+        const bi = order.indexOf(b.id);
+        if (ai >= 0 || bi >= 0) return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+        return (a.y - b.y) || (a.x - b.x);
+      });
+    }
+
+    function buildScriptFromState() {
+      const lines = [];
+      lines.push(`${state.title}.`);
+      lines.push("Главная мысль: Hermest можно объяснять как управляющую оболочку над ИИ-агентами. Он не заменяет агента, а собирает агентов, инструменты, память, права, логи и результат в одну систему.");
+      lines.push("Теперь пройдемся по карте борда.");
+      orderedCards().forEach((card, index) => {
+        const tags = Array.isArray(card.tags) && card.tags.length ? ` Теги: ${card.tags.join(", ")}.` : "";
+        lines.push(`${index + 1}. ${card.title}. ${card.text}${tags}`);
+      });
+      if (state.plan?.trim()) {
+        lines.push(`План проекта. ${state.plan.trim()}`);
+      }
+      if (state.roadmap?.trim()) {
+        lines.push(`Roadmap. ${state.roadmap.trim()}`);
+      }
+      lines.push("Вывод: такой борд нужен не для красивой картинки, а для работы. Он превращает идею в структуру, структуру в сценарий, сценарий в озвучку и видео, а дальше в продукт, который можно развивать и монетизировать.");
+      return lines.join("\n\n");
+    }
+
+    function selectedChecks(container) {
+      return [...container.querySelectorAll("input[type='checkbox']:checked")].map(input => input.value);
+    }
+
+    function syncChecks(container, values) {
+      const set = new Set(values);
+      container.querySelectorAll("input[type='checkbox']").forEach(input => {
+        input.checked = set.has(input.value);
+      });
+    }
+
+    function selectedLanguages() {
+      return String(state.publish.languages || "")
+        .split(",")
+        .map(item => item.trim())
+        .filter(Boolean);
+    }
+
+    function platformLabel(platform) {
+      return {
+        tiktok: "TikTok",
+        youtube_video: "YouTube видео",
+        youtube_shorts: "YouTube Shorts",
+        instagram_reels: "Instagram Reels"
+      }[platform] || platform;
+    }
+
+    function toolLabel(tool) {
+      return {
+        parser: "парсер источников",
+        translator: "переводчик",
+        web_media: "поиск фото/видео из интернета",
+        generated_media: "генерация фото/видео",
+        rights_check: "проверка прав и источников",
+        scheduler: "очередь публикаций"
+      }[tool] || tool;
+    }
+
+    function buildMediaBrief() {
+      const cards = orderedCards().map(card => `${card.title}: ${card.text}`).join("\n");
+      return [
+        "Задача для медиа-агента:",
+        "1. Разобрать борд и сценарий.",
+        "2. Для каждого смыслового блока подобрать или сгенерировать визуальный ряд.",
+        "3. Основной формат: вертикальное видео 9:16 для TikTok, YouTube Shorts и Instagram Reels.",
+        "4. Дополнительный формат: горизонтальное 16:9 для полного YouTube-видео.",
+        "5. Стиль: техно-обучение, агентская система, карта знаний, интерфейсная среда, чистая демонстрация без лишнего шума.",
+        "6. Все внешние материалы должны иметь понятный источник и право использования.",
+        "",
+        "Смысловые блоки:",
+        cards,
+        "",
+        "Дополнительные требования:",
+        state.publish.mediaBrief || "Сгенерировать b-roll, превью, обложки, фоновые кадры и короткие переходы под контекст объяснения."
+      ].join("\n");
+    }
+
+    function buildTranslationPack() {
+      const script = state.script?.trim() || buildScriptFromState();
+      const languages = selectedLanguages();
+      return [
+        "Задача для переводчика агента:",
+        `Языки: ${languages.join(", ") || "ru, en"}.`,
+        "Нужно перевести не дословно, а локализовать под зрителя: сохранить смысл, темп видео, технические термины и энергичную подачу.",
+        "На каждый язык подготовить:",
+        "- сценарий озвучки;",
+        "- короткое описание;",
+        "- 3 варианта заголовка;",
+        "- 10-20 хэштегов;",
+        "- субтитры сегментами по 1-2 строки;",
+        "- предупреждения, где перевод может исказить смысл.",
+        "",
+        "Исходный сценарий:",
+        script
+      ].join("\n");
+    }
+
+    async function runResearchSearch() {
+      const query = (researchQueryInput.value || state.publish.researchQuery || state.title).trim();
+      if (!query) {
+        statusEl.textContent = "Впиши запрос для public parser";
+        return;
+      }
+      state.publish.researchQuery = query;
+      publishOutput.value = "Public search запущен...";
+      statusEl.textContent = "Ищу публичные источники";
+      try {
+        const data = await fetchJson(`/api/research/search?q=${encodeURIComponent(query)}`);
+        state.publish.packageText = formatResearchResults(data);
+        publishOutput.value = state.publish.packageText;
+        saveState("Public search готов");
+      } catch (_) {
+        state.publish.packageText = [
+          "Public search пока недоступен в этом режиме.",
+          "",
+          "Он работает после Vercel/backend deploy через endpoint:",
+          `/api/research/search?q=${query}`,
+          "",
+          "Безопасные публичные источники:",
+          "- Wikipedia / MediaWiki REST",
+          "- Crossref",
+          "- arXiv",
+          "- GitHub public search",
+          "- OpenAlex при добавленном OPENALEX_API_KEY",
+          "",
+          "Важно: внешние фото/видео всегда нужно проверять по правам использования."
+        ].join("\n");
+        publishOutput.value = state.publish.packageText;
+        saveState("Public search требует backend deploy");
+      }
+    }
+
+    function showConnectorGuide() {
+      const lines = [
+        "USER ACCOUNT CONNECTION FLOW",
+        "",
+        "Главное правило: пользователи НЕ видят личные секреты владельца продукта.",
+        "Каждый пользователь подключает свои аккаунты через OAuth.",
+        "",
+        "YouTube:",
+        "1. Пользователь нажимает Connect YouTube.",
+        "2. Backend отправляет его в Google OAuth.",
+        "3. Пользователь разрешает upload.",
+        "4. Backend сохраняет encrypted refresh token.",
+        "5. Агент может создавать draft/upload только для этого пользователя.",
+        "",
+        "TikTok:",
+        "1. Пользователь нажимает Connect TikTok.",
+        "2. Backend открывает TikTok OAuth.",
+        "3. Публикация работает только после разрешений и approval от TikTok.",
+        "",
+        "Instagram Reels:",
+        "1. Нужен professional/business Instagram.",
+        "2. Нужна связанная Facebook Page.",
+        "3. Backend работает через Meta Graph API.",
+        "",
+        "Что уже есть в backend skeleton:",
+        "- /api/connectors/status",
+        "- /api/connectors/start?provider=youtube",
+        "- /api/connectors/start?provider=tiktok",
+        "- /api/connectors/start?provider=instagram",
+        "- /api/user-config/schema",
+        "",
+        "Что ещё нужно для настоящей работы:",
+        "- user accounts",
+        "- sessions",
+        "- OAuth callback token exchange",
+        "- encrypted token storage",
+        "- publish approval screen",
+        "- upload workers"
+      ];
+      state.publish.packageText = lines.join("\n");
+      publishOutput.value = state.publish.packageText;
+      saveState("Схема аккаунтов показана");
+    }
+
+    function formatResearchResults(data) {
+      const results = Array.isArray(data.results) ? data.results : [];
+      const lines = [
+        "PUBLIC RESEARCH RESULTS",
+        `Запрос: ${data.query || state.publish.researchQuery || ""}`,
+        "",
+        "Эти источники можно использовать для анализа и сценария. Фото/видео из внешних источников нужно проверять по лицензии.",
+        ""
+      ];
+      if (!results.length) {
+        lines.push("Ничего не найдено или backend вернул пустой результат.");
+      }
+      results.forEach((item, index) => {
+        lines.push(`${index + 1}. [${item.source}] ${item.title || "Untitled"}`);
+        if (item.summary) lines.push(`   ${item.summary}`);
+        if (item.url) lines.push(`   ${item.url}`);
+      });
+      if (Array.isArray(data.errors) && data.errors.length) {
+        lines.push("", "Errors:", ...data.errors.map(error => `- ${error}`));
+      }
+      return lines.join("\n");
+    }
+
+    async function fetchJson(url) {
+      const response = await fetch(url, { headers: { "accept": "application/json" } });
+      if (!response.ok) throw new Error(`http_${response.status}`);
+      return response.json();
+    }
+
+    function buildPublishPackageObject() {
+      const script = state.script?.trim() || buildScriptFromState();
+      const title = state.title || "Hermest Board";
+      const platforms = state.publish.platforms || [];
+      const languages = selectedLanguages();
+      const cards = orderedCards().map(card => ({
+        id: card.id,
+        title: card.title,
+        text: card.text,
+        tags: card.tags || []
+      }));
+      return {
+        schema: "hermest.publish.pack.v1",
+        createdAt: new Date().toISOString(),
+        title,
+        status: "draft_until_platform_connectors_are_linked",
+        platforms,
+        platformLabels: platforms.map(platformLabel),
+        languages,
+        tools: state.publish.tools || [],
+        toolLabels: (state.publish.tools || []).map(toolLabel),
+        researchQuery: state.publish.researchQuery || "",
+        script,
+        plan: state.plan || "",
+        roadmap: state.roadmap || "",
+        mediaBrief: buildMediaBrief(),
+        cards,
+        platformSpecs: platforms.map(platform => buildPlatformSpec(platform, title, script)),
+        agentQueue: [
+          "parse_board_and_attached_plan",
+          "collect_or_generate_context_media",
+          "rights_check_all_external_assets",
+          "render_vertical_9_16_versions",
+          "render_horizontal_16_9_youtube_version",
+          "localize_script_titles_descriptions_and_subtitles",
+          "wait_for_platform_connectors",
+          "upload_drafts_or_publish_when_allowed",
+          "store_links_errors_metrics_and_next_actions"
+        ],
+        connectorRequirements: {
+          tiktok: "TikTok Content Posting API or approved OAuth publishing flow",
+          youtube_video: "YouTube Data API upload permission",
+          youtube_shorts: "YouTube Data API upload permission with Shorts-ready vertical asset",
+          instagram_reels: "Meta Graph API Instagram Content Publishing permission"
+        }
+      };
+    }
+
+    function buildPlatformSpec(platform, title, script) {
+      const commonTags = collectHashtags();
+      const shortText = summarizeForDescription(script, 420);
+      const isShort = platform === "tiktok" || platform === "youtube_shorts" || platform === "instagram_reels";
+      return {
+        platform,
+        label: platformLabel(platform),
+        format: isShort ? "vertical_9_16_short" : "horizontal_16_9_long",
+        title: platform === "youtube_video" ? `${title}: оболочка над ИИ-агентами` : "Hermest: ИИ-агенты под контролем",
+        description: `${shortText}\n\n${commonTags.join(" ")}`,
+        hashtags: commonTags,
+        publishMode: "draft_or_publish_after_connector_linked",
+        assetRequirements: isShort
+          ? ["video_9_16_webm_or_mp4", "captions", "cover_frame", "localized_caption"]
+          : ["video_16_9_webm_or_mp4", "thumbnail", "description", "chapters", "subtitles"]
+      };
+    }
+
+    function buildPublishPackageText() {
+      const pack = buildPublishPackageObject();
+      const platformBlocks = pack.platformSpecs.map(spec => [
+        `Площадка: ${spec.label}`,
+        `Формат: ${spec.format}`,
+        `Заголовок: ${spec.title}`,
+        `Описание: ${spec.description}`,
+        `Ассеты: ${spec.assetRequirements.join(", ")}`
+      ].join("\n")).join("\n\n");
+      return [
+        "PUBLISH PACK",
+        `Проект: ${pack.title}`,
+        `Статус: ${pack.status}`,
+        `Площадки: ${pack.platformLabels.join(", ") || "не выбраны"}`,
+        `Языки: ${pack.languages.join(", ") || "не выбраны"}`,
+        `Инструменты агента: ${pack.toolLabels.join(", ") || "не выбраны"}`,
+        "",
+        "Очередь агента:",
+        pack.agentQueue.map((step, index) => `${index + 1}. ${step}`).join("\n"),
+        "",
+        "Площадки:",
+        platformBlocks,
+        "",
+        "Media brief:",
+        pack.mediaBrief,
+        "",
+        "Connector requirements:",
+        Object.entries(pack.connectorRequirements).map(([key, value]) => `- ${platformLabel(key)}: ${value}`).join("\n")
+      ].join("\n");
+    }
+
+    function collectHashtags() {
+      const tags = new Set(["#AI", "#AIAgents", "#Hermest", "#automation", "#content"]);
+      for (const card of state.cards) {
+        for (const tag of card.tags || []) {
+          const normalized = String(tag).replace(/[^a-zA-Zа-яА-Я0-9_]+/g, "");
+          if (normalized) tags.add(`#${normalized}`);
+        }
+      }
+      return [...tags].slice(0, 20);
+    }
+
+    function summarizeForDescription(text, limit) {
+      const clean = String(text || "").replace(/\s+/g, " ").trim();
+      if (clean.length <= limit) return clean;
+      return `${clean.slice(0, limit - 1).replace(/\s+\S*$/, "")}...`;
+    }
+
+    function readTextFile(input, field) {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = String(reader.result || "").trim();
+        if (field === "plan") {
+          state.plan = text;
+          planInput.value = text;
+          saveState("План прицеплен");
+        }
+        if (field === "roadmap") {
+          state.roadmap = text;
+          roadmapInput.value = text;
+          saveState("Roadmap прицеплен");
+        }
+      };
+      reader.onerror = () => {
+        statusEl.textContent = "Файл не прочитан";
+      };
+      reader.readAsText(file);
+    }
+
+    async function speakText(text) {
+      tourAbort = false;
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      const chunks = splitForSpeech(text);
+      for (const chunk of chunks) {
+        if (tourAbort) break;
+        await speakSegment(chunk);
+      }
+    }
+
+    function splitForSpeech(text) {
+      const paragraphs = String(text).split(/\n{2,}/).map(part => part.trim()).filter(Boolean);
+      const chunks = [];
+      for (const paragraph of paragraphs) {
+        if (paragraph.length <= 900) {
+          chunks.push(paragraph);
+          continue;
+        }
+        const sentences = paragraph.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [paragraph];
+        let chunk = "";
+        for (const sentence of sentences) {
+          if ((chunk + sentence).length > 900 && chunk) {
+            chunks.push(chunk.trim());
+            chunk = "";
+          }
+          chunk += `${sentence.trim()} `;
+        }
+        if (chunk.trim()) chunks.push(chunk.trim());
+      }
+      return chunks.length ? chunks : [String(text)];
+    }
+
+    function speakSegment(text) {
+      const clean = String(text || "").replace(/\s+/g, " ").trim();
+      if (!clean) return Promise.resolve();
+      const fallbackMs = clamp(clean.split(" ").length * 430, 1400, 18000);
+      if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+        return wait(fallbackMs);
+      }
+      return new Promise(resolve => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          resolve();
+        };
+        const utterance = new SpeechSynthesisUtterance(clean);
+        utterance.lang = "ru-RU";
+        utterance.rate = 0.96;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+        const voices = window.speechSynthesis.getVoices();
+        const ruVoice = voices.find(voice => /^ru/i.test(voice.lang)) || voices.find(voice => /Russian|рус/i.test(voice.name));
+        if (ruVoice) utterance.voice = ruVoice;
+        utterance.onend = finish;
+        utterance.onerror = finish;
+        const timer = setTimeout(finish, fallbackMs + 2400);
+        window.speechSynthesis.speak(utterance);
+      });
+    }
+
+    async function playTour(options = {}) {
+      const wasRecording = document.body.classList.contains("recording");
+      tourAbort = false;
+      document.body.classList.add("recording", "touring");
+      document.getElementById("recordMode").dataset.active = "true";
+      statusEl.textContent = "Тур запущен";
+      const cards = orderedCards();
+      try {
+        await wait(500);
+        for (const card of cards) {
+          if (tourAbort) break;
+          selectedId = card.id;
+          setSelected(card.id);
+          focusCard(card);
+          await wait(760);
+          if (options.speak !== false) {
+            await speakSegment(`${card.title}. ${card.text}`);
+          } else {
+            await wait(1800);
+          }
+        }
+        if (!tourAbort && options.speak !== false && state.plan?.trim()) {
+          await speakSegment(`План проекта. ${state.plan}`);
+        }
+        if (!tourAbort && options.speak !== false && state.roadmap?.trim()) {
+          await speakSegment(`Roadmap. ${state.roadmap}`);
+        }
+      } finally {
+        document.body.classList.remove("touring");
+        if (!wasRecording && !options.keepRecording) {
+          document.body.classList.remove("recording");
+          document.getElementById("recordMode").dataset.active = "false";
+        }
+        if (!tourAbort) statusEl.textContent = "Тур завершен";
+      }
+    }
+
+    function stopPlayback() {
+      tourAbort = true;
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      if (activeRecorder && activeRecorder.state === "recording") activeRecorder.stop();
+      if (activeStream) activeStream.getTracks().forEach(track => track.stop());
+      document.body.classList.remove("touring");
+      statusEl.textContent = "Остановлено";
+    }
+
+    function focusCard(card) {
+      const safeLeft = 32;
+      const safeTop = 32;
+      const safeRight = 32;
+      const safeBottom = 32;
+      const viewW = Math.max(320, window.innerWidth - safeLeft - safeRight);
+      const viewH = Math.max(260, window.innerHeight - safeTop - safeBottom);
+      const zoom = clamp(Math.min(viewW / (card.w + 240), viewH / (card.h + 220)), 0.72, 1.16);
+      state.view.zoom = zoom;
+      state.view.x = Math.round(safeLeft + viewW / 2 - (card.x + card.w / 2) * zoom);
+      state.view.y = Math.round(safeTop + viewH / 2 - (card.y + card.h / 2) * zoom);
+      applyView();
+      drawLinks();
+    }
+
+    async function recordVideo() {
+      if (!navigator.mediaDevices?.getDisplayMedia || typeof MediaRecorder === "undefined") {
+        statusEl.textContent = "Запись WebM недоступна в этом браузере";
+        return;
+      }
+      state.script = state.script?.trim() || buildScriptFromState();
+      scriptOutput.value = state.script;
+      saveState("Выбери окно Hermest Board для записи");
+      try {
+        activeStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { frameRate: 30 },
+          audio: true
+        });
+        const chunks = [];
+        const mimeType = bestRecorderMimeType();
+        activeRecorder = new MediaRecorder(activeStream, mimeType ? { mimeType } : undefined);
+        activeRecorder.ondataavailable = event => {
+          if (event.data?.size) chunks.push(event.data);
+        };
+        activeRecorder.onstop = () => {
+          const blob = new Blob(chunks, { type: mimeType || "video/webm" });
+          downloadBlob(blob, `hermest-board-${timestampSlug()}.webm`);
+          if (activeStream) activeStream.getTracks().forEach(track => track.stop());
+          activeRecorder = null;
+          activeStream = null;
+          document.body.classList.remove("recording", "touring");
+          document.getElementById("recordMode").dataset.active = "false";
+          statusEl.textContent = "WebM сохранен";
+        };
+        activeRecorder.start(500);
+        await wait(800);
+        await playTour({ speak: true, keepRecording: true });
+        await wait(900);
+        if (activeRecorder?.state === "recording") activeRecorder.stop();
+      } catch (_) {
+        if (activeStream) activeStream.getTracks().forEach(track => track.stop());
+        activeRecorder = null;
+        activeStream = null;
+        document.body.classList.remove("touring");
+        statusEl.textContent = "Запись отменена";
+      }
+    }
+
+    function bestRecorderMimeType() {
+      const types = [
+        "video/webm;codecs=vp9,opus",
+        "video/webm;codecs=vp8,opus",
+        "video/webm"
+      ];
+      return types.find(type => MediaRecorder.isTypeSupported(type)) || "";
+    }
+
+    function downloadBlob(blob, filename) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    function timestampSlug() {
+      return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    }
+
+    function wait(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    function fitView() {
+      if (!state.cards.length) return;
+      const minX = Math.min(...state.cards.map(c => c.x));
+      const minY = Math.min(...state.cards.map(c => c.y));
+      const maxX = Math.max(...state.cards.map(c => c.x + c.w));
+      const maxY = Math.max(...state.cards.map(c => c.y + c.h));
+      const controlsHidden = document.body.classList.contains("recording");
+      const safeLeft = 24;
+      const safeTop = controlsHidden ? 24 : 86;
+      const safeRight = controlsHidden || sidePanel.hidden ? 24 : 344;
+      const safeBottom = 24;
+      const viewW = Math.max(320, window.innerWidth - safeLeft - safeRight);
+      const viewH = Math.max(260, window.innerHeight - safeTop - safeBottom);
+      const pad = 46;
+      const zoom = clamp(Math.min(viewW / (maxX - minX + pad * 2), viewH / (maxY - minY + pad * 2)), 0.45, 1.2);
+      state.view.zoom = zoom;
+      state.view.x = Math.round(safeLeft + (viewW - (maxX - minX) * zoom) / 2 - minX * zoom);
+      state.view.y = Math.round(safeTop + (viewH - (maxY - minY) * zoom) / 2 - minY * zoom);
+      applyView();
+      saveState("Вид подогнан");
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, ch => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[ch]));
+    }
+
+    function prepareImage(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error);
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const maxSide = 1400;
+            const sourceW = img.naturalWidth || img.width;
+            const sourceH = img.naturalHeight || img.height;
+            const scale = Math.min(1, maxSide / Math.max(sourceW, sourceH));
+            const width = Math.max(1, Math.round(sourceW * scale));
+            const height = Math.max(1, Math.round(sourceH * scale));
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL("image/jpeg", 0.82));
+          };
+          img.onerror = () => resolve(reader.result);
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function visual(kind, title, subtitle) {
+      const palettes = {
+        user: ["#5eead4", "#0f766e", "#172554"],
+        core: ["#f0abfc", "#7c3aed", "#082f49"],
+        router: ["#38bdf8", "#0369a1", "#111827"],
+        agents: ["#93c5fd", "#2563eb", "#020617"],
+        tools: ["#60a5fa", "#0f766e", "#111827"],
+        workflow: ["#fb7185", "#be123c", "#111827"],
+        memory: ["#a7f3d0", "#047857", "#052e2b"],
+        open: ["#facc15", "#a16207", "#1e1b4b"],
+        logs: ["#c084fc", "#6d28d9", "#111827"],
+        guard: ["#f97316", "#9a3412", "#111827"],
+        plan: ["#22c55e", "#15803d", "#052e16"],
+        roadmap: ["#eab308", "#854d0e", "#111827"],
+        voice: ["#f472b6", "#be185d", "#111827"],
+        result: ["#2dd4bf", "#0f766e", "#111827"],
+        business: ["#fda4af", "#be123c", "#111827"]
+      };
+      const [accent, deep, dark] = palettes[kind] || palettes.core;
+      const motifs = {
+        user: `<circle cx="170" cy="205" r="54" fill="${accent}" opacity=".22"/><path d="M110 278c24-62 96-62 120 0" stroke="${accent}" stroke-width="16" fill="none" opacity=".7"/><path d="M330 120h250M330 172h190M330 224h270" stroke="#e9f7ff" stroke-width="13" opacity=".22"/>`,
+        core: `<circle cx="400" cy="220" r="92" fill="${accent}" opacity=".18"/><circle cx="400" cy="220" r="38" fill="${accent}" opacity=".84"/><path d="M400 86v92M400 262v92M266 220h92M442 220h92M304 124l64 64M496 124l-64 64M304 316l64-64M496 316l-64-64" stroke="${accent}" stroke-width="11" opacity=".72"/>`,
+        router: `<path d="M116 212h180M296 212l86-88M296 212l86 88M382 124h270M382 300h270" stroke="${accent}" stroke-width="15" fill="none" opacity=".72"/><circle cx="296" cy="212" r="34" fill="${accent}" opacity=".86"/><circle cx="652" cy="124" r="28" fill="#e9f7ff" opacity=".26"/><circle cx="652" cy="300" r="28" fill="#e9f7ff" opacity=".26"/>`,
+        agents: `<path d="M210 248l190-104 190 104M210 248l190 70 190-70" stroke="${accent}" stroke-width="10" fill="none" opacity=".58"/><circle cx="210" cy="248" r="46" fill="${accent}" opacity=".32"/><circle cx="400" cy="144" r="54" fill="${accent}" opacity=".72"/><circle cx="590" cy="248" r="46" fill="${accent}" opacity=".32"/><circle cx="400" cy="318" r="40" fill="#e9f7ff" opacity=".2"/>`,
+        tools: `<rect x="138" y="110" width="174" height="190" rx="22" fill="${accent}" opacity=".26"/><rect x="365" y="92" width="270" height="228" rx="24" fill="#e9f7ff" opacity=".1"/><path d="M182 160h86M182 206h86M182 252h62M420 154h160M420 205h118M420 256h176" stroke="${accent}" stroke-width="12" opacity=".78"/>`,
+        workflow: `<path d="M118 306c98-178 248 48 356-118 42-64 112-74 198-12" stroke="${accent}" stroke-width="15" fill="none" opacity=".78"/><rect x="120" y="116" width="172" height="96" rx="18" fill="${accent}" opacity=".24"/><rect x="314" y="238" width="172" height="96" rx="18" fill="#e9f7ff" opacity=".12"/><rect x="508" y="116" width="172" height="96" rx="18" fill="${accent}" opacity=".2"/>`,
+        memory: `<path d="M176 280l116-128 122 74 132-112 96 142" stroke="${accent}" stroke-width="12" fill="none" opacity=".72"/><circle cx="176" cy="280" r="32" fill="${accent}" opacity=".68"/><circle cx="292" cy="152" r="36" fill="${accent}" opacity=".34"/><circle cx="414" cy="226" r="30" fill="#e9f7ff" opacity=".2"/><circle cx="546" cy="114" r="36" fill="${accent}" opacity=".48"/><circle cx="642" cy="256" r="32" fill="${accent}" opacity=".28"/>`,
+        open: `<path d="M158 112h484v210H158z" fill="#e9f7ff" opacity=".08"/><path d="M158 188h484M282 112v210M518 112v210" stroke="${accent}" stroke-width="10" opacity=".56"/><path d="M214 262l52-50 52 50M462 212l52 50 72-92" stroke="${accent}" stroke-width="14" fill="none" opacity=".8"/>`,
+        logs: `<path d="M180 120h440M180 174h330M180 228h390M180 282h250" stroke="${accent}" stroke-width="14" opacity=".66"/><path d="M122 120h28M122 174h28M122 228h28M122 282h28" stroke="#e9f7ff" stroke-width="14" opacity=".24"/><rect x="580" y="238" width="78" height="78" rx="18" fill="${accent}" opacity=".26"/>`,
+        guard: `<path d="M400 92l210 82v96c0 88-86 144-210 178-124-34-210-90-210-178v-96z" fill="${accent}" opacity=".18" stroke="${accent}" stroke-width="12"/><path d="M306 240l62 60 126-132" stroke="${accent}" stroke-width="18" fill="none" opacity=".9"/>`,
+        plan: `<rect x="150" y="104" width="500" height="238" rx="24" fill="#e9f7ff" opacity=".1"/><path d="M214 170h340M214 224h260M214 278h302" stroke="${accent}" stroke-width="14" opacity=".78"/><path d="M164 170h22M164 224h22M164 278h22" stroke="#e9f7ff" stroke-width="14" opacity=".32"/>`,
+        roadmap: `<path d="M130 292c106-160 230-22 338-128 68-66 120-74 212-26" stroke="${accent}" stroke-width="16" fill="none" opacity=".78"/><circle cx="130" cy="292" r="28" fill="${accent}" opacity=".76"/><circle cx="338" cy="210" r="28" fill="#e9f7ff" opacity=".22"/><circle cx="468" cy="164" r="28" fill="${accent}" opacity=".54"/><circle cx="680" cy="138" r="28" fill="${accent}" opacity=".32"/>`,
+        voice: `<path d="M172 250h90l118 74V118l-118 74h-90z" fill="${accent}" opacity=".4"/><path d="M448 174c32 36 32 86 0 122M506 130c68 78 68 168 0 246" stroke="${accent}" stroke-width="16" fill="none" opacity=".78"/><rect x="580" y="118" width="92" height="192" rx="24" fill="#e9f7ff" opacity=".12"/>`,
+        result: `<path d="M160 284h480" stroke="${accent}" stroke-width="16" opacity=".55"/><rect x="174" y="122" width="160" height="116" rx="22" fill="${accent}" opacity=".28"/><rect x="380" y="88" width="246" height="186" rx="24" fill="#e9f7ff" opacity=".12"/><path d="M214 180h76M430 148h142M430 204h96" stroke="${accent}" stroke-width="12" opacity=".78"/>`,
+        business: `<path d="M156 292c64-118 128-28 188-128 44-74 112-90 190-26 42 34 70 48 116 18" stroke="${accent}" stroke-width="15" fill="none" opacity=".74"/><path d="M544 114h98v98" stroke="${accent}" stroke-width="15" fill="none" opacity=".8"/><circle cx="214" cy="258" r="34" fill="${accent}" opacity=".28"/><circle cx="402" cy="144" r="40" fill="${accent}" opacity=".34"/>`
+      };
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420">
+          <defs>
+            <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="${deep}"/>
+              <stop offset=".52" stop-color="${dark}"/>
+              <stop offset="1" stop-color="#030712"/>
+            </linearGradient>
+            <radialGradient id="glow" cx=".72" cy=".18" r=".72">
+              <stop offset="0" stop-color="${accent}" stop-opacity=".42"/>
+              <stop offset=".45" stop-color="${accent}" stop-opacity=".12"/>
+              <stop offset="1" stop-color="${accent}" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <rect width="800" height="420" fill="url(#bg)"/>
+          <rect width="800" height="420" fill="url(#glow)"/>
+          <path d="M0 350c140-60 260 42 400-28 120-60 250-40 400 18" stroke="${accent}" stroke-opacity=".16" stroke-width="3" fill="none"/>
+          <path d="M0 0h800v420H0z" fill="none" stroke="${accent}" stroke-opacity=".28" stroke-width="3"/>
+          ${motifs[kind] || motifs.core}
+          <text x="42" y="62" fill="#e9f7ff" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="800">${svgText(title)}</text>
+          <text x="44" y="102" fill="${accent}" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="700">${svgText(subtitle)}</text>
+        </svg>`;
+      return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+    }
+
+    function svgText(value) {
+      return String(value).replace(/[&<>]/g, ch => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;"
+      }[ch]));
+    }
+
+    if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      });
+    }
+
+    render();
+    setTimeout(fitView, 80);
+  </script>
+</body>
+</html>
