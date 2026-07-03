@@ -172,29 +172,34 @@ async function handleAssetsIndex(request, response) {
   if (!requireMethods(request, response, ["GET", "POST"])) return;
 
   if (request.method === "GET") {
-    requireReadAccess(request);
+    const actor = requireReadAccess(request);
     const assets = await listRecords("assets");
-    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), assets });
+    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), assets: filterRecordsForActor(assets, actor) });
     return;
   }
 
   const actor = requireWriteAccess(request);
   const body = await readJson(request);
   const now = new Date().toISOString();
+  const ownership = await childRecordOwnership(body.projectId, actor, "attach asset to");
   const asset = {
     id: createId("asset"),
-    projectId: safeText(body.projectId, 120),
+    projectId: ownership.projectId,
+    workspaceId: ownership.workspaceId,
+    ownerUserId: ownership.ownerUserId,
     type: safeText(body.type || "reference", 80),
     source: safeText(body.source || "manual", 120),
     title: safeText(body.title || "Untitled asset", 200),
     url: safeText(body.url, 2000),
     rightsStatus: normalizeAssetRightsStatus(body.rightsStatus),
     metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : {},
+    createdBy: ownership.actor,
+    updatedBy: ownership.actor,
     createdAt: now,
     updatedAt: now
   };
   await saveRecord("assets", asset);
-  await appendAudit("asset.created", { id: asset.id, projectId: asset.projectId, rightsStatus: asset.rightsStatus }, actor);
+  await appendAudit("asset.created", { id: asset.id, projectId: asset.projectId, workspaceId: asset.workspaceId, ownerUserId: asset.ownerUserId, rightsStatus: asset.rightsStatus }, actor);
   sendJson(response, 201, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), asset });
 }
 
@@ -202,9 +207,9 @@ async function handleJobsIndex(request, response) {
   if (!requireMethods(request, response, ["GET", "POST"])) return;
 
   if (request.method === "GET") {
-    requireReadAccess(request);
+    const actor = requireReadAccess(request);
     const jobs = await listRecords("jobs");
-    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), jobs });
+    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), jobs: filterRecordsForActor(jobs, actor) });
     return;
   }
 
@@ -212,17 +217,22 @@ async function handleJobsIndex(request, response) {
   const body = await readJson(request);
   const now = new Date().toISOString();
   const plan = buildAgentPlan(body.publishPack || body.pack || {});
+  const ownership = await childRecordOwnership(body.projectId, actor, "create job for");
   const job = {
     id: createId("job"),
-    projectId: String(body.projectId || ""),
+    projectId: ownership.projectId,
+    workspaceId: ownership.workspaceId,
+    ownerUserId: ownership.ownerUserId,
     type: String(body.type || "publish_plan"),
     status: jobStatusFromPlan(plan),
     plan,
+    createdBy: ownership.actor,
+    updatedBy: ownership.actor,
     createdAt: now,
     updatedAt: now
   };
   await saveRecord("jobs", job);
-  await appendAudit("job.created", { id: job.id, type: job.type, status: job.status }, actor);
+  await appendAudit("job.created", { id: job.id, projectId: job.projectId, workspaceId: job.workspaceId, ownerUserId: job.ownerUserId, type: job.type, status: job.status }, actor);
   sendJson(response, 201, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), job });
 }
 
@@ -230,12 +240,13 @@ async function handleJobById(request, response, id) {
   if (!requireMethods(request, response, ["GET", "PATCH"])) return;
 
   if (request.method === "GET") {
-    requireReadAccess(request);
+    const actor = requireReadAccess(request);
     const existing = await getRecord("jobs", id);
     if (!existing) {
       sendJson(response, 404, { ok: false, error: "job_not_found", id });
       return;
     }
+    requireRecordAccess(existing, actor, "read");
     sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), job: existing });
     return;
   }
@@ -247,16 +258,18 @@ async function handleJobById(request, response, id) {
     sendJson(response, 404, { ok: false, error: "job_not_found", id });
     return;
   }
+  requireRecordAccess(existing, actor, "patch");
 
   const body = await readJson(request);
   const job = {
     ...existing,
     status: normalizeJobStatus(body.status, existing.status),
     note: body.note ? String(body.note).slice(0, 4000) : existing.note,
+    updatedBy: actorSnapshot(actor),
     updatedAt: new Date().toISOString()
   };
   await saveRecord("jobs", job);
-  await appendAudit("job.updated", { id: job.id, status: job.status }, actor);
+  await appendAudit("job.updated", { id: job.id, workspaceId: job.workspaceId, ownerUserId: job.ownerUserId, status: job.status }, actor);
   sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), job });
 }
 
@@ -273,6 +286,49 @@ function routeFromUrl(value = "") {
 
 function safeText(value, limit) {
   return String(value || "").slice(0, limit);
+}
+
+async function childRecordOwnership(projectIdInput, actor, action) {
+  const projectId = safeText(projectIdInput, 120);
+  const project = isStorageSafeId(projectId) ? await getRecord("projects", projectId) : null;
+  if (project) requireRecordAccess(project, actor, action);
+
+  return {
+    projectId,
+    workspaceId: safeText(project?.workspaceId || project?.project?.workspaceId || defaultWorkspaceId(actor), 120),
+    ownerUserId: safeText(project?.ownerUserId || project?.project?.ownerUserId || defaultOwnerUserId(actor), 120),
+    actor: actorSnapshot(actor)
+  };
+}
+
+function defaultWorkspaceId(actor) {
+  if (actor?.workspaceId) return actor.workspaceId;
+  if (actor?.mode === "owner-token") return "workspace_owner";
+  return "workspace_local";
+}
+
+function defaultOwnerUserId(actor) {
+  return actor?.id || "local-dev";
+}
+
+function actorSnapshot(actor) {
+  if (!actor) {
+    return {
+      id: "unknown",
+      mode: "unknown",
+      authenticated: false
+    };
+  }
+
+  return {
+    id: safeText(actor.id || "unknown", 120),
+    mode: safeText(actor.mode || "unknown", 80),
+    authenticated: Boolean(actor.authenticated)
+  };
+}
+
+function isStorageSafeId(id) {
+  return /^[a-z0-9_-]{3,120}$/i.test(String(id || ""));
 }
 
 function jobStatusFromPlan(plan) {

@@ -69,6 +69,62 @@ try {
   if (forbiddenSignedRead.error !== "forbidden") {
     throw new Error(`Expected forbidden signed-session project read, got ${forbiddenSignedRead.error}`);
   }
+  const signedAsset = await expect("asset-create-signed-session", "POST", "assets", {
+    projectId: signedProject.project.id,
+    title: "Signed reference",
+    rightsStatus: "owned"
+  }, 201, { authorization: `Bearer ${signedToken}` });
+  if (signedAsset.asset.workspaceId !== signedProject.project.workspaceId || signedAsset.asset.ownerUserId !== signedProject.project.ownerUserId) {
+    throw new Error(`Expected signed-session asset ownership metadata, got ${JSON.stringify(signedAsset.asset)}`);
+  }
+  const signedAssetList = await expect("asset-list-signed-session", "GET", "assets", null, 200, { authorization: `Bearer ${signedToken}` });
+  if (!signedAssetList.assets.some(asset => asset.id === signedAsset.asset.id)) {
+    throw new Error(`Expected signed asset in signed-session list, got ${JSON.stringify(signedAssetList.assets)}`);
+  }
+  const otherAssetList = await expect("asset-list-other-session", "GET", "assets", null, 200, { authorization: `Bearer ${otherToken}` });
+  if (otherAssetList.assets.some(asset => asset.id === signedAsset.asset.id)) {
+    throw new Error(`Expected other workspace asset list to exclude signed asset, got ${JSON.stringify(otherAssetList.assets)}`);
+  }
+  const forbiddenAssetAttach = await expect("asset-create-other-project-session", "POST", "assets", {
+    projectId: signedProject.project.id,
+    title: "Forbidden reference",
+    rightsStatus: "owned"
+  }, 403, { authorization: `Bearer ${otherToken}` });
+  if (forbiddenAssetAttach.error !== "forbidden") {
+    throw new Error(`Expected forbidden signed-session asset attach, got ${forbiddenAssetAttach.error}`);
+  }
+  const signedJob = await expect("job-create-signed-session", "POST", "jobs", {
+    projectId: signedProject.project.id,
+    publishPack: { platforms: ["youtube_video"], tools: ["parser"], languages: ["ru"] }
+  }, 201, { authorization: `Bearer ${signedToken}` });
+  if (signedJob.job.workspaceId !== signedProject.project.workspaceId || signedJob.job.ownerUserId !== signedProject.project.ownerUserId) {
+    throw new Error(`Expected signed-session job ownership metadata, got ${JSON.stringify(signedJob.job)}`);
+  }
+  const signedJobList = await expect("job-list-signed-session", "GET", "jobs", null, 200, { authorization: `Bearer ${signedToken}` });
+  if (!signedJobList.jobs.some(job => job.id === signedJob.job.id)) {
+    throw new Error(`Expected signed job in signed-session list, got ${JSON.stringify(signedJobList.jobs)}`);
+  }
+  const otherJobList = await expect("job-list-other-session", "GET", "jobs", null, 200, { authorization: `Bearer ${otherToken}` });
+  if (otherJobList.jobs.some(job => job.id === signedJob.job.id)) {
+    throw new Error(`Expected other workspace job list to exclude signed job, got ${JSON.stringify(otherJobList.jobs)}`);
+  }
+  const forbiddenJobRead = await expect("job-read-other-session", "GET", `jobs/${signedJob.job.id}`, null, 403, { authorization: `Bearer ${otherToken}` });
+  if (forbiddenJobRead.error !== "forbidden") {
+    throw new Error(`Expected forbidden signed-session job read, got ${forbiddenJobRead.error}`);
+  }
+  const forbiddenJobPatch = await expect("job-patch-other-session", "PATCH", `jobs/${signedJob.job.id}`, {
+    status: "running"
+  }, 403, { authorization: `Bearer ${otherToken}` });
+  if (forbiddenJobPatch.error !== "forbidden") {
+    throw new Error(`Expected forbidden signed-session job patch, got ${forbiddenJobPatch.error}`);
+  }
+  const forbiddenJobCreate = await expect("job-create-other-project-session", "POST", "jobs", {
+    projectId: signedProject.project.id,
+    publishPack: { platforms: ["youtube_video"], tools: ["parser"], languages: ["ru"] }
+  }, 403, { authorization: `Bearer ${otherToken}` });
+  if (forbiddenJobCreate.error !== "forbidden") {
+    throw new Error(`Expected forbidden signed-session job create, got ${forbiddenJobCreate.error}`);
+  }
   await expect("project-delete-signed-session", "DELETE", `projects/${signedProject.project.id}`, null, 200, { authorization: `Bearer ${signedToken}` });
   delete process.env.HERMEST_SESSION_SECRET;
 
@@ -107,12 +163,15 @@ try {
   if (updated.project.workspaceId !== created.project.workspaceId || updated.project.ownerUserId !== created.project.ownerUserId) {
     throw new Error(`Expected update to preserve ownership metadata, got ${JSON.stringify(updated.project)}`);
   }
-  await expect("asset-create", "POST", "assets", {
+  const createdAsset = await expect("asset-create", "POST", "assets", {
     projectId: id,
     title: "Reference",
     url: "https://example.com/reference",
     rightsStatus: "unknown"
   }, 201);
+  if (createdAsset.asset.workspaceId !== created.project.workspaceId || createdAsset.asset.ownerUserId !== created.project.ownerUserId) {
+    throw new Error(`Expected asset to inherit project ownership, got ${JSON.stringify(createdAsset.asset)}`);
+  }
   const invalidAssetRights = await expect("asset-invalid-rights-status", "POST", "assets", {
     projectId: id,
     title: "Invalid rights",
@@ -125,6 +184,9 @@ try {
     projectId: id,
     publishPack: { platforms: ["youtube_video"], tools: ["parser"], languages: ["ru"] }
   }, 201);
+  if (blockedJob.job.workspaceId !== created.project.workspaceId || blockedJob.job.ownerUserId !== created.project.ownerUserId) {
+    throw new Error(`Expected job to inherit project ownership, got ${JSON.stringify(blockedJob.job)}`);
+  }
   if (blockedJob.job.status !== "blocked") {
     throw new Error(`Expected blocked job, got ${blockedJob.job.status}`);
   }

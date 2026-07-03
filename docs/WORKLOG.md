@@ -16,6 +16,10 @@
 - Added current-session API contract for bootstrap actor metadata ahead of real per-user auth.
 - Added signed session token verification foundation without adding a public token issuer or enabling production writes.
 - Added signed-session project authorization checks against bootstrap `workspaceId`.
+- Extended bootstrap signed-session workspace authorization to asset and job records:
+  - new assets/jobs inherit project ownership metadata when linked to a project;
+  - signed-session list/read/update paths are filtered or rejected by `workspaceId`;
+  - API smoke coverage now verifies cross-workspace denial for projects, assets, and jobs.
 - Hardened agent job status handling:
   - aligned API-created approval jobs with the durable schema status `waiting_for_approval`;
   - rejected invalid job status updates;

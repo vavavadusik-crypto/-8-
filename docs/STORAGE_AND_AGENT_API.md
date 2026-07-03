@@ -93,9 +93,10 @@ The current bootstrap API preserves existing ownership during updates instead of
 accepting ownership changes from request payloads. Real SaaS auth must replace
 these defaults with session-backed user/workspace IDs.
 
-Signed-session actors are filtered and checked against `workspaceId` for project
-list/detail/update/delete routes. Owner-token and local development actors still
-act as bootstrap bypasses until the real workspace membership model exists.
+Signed-session actors are filtered and checked against `workspaceId` for
+project list/detail/update/delete routes and for asset/job records tied to a
+project. Owner-token and local development actors still act as bootstrap
+bypasses until the real workspace membership model exists.
 
 Write routes are protected by `api/_lib/auth.js`. If `HERMEST_OWNER_TOKEN` is
 configured, callers must send `Authorization: Bearer <token>` or
@@ -117,6 +118,17 @@ Stores metadata for uploaded, found, or generated assets. It does not store
 large binary media yet. A real launch needs Blob/S3/R2/Vercel Blob style object
 storage plus rights metadata.
 
+Asset records carry:
+
+- `workspaceId`
+- `ownerUserId`
+- `createdBy`
+- `updatedBy`
+
+When an asset is created for an existing project, it inherits the project's
+ownership metadata and signed-session actors must be allowed to access that
+project. Asset list responses are filtered by signed-session `workspaceId`.
+
 `rightsStatus` is constrained to the durable schema enum:
 `unknown`, `allowed`, `restricted`, `owned`, or `generated`. Invalid values are
 rejected before storage so the JSON adapter and future Postgres adapter keep the
@@ -133,6 +145,18 @@ PATCH /api/product?route=jobs/:id
 
 Stores publish/render job metadata for local development. Production needs a
 durable queue and workers.
+
+Job records carry:
+
+- `workspaceId`
+- `ownerUserId`
+- `createdBy`
+- `updatedBy`
+
+When a job is created for an existing project, it inherits the project's
+ownership metadata and signed-session actors must be allowed to access that
+project. Job list/detail/update routes are filtered or rejected by signed-session
+`workspaceId`.
 
 Job status values are intentionally constrained to the durable queue target:
 `queued`, `running`, `waiting_for_approval`, `blocked`, `failed`, `completed`,
@@ -171,9 +195,10 @@ npm run check
 ```
 
 `smoke:api` runs the product API directly without a server. It verifies local
-project create/update/delete, assets, jobs, audit, production storage guard,
-asset rights-status validation, external-storage-env guard, and owner-token
-demo-storage read/write guards.
+project create/update/delete, asset/job ownership metadata, signed-session
+workspace authorization for projects/assets/jobs, audit, production storage
+guard, asset rights-status validation, external-storage-env guard, and
+owner-token demo-storage read/write guards.
 
 ## Durable Storage Target
 

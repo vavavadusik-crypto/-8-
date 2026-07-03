@@ -47,8 +47,9 @@ publishing approval are implemented.
   per-user authentication.
 - Signed session token verification exists, but token issuance and full
   per-user authorization are still intentionally blocked.
-- Project routes enforce bootstrap `workspaceId` checks for signed-session
-  actors; this does not yet cover the full future workspace membership model.
+- Project, asset, and job routes enforce bootstrap `workspaceId` checks for
+  signed-session actors; this does not yet cover the full future workspace
+  membership model.
 
 ## Known Limitations
 
@@ -56,7 +57,8 @@ publishing approval are implemented.
 
 - No real user authentication or session model exists yet.
 - No durable production database is connected yet.
-- No authorization model exists for user-owned projects or workspaces.
+- No final workspace membership or role model exists for user-owned projects.
+  Current signed-session authorization is only a bootstrap `workspaceId` guard.
 - No encrypted storage exists for OAuth refresh/access tokens.
 - Autopublishing is intentionally not executable yet.
 - Existing owner-token guard is only a bootstrap control, not real multi-user security.
