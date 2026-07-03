@@ -130,3 +130,17 @@ token storage.
 loss is acceptable. It must not be used for private customer data. When this
 mode is enabled on public Vercel, configure `HERMEST_OWNER_TOKEN`; project,
 asset, job, and audit read/write routes are blocked without it.
+
+The guarded bootstrap Postgres adapter is available for the next deployment
+phase:
+
+```bash
+HERMEST_STORAGE_ADAPTER=postgres
+DATABASE_URL=postgres://...
+HERMEST_ENABLE_DURABLE_STORAGE=1
+HERMEST_SESSION_SECRET=<long random secret>
+```
+
+Without `HERMEST_ENABLE_DURABLE_STORAGE=1`, Vercel keeps using the safe read-only
+guard. Without `HERMEST_OWNER_TOKEN` or `HERMEST_SESSION_SECRET`, durable writes
+stay blocked even if the Postgres adapter is enabled.

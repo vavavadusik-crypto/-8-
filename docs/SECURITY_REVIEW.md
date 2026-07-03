@@ -39,8 +39,9 @@ publishing approval are implemented.
   blockers, source download availability, and security headers.
 - A product preflight route reports readiness gates and blocker names without
   exposing secret values.
-- Storage now has an explicit adapter boundary; durable adapters still remain
-  disabled until auth and authorization are implemented.
+- Storage now has an explicit adapter boundary and a guarded Postgres JSONB
+  adapter; durable writes still remain disabled until auth, authorization, and
+  explicit deployment flags are configured.
 - Project records include future ownership metadata, but it is bootstrap
   metadata only and must not be treated as final authorization.
 - `session/current` exposes only bootstrap actor metadata; it is not final
@@ -56,15 +57,15 @@ publishing approval are implemented.
 ### High
 
 - No real user authentication or session model exists yet.
-- No durable production database is connected yet.
+- No durable production database is connected and enabled yet.
 - No final workspace membership or role model exists for user-owned projects.
   Current signed-session authorization is only a bootstrap `workspaceId` guard.
 - No encrypted storage exists for OAuth refresh/access tokens.
 - Autopublishing is intentionally not executable yet.
 - Existing owner-token guard is only a bootstrap control, not real multi-user security.
 - `DATABASE_URL`, `POSTGRES_URL`, or blob-token env presence is detected and
-  reported, but it intentionally does not enable production writes until an
-  adapter, authentication, and authorization are implemented.
+  reported, but it intentionally does not enable production writes without an
+  explicit storage adapter flag and an authentication guard.
 
 ### Medium
 

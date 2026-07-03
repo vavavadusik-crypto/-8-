@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createJsonFileStorageAdapter } from "./storage-adapters/json-file.js";
+import { createPostgresStorageAdapter } from "./storage-adapters/postgres.js";
 
 const COLLECTIONS = new Set(["projects", "assets", "jobs", "audit"]);
 const STORAGE_ADAPTER_INTERFACE_VERSION = 1;
@@ -13,14 +14,20 @@ export function createId(prefix) {
 export function getStorageStatus() {
   const inVercel = Boolean(process.env.VERCEL);
   const demoStorageEnabled = process.env.HERMEST_ENABLE_DEMO_STORAGE === "1";
+  const durableStorageRequested = process.env.HERMEST_ENABLE_DURABLE_STORAGE === "1";
+  const configuredAdapter = storageAdapterName();
+  const postgresConfigPresent = Boolean(postgresConnectionString());
+  const postgresAdapterConfigured = configuredAdapter === "postgres" && postgresConfigPresent;
+  const postgresAdapterEnabled = postgresAdapterConfigured && (!inVercel || durableStorageRequested);
+  const authGuardConfigured = Boolean(process.env.HERMEST_OWNER_TOKEN || process.env.HERMEST_SESSION_SECRET);
   const adapter = getStorageAdapter();
   const externalConfigPresent = Boolean(
     process.env.DATABASE_URL ||
     process.env.POSTGRES_URL ||
     process.env.BLOB_READ_WRITE_TOKEN
   );
-  const writeEnabled = !inVercel || demoStorageEnabled;
-  const durable = !inVercel;
+  const writeEnabled = !inVercel || demoStorageEnabled || (postgresAdapterEnabled && authGuardConfigured);
+  const durable = postgresAdapterEnabled || !inVercel;
   const warnings = [];
 
   if (inVercel && !demoStorageEnabled) {
@@ -29,7 +36,16 @@ export function getStorageStatus() {
   if (inVercel && demoStorageEnabled) {
     warnings.push("demo_storage_uses_ephemeral_vercel_tmp_and_can_be_lost");
   }
-  if (externalConfigPresent) {
+  if (configuredAdapter === "postgres" && !postgresConfigPresent) {
+    warnings.push("postgres_adapter_selected_without_database_url");
+  }
+  if (postgresAdapterConfigured && !postgresAdapterEnabled) {
+    warnings.push("durable_postgres_adapter_configured_but_not_enabled");
+  }
+  if (postgresAdapterEnabled && !authGuardConfigured) {
+    warnings.push("durable_postgres_adapter_enabled_without_auth_guard");
+  }
+  if (externalConfigPresent && !postgresAdapterConfigured) {
     warnings.push("external_storage_env_detected_but_adapter_not_enabled_yet");
   }
 
@@ -37,12 +53,17 @@ export function getStorageStatus() {
     ok: true,
     adapter: adapter.id,
     adapterKind: adapter.kind,
+    configuredAdapter,
     adapterInterfaceVersion: STORAGE_ADAPTER_INTERFACE_VERSION,
-    durableAdapterImplemented: false,
+    durableAdapterImplemented: true,
+    durableAdapterConfigured: postgresAdapterConfigured,
+    durableAdapterEnabled: postgresAdapterEnabled,
+    durableStorageRequested,
     durable,
     writeEnabled,
     demoStorageEnabled,
     externalConfigPresent,
+    postgresConfigPresent,
     requiredForProduction: [
       "database_or_blob_storage_adapter",
       "user_accounts_and_sessions",
@@ -109,6 +130,14 @@ export async function appendAudit(action, payload = {}, actor = null) {
 }
 
 function getStorageAdapter() {
+  if (postgresAdapterActive()) {
+    return createPostgresStorageAdapter({
+      connectionString: postgresConnectionString(),
+      assertCollection,
+      assertSafeId
+    });
+  }
+
   return createJsonFileStorageAdapter({
     dataRoot: dataRoot(),
     assertCollection,
@@ -118,6 +147,19 @@ function getStorageAdapter() {
 
 function dataRoot() {
   return process.env.HERMEST_DATA_DIR || join(process.env.VERCEL ? tmpdir() : process.cwd(), ".data", "hermest-board");
+}
+
+function postgresAdapterActive() {
+  if (storageAdapterName() !== "postgres" || !postgresConnectionString()) return false;
+  return !process.env.VERCEL || process.env.HERMEST_ENABLE_DURABLE_STORAGE === "1";
+}
+
+function storageAdapterName() {
+  return String(process.env.HERMEST_STORAGE_ADAPTER || "json-file").trim().toLowerCase();
+}
+
+function postgresConnectionString() {
+  return process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
 }
 
 function defaultWorkspaceId(actor) {

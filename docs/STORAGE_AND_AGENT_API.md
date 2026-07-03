@@ -15,8 +15,9 @@ Reports whether the current deployment can write server-side data safely.
 - Public Vercel: writes are disabled unless `HERMEST_ENABLE_DEMO_STORAGE=1`.
 - Production SaaS: needs durable storage, user accounts, authorization, and
   encrypted connector token storage.
-- Storage now goes through an explicit adapter boundary. The current adapter is
-  `json-file`; future durable adapters must preserve the same API contract.
+- Storage now goes through an explicit adapter boundary. The default adapter is
+  `json-file`; a guarded `postgres-jsonb` durable adapter is implemented but is
+  not active on public Vercel unless explicitly configured and enabled.
 
 The response also includes `auth` status:
 
@@ -46,7 +47,9 @@ Expected alpha behavior:
 - `canAutopublish: false`
 
 This route is meant for deployment verification and for the next agent to see
-which 0.3.0/0.4.0 blockers remain before enabling production writes.
+which 0.3.0/0.4.0 blockers remain before enabling production writes. Durable
+storage reports separate booleans for adapter implementation, configuration,
+and explicit enablement.
 
 ## Current Session
 
@@ -206,4 +209,7 @@ owner-token demo-storage read/write guards.
 
 ## Durable Storage Target
 
-See `docs/DATABASE_SCHEMA_DRAFT.md` for the first Postgres schema target.
+See `docs/DATABASE_SCHEMA_DRAFT.md` for the first typed Postgres schema target.
+The current `postgres-jsonb` adapter is a guarded bootstrap adapter that stores
+portable API records in a generic `hermest_records` JSONB table until the typed
+schema and migration path are finalized.

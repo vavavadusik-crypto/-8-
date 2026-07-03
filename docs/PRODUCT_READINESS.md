@@ -37,6 +37,7 @@ It is not yet ready for:
 - minimal Vercel API skeleton;
 - project, asset, job, audit, storage status, and agent-plan API contracts;
 - safe local JSON storage fallback;
+- guarded Postgres JSONB storage adapter foundation;
 - production guard that blocks unsafe public Vercel writes without durable storage;
 - bootstrap owner-token write guard for temporary demo storage;
 - owner-token read guard for temporary public Vercel demo storage;
@@ -45,7 +46,7 @@ It is not yet ready for:
 
 ## Required Before Beta
 
-- durable project storage outside `localStorage`;
+- connect and enable durable project storage outside `localStorage`;
 - user accounts;
 - OAuth connector backend;
 - server-side secrets;

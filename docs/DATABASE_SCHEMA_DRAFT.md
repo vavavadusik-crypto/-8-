@@ -2,9 +2,10 @@
 
 This is the draft durable-storage schema for phase `0.3.0` / `0.4.0`.
 
-The current product still uses local JSON storage for development and blocks
-public production writes. This schema is the intended target for the first real
-Postgres adapter.
+The current product uses local JSON storage by default and blocks public
+production writes. A guarded `postgres-jsonb` bootstrap adapter can store current
+portable API records in a generic `hermest_records` table, but this schema is
+still the intended typed target for the first full production Postgres adapter.
 
 Runnable draft SQL lives in `db/postgres-schema.sql`.
 

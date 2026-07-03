@@ -11,7 +11,9 @@ export function getProductReadiness() {
   const connectors = connectorReadiness();
   const blockers = [
     !durableDbConfigured && "durable_database_not_configured",
-    "durable_storage_adapter_not_implemented",
+    !storage.durableAdapterImplemented && "durable_storage_adapter_not_implemented",
+    storage.durableAdapterImplemented && !storage.durableAdapterConfigured && "durable_storage_adapter_not_configured",
+    storage.durableAdapterConfigured && !storage.durableAdapterEnabled && "durable_storage_adapter_not_enabled",
     !objectStorageConfigured && "object_storage_not_configured",
     !sessionSecretConfigured && "session_secret_not_configured",
     "real_user_auth_not_implemented",
@@ -39,7 +41,9 @@ export function getProductReadiness() {
       durableDbConfigured,
       objectStorageConfigured,
       adapterInterfaceImplemented: true,
-      durableAdapterImplemented: storage.durableAdapterImplemented
+      durableAdapterImplemented: storage.durableAdapterImplemented,
+      durableAdapterConfigured: storage.durableAdapterConfigured,
+      durableAdapterEnabled: storage.durableAdapterEnabled
     },
     auth: {
       ...auth,

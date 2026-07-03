@@ -22,8 +22,8 @@ try {
   if (preflight.launchReady !== false || preflight.canAutopublish !== false) {
     throw new Error(`Expected blocked alpha preflight, got ${JSON.stringify(preflight)}`);
   }
-  if (preflight.storage.adapterInterfaceImplemented !== true || preflight.storage.durableAdapterImplemented !== false) {
-    throw new Error(`Expected adapter boundary without durable adapter, got ${JSON.stringify(preflight.storage)}`);
+  if (preflight.storage.adapterInterfaceImplemented !== true || preflight.storage.durableAdapterImplemented !== true || preflight.storage.durableAdapterConfigured !== false) {
+    throw new Error(`Expected adapter boundary with disabled durable adapter, got ${JSON.stringify(preflight.storage)}`);
   }
   if (!preflight.blockers.includes("real_user_auth_not_implemented")) {
     throw new Error(`Expected real auth blocker, got ${JSON.stringify(preflight.blockers)}`);
@@ -245,6 +245,30 @@ try {
   if (!externalStorageStatus.warnings?.includes("external_storage_env_detected_but_adapter_not_enabled_yet")) {
     throw new Error(`Expected external storage warning, got ${JSON.stringify(externalStorageStatus.warnings)}`);
   }
+  process.env.HERMEST_STORAGE_ADAPTER = "postgres";
+  const disabledPostgresStatus = await expect("postgres-storage-disabled", "GET", "storage/status", null, 200);
+  if (disabledPostgresStatus.adapter !== "json-file" || disabledPostgresStatus.durableAdapterConfigured !== true || disabledPostgresStatus.durableAdapterEnabled !== false || disabledPostgresStatus.writeEnabled !== false) {
+    throw new Error(`Expected configured Postgres adapter to stay disabled, got ${JSON.stringify(disabledPostgresStatus)}`);
+  }
+  if (!disabledPostgresStatus.warnings?.includes("durable_postgres_adapter_configured_but_not_enabled")) {
+    throw new Error(`Expected disabled Postgres warning, got ${JSON.stringify(disabledPostgresStatus.warnings)}`);
+  }
+  process.env.HERMEST_ENABLE_DURABLE_STORAGE = "1";
+  const enabledPostgresNoAuthStatus = await expect("postgres-storage-enabled-without-auth", "GET", "storage/status", null, 200);
+  if (enabledPostgresNoAuthStatus.adapter !== "postgres-jsonb" || enabledPostgresNoAuthStatus.durableAdapterEnabled !== true || enabledPostgresNoAuthStatus.writeEnabled !== false) {
+    throw new Error(`Expected Postgres adapter active but write-blocked without auth, got ${JSON.stringify(enabledPostgresNoAuthStatus)}`);
+  }
+  if (!enabledPostgresNoAuthStatus.warnings?.includes("durable_postgres_adapter_enabled_without_auth_guard")) {
+    throw new Error(`Expected auth guard warning for enabled Postgres, got ${JSON.stringify(enabledPostgresNoAuthStatus.warnings)}`);
+  }
+  const durableAuthBlocked = await expect("postgres-storage-write-auth-guard", "POST", "projects", {
+    project: { title: "blocked durable" }
+  }, 501);
+  if (durableAuthBlocked.error !== "write_auth_not_configured") {
+    throw new Error(`Expected durable write_auth_not_configured, got ${durableAuthBlocked.error}`);
+  }
+  delete process.env.HERMEST_ENABLE_DURABLE_STORAGE;
+  delete process.env.HERMEST_STORAGE_ADAPTER;
   delete process.env.DATABASE_URL;
 
   const guarded = await expect("production-write-guard", "POST", "projects", {

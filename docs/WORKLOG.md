@@ -21,6 +21,10 @@
   - signed-session list/read/update paths are filtered or rejected by `workspaceId`;
   - API smoke coverage now verifies cross-workspace denial for projects, assets, and jobs.
 - Added workspace ownership metadata and signed-session filtering for audit records.
+- Added a guarded `postgres-jsonb` storage adapter foundation:
+  - adapter stays inactive on public Vercel unless `HERMEST_STORAGE_ADAPTER=postgres` and `HERMEST_ENABLE_DURABLE_STORAGE=1` are set;
+  - durable writes remain blocked without `HERMEST_OWNER_TOKEN` or `HERMEST_SESSION_SECRET`;
+  - preflight now separates durable adapter implementation, configuration, and enablement.
 - Hardened agent job status handling:
   - aligned API-created approval jobs with the durable schema status `waiting_for_approval`;
   - rejected invalid job status updates;
