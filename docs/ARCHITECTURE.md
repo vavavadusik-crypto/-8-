@@ -18,6 +18,7 @@ Hermest Board is a browser-first interactive product prototype:
 - `GET /api/connectors/status` - reports whether connector env vars are present without exposing secrets;
 - `GET /api/public/sources` - public/free source registry;
 - `GET /api/research/search?q=...` - server-side public source search;
+- `GET /api-provider-catalog.json` - static provider catalog for settings and BYOK key slots;
 - `POST /api/ai/respond` - user-key AI response proxy for in-board BYOK testing;
 - `GET /api/connectors/start?provider=...` - OAuth start URL with signed state for per-user account connection;
 - `GET /api/connectors/callback` - validates signed state, then stops before token exchange;
@@ -43,6 +44,8 @@ browser storage and sent to `/api/ai/respond` only for the current request. The
 server endpoint does not persist the key or include it in project documents.
 The same settings area has browser-only slots for future parser, media,
 translation, and workflow keys; these slots are not a production secret vault.
+The provider catalog stores docs/signup metadata only. It does not include API
+keys gathered from the internet.
 
 All autonomous actions need a durable backend:
 

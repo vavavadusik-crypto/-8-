@@ -46,6 +46,8 @@ It is not yet ready for:
 - encrypted connector token vault with redacted API responses;
 - human approval record endpoint for jobs;
 - in-board Settings button with BYOK AI settings, local future-module key slots, and `/api/ai/respond` proxy for user-owned OpenAI keys;
+- static API provider catalog with 40+ official signup/docs links and no embedded secrets;
+- expanded no-key public research sources: Wikidata, Wikimedia Commons, and Open Library;
 - API smoke checks for product routes and guards;
 - basic smoke validation.
 

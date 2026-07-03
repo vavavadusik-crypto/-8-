@@ -89,7 +89,8 @@ try {
   }
   const userConfig = await expectConnector("user-config-schema", userConfigSchema, "GET", {});
   const openAiUserKey = userConfig.userVisibleFields?.find(field => field.key === "openaiApiKey");
-  if (!openAiUserKey?.secret || !openAiUserKey?.browserOnly || !userConfig.hiddenServerSideSecrets?.includes("OPENAI_API_KEY")) {
+  const noKeyProviders = (userConfig.apiProviderCatalog || []).filter(provider => provider.auth === "none");
+  if (!openAiUserKey?.secret || !openAiUserKey?.browserOnly || !userConfig.hiddenServerSideSecrets?.includes("OPENAI_API_KEY") || noKeyProviders.length < 3) {
     throw new Error(`Expected user BYOK schema to stay separate from owner secrets, got ${JSON.stringify(userConfig)}`);
   }
   const connectorMissingConfig = await expectConnector("connector-start-missing-config", connectorStart, "GET", { provider: "youtube" }, null, 501);

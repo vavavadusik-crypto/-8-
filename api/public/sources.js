@@ -14,11 +14,32 @@ const SOURCES = [
     docs: "https://www.crossref.org/documentation/retrieve-metadata/rest-api/"
   },
   {
+    id: "wikidata",
+    name: "Wikidata",
+    keyRequired: false,
+    use: "entity search, structured facts and knowledge graph references",
+    docs: "https://www.wikidata.org/wiki/Wikidata:Data_access"
+  },
+  {
+    id: "commons",
+    name: "Wikimedia Commons",
+    keyRequired: false,
+    use: "public media search with license metadata",
+    docs: "https://commons.wikimedia.org/wiki/Commons:API"
+  },
+  {
     id: "arxiv",
     name: "arXiv API",
     keyRequired: false,
     use: "open research preprints",
     docs: "https://info.arxiv.org/help/api/index.html"
+  },
+  {
+    id: "openlibrary",
+    name: "Open Library",
+    keyRequired: false,
+    use: "books, authors and covers",
+    docs: "https://openlibrary.org/developers/api"
   },
   {
     id: "openalex",

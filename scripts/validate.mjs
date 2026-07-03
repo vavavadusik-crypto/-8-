@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const html = readFileSync("index.html", "utf8");
+const providerCatalog = JSON.parse(readFileSync("public/api-provider-catalog.json", "utf8"));
 const scriptMatch = html.match(/<script>([\s\S]*)<\/script>\s*<\/body>/);
 
 if (!html.includes("<!doctype html>")) {
@@ -16,6 +17,14 @@ if (!html.includes("Hermest Board")) {
 
 if (!scriptMatch) {
   throw new Error("Could not extract inline script for syntax validation");
+}
+
+if (!Array.isArray(providerCatalog.providers) || providerCatalog.providers.length < 20) {
+  throw new Error("API provider catalog is missing provider entries");
+}
+
+if (!providerCatalog.providers.some(provider => provider.auth === "none") || !providerCatalog.providers.some(provider => provider.id === "openai")) {
+  throw new Error("API provider catalog must include OpenAI and no-key public providers");
 }
 
 const dir = mkdtempSync(join(tmpdir(), "hermest-validate-"));

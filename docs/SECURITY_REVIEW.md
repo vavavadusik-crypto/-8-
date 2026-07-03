@@ -64,6 +64,9 @@ publishing approval are implemented.
 - The Settings button includes browser-only user key slots for future modules;
   these values are intentionally not part of project export, project save, or
   server-side connector storage.
+- API provider catalog entries contain only provider metadata and official
+  docs/signup URLs. The product must not embed scraped, leaked, or shared
+  third-party API keys from the internet.
 
 ## Known Limitations
 
@@ -99,6 +102,8 @@ publishing approval are implemented.
   clear user-facing key handling policy.
 - Local future-module key slots are not connected to production workers yet and
   must not be treated as a secure multi-user vault.
+- Free-tier labels in the provider catalog are convenience hints, not a security
+  or billing guarantee. Provider limits and policies can change.
 
 ### Low
 

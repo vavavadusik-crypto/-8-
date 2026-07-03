@@ -41,6 +41,13 @@
   - OpenAI BYOK remains the working AI path;
   - browser-only slots now exist for future parser/media/translation/workflow keys;
   - user config schema documents browser-only user keys separately from hidden owner/server secrets.
+- Added a broad API provider catalog:
+  - 40+ provider slots across AI, search, media, speech, social publishing, automation, storage, email, and payments;
+  - catalog stores official docs/signup links and free/no-key metadata, not API secrets;
+  - settings UI can filter providers by category, open official docs, activate no-key sources, and store user-owned keys locally.
+- Expanded no-key public research:
+  - added Wikidata, Wikimedia Commons, and Open Library search;
+  - added per-provider timeout so slow public APIs do not block the whole research response.
 - Verified local project is its own clean git repo on `main`.
 - Verified GitHub `origin/main` matches local commit `bef87cb`.
 - Verified public production endpoints are live:

@@ -42,7 +42,7 @@ npm run check
 - очередь агента после генерации видео: парсер, переводчик, медиа-поиск, медиа-генерация, проверка прав, публикация и отчёт;
 - экспорт публикационного пакета в JSON;
 - Vercel API skeleton: health, connector status, publish-pack validation;
-- public/free research API skeleton: Wikipedia, Crossref, arXiv, GitHub public search, optional OpenAlex;
+- public/free research API: Wikipedia, Wikidata, Wikimedia Commons, Crossref, arXiv, Open Library, GitHub public search, optional OpenAlex;
 - backend storage API contract: projects, assets, jobs, audit log, storage status;
 - guarded Postgres JSONB adapter foundation for future durable storage;
 - signed-session verification and owner-token bootstrap issuer foundation;
@@ -50,6 +50,7 @@ npm run check
 - backend agent plan preview that shows blockers before autopublishing;
 - human approval record endpoint for publish jobs;
 - Settings button inside the board for user-owned OpenAI keys and future local parser/media/translation/workflow keys;
+- API provider catalog with 40+ AI, search, media, speech, social, automation, storage, email, and payment providers;
 - BYOK AI response proxy and AI-answer cards;
 - per-user OAuth start skeleton for YouTube, TikTok, Instagram;
 - signed OAuth state validation before connector token exchange;

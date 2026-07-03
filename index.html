@@ -529,6 +529,34 @@
       border-color: rgba(251, 113, 133, .34);
     }
 
+    .provider-info {
+      border: 1px solid rgba(123, 220, 255, .16);
+      border-radius: 8px;
+      background: rgba(3, 9, 18, .5);
+      padding: 9px;
+      color: #a9c7d8;
+      font-size: 11px;
+      line-height: 1.38;
+      margin: 8px 0 10px;
+    }
+
+    .provider-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 7px;
+    }
+
+    .provider-pill {
+      border: 1px solid rgba(94, 234, 212, .24);
+      border-radius: 999px;
+      padding: 3px 7px;
+      color: #a7f3d0;
+      background: rgba(5, 25, 29, .42);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
     .hint {
       color: #7894a9;
       font-size: 12px;
@@ -769,16 +797,15 @@
               <h2>Локальные API ключи</h2>
               <div class="settings-list" id="userApiKeyList"></div>
               <div class="field">
-                <label><span>Модуль</span></label>
+                <label><span>Категория</span></label>
+                <select id="apiCatalogCategory"></select>
+              </div>
+              <div class="field">
+                <label><span>Провайдер</span></label>
                 <select id="userApiKeyProvider">
-                  <option value="openai">OpenAI AI</option>
-                  <option value="search">Search / parser</option>
-                  <option value="media">Media generation</option>
-                  <option value="translation">Translation</option>
-                  <option value="workflow">Workflow webhook</option>
-                  <option value="other">Other</option>
                 </select>
               </div>
+              <div class="provider-info" id="apiProviderInfo"></div>
               <div class="field">
                 <label><span>Название</span></label>
                 <input id="userApiKeyLabel" type="text" placeholder="Например: мой OpenAI или media worker" autocomplete="off">
@@ -789,9 +816,13 @@
               </div>
               <div class="panel-row two">
                 <button id="saveUserApiKey" title="Сохранить ключ локально">Добавить</button>
+                <button id="openProviderDocs" title="Открыть официальную страницу API">Docs</button>
+              </div>
+              <div class="panel-row two">
+                <button id="activateNoKeyProvider" title="Добавить no-key источник без секрета">No-key</button>
                 <button id="clearUserApiKeys" title="Удалить все локальные ключи">Очистить</button>
               </div>
-              <div class="mini-note">Сейчас реально используется OpenAI ключ. Остальные слоты готовят интерфейс под parser, media, translation и workflow workers.</div>
+              <div class="mini-note">No-key источники работают без секрета. OAuth и server-secret провайдеры требуют отдельный backend flow перед продакшеном.</div>
             </div>
           </div>
           <div class="panel-row two">
@@ -830,6 +861,29 @@
     const CONTENT_VERSION = 4;
     const BOARD_WIDTH = 3000;
     const BOARD_HEIGHT = 1800;
+    const API_PROVIDER_CATEGORIES = [
+      ["all", "Все"],
+      ["ai_text", "AI text"],
+      ["ai_router", "AI router"],
+      ["image_video", "Фото / видео"],
+      ["speech", "Голос"],
+      ["search_research", "Поиск / research"],
+      ["social_publish", "Публикация"],
+      ["automation", "Automation"],
+      ["storage_db", "Storage / DB"],
+      ["email", "Email"],
+      ["payments", "Payments"]
+    ];
+    const FALLBACK_API_PROVIDER_CATALOG = [
+      { id: "openai", name: "OpenAI", category: "ai_text", auth: "api_key", freeMode: "paid_or_trial", env: "OPENAI_API_KEY", docs: "https://platform.openai.com/docs", signup: "https://platform.openai.com/api-keys", use: "Primary BYOK AI assistant", status: "working_ai" },
+      { id: "gemini", name: "Google Gemini API", category: "ai_text", auth: "api_key", freeMode: "free_tier", env: "GEMINI_API_KEY", docs: "https://ai.google.dev/gemini-api/docs", signup: "https://aistudio.google.com/apikey", use: "Alternative multimodal AI provider", status: "key_slot" },
+      { id: "groq", name: "Groq", category: "ai_text", auth: "api_key", freeMode: "free_plan", env: "GROQ_API_KEY", docs: "https://console.groq.com/docs/quickstart", signup: "https://console.groq.com/keys", use: "Fast OpenAI-compatible chat models", status: "key_slot" },
+      { id: "wikipedia", name: "Wikipedia / Wikimedia APIs", category: "search_research", auth: "none", freeMode: "no_key", env: "", docs: "https://www.mediawiki.org/wiki/Wikimedia_APIs", signup: "", use: "No-key encyclopedic research", status: "working_public_search" },
+      { id: "wikidata", name: "Wikidata", category: "search_research", auth: "none", freeMode: "no_key", env: "", docs: "https://www.wikidata.org/wiki/Wikidata:Data_access", signup: "", use: "No-key entity search", status: "working_public_search" },
+      { id: "commons", name: "Wikimedia Commons", category: "image_video", auth: "none", freeMode: "no_key", env: "", docs: "https://commons.wikimedia.org/wiki/Commons:API", signup: "", use: "No-key media search with license metadata", status: "working_public_search" },
+      { id: "crossref", name: "Crossref REST API", category: "search_research", auth: "none", freeMode: "no_key", env: "SUPPORT_EMAIL", docs: "https://www.crossref.org/documentation/retrieve-metadata/rest-api/", signup: "", use: "No-key publication metadata", status: "working_public_search" },
+      { id: "openlibrary", name: "Open Library", category: "search_research", auth: "none", freeMode: "no_key", env: "", docs: "https://openlibrary.org/developers/api", signup: "", use: "No-key books and author metadata", status: "working_public_search" }
+    ];
     const board = document.getElementById("board");
     const boardWrap = document.getElementById("boardWrap");
     const wire = document.getElementById("wire");
@@ -863,11 +917,14 @@
     const aiPromptInput = document.getElementById("aiPrompt");
     const aiResponseOutput = document.getElementById("aiResponseOutput");
     const userApiKeyList = document.getElementById("userApiKeyList");
+    const apiCatalogCategory = document.getElementById("apiCatalogCategory");
     const userApiKeyProvider = document.getElementById("userApiKeyProvider");
+    const apiProviderInfo = document.getElementById("apiProviderInfo");
     const userApiKeyLabel = document.getElementById("userApiKeyLabel");
     const userApiKeyValue = document.getElementById("userApiKeyValue");
 
     const state = loadState();
+    let apiProviderCatalog = normalizeApiProviderCatalog(FALLBACK_API_PROVIDER_CATALOG);
     let aiSettings = loadAiSettings();
     let userApiKeys = loadUserApiKeys();
     let latestAiResponse = "";
@@ -1702,6 +1759,13 @@
     document.getElementById("addAiResponseCard").addEventListener("click", addAiResponseCard);
     document.getElementById("saveUserApiKey").addEventListener("click", saveUserApiKeyFromForm);
     document.getElementById("clearUserApiKeys").addEventListener("click", clearUserApiKeys);
+    document.getElementById("openProviderDocs").addEventListener("click", openSelectedProviderDocs);
+    document.getElementById("activateNoKeyProvider").addEventListener("click", activateSelectedNoKeyProvider);
+    apiCatalogCategory.addEventListener("change", () => {
+      renderApiProviderControls();
+      updateApiProviderInfo();
+    });
+    userApiKeyProvider.addEventListener("change", updateApiProviderInfo);
     userApiKeyList.addEventListener("click", event => {
       const id = event.target.closest("button")?.dataset.deleteKey;
       if (id) deleteUserApiKey(id);
@@ -2173,6 +2237,122 @@
       flashStatus("AI ключ удалён из браузера");
     }
 
+    async function loadApiProviderCatalog() {
+      try {
+        const response = await fetch("./api-provider-catalog.json", { cache: "no-store" });
+        if (!response.ok) throw new Error(`catalog_${response.status}`);
+        const data = await response.json();
+        const providers = normalizeApiProviderCatalog(data.providers);
+        if (providers.length) {
+          apiProviderCatalog = providers;
+          userApiKeys = normalizeUserApiKeys(userApiKeys);
+          renderApiProviderControls();
+          renderUserApiKeyList();
+        }
+      } catch (_) {
+        renderApiProviderControls();
+      }
+    }
+
+    function normalizeApiProviderCatalog(providers) {
+      return (Array.isArray(providers) ? providers : []).map(provider => ({
+        id: String(provider.id || "").trim(),
+        name: String(provider.name || "").trim(),
+        category: String(provider.category || "other").trim(),
+        auth: String(provider.auth || "api_key").trim(),
+        freeMode: String(provider.freeMode || "unknown").trim(),
+        env: String(provider.env || "").trim(),
+        docs: String(provider.docs || "").trim(),
+        signup: String(provider.signup || "").trim(),
+        use: String(provider.use || "").trim(),
+        status: String(provider.status || "key_slot").trim()
+      })).filter(provider => provider.id && provider.name);
+    }
+
+    function renderApiProviderControls() {
+      const currentCategory = apiCatalogCategory.value || "all";
+      apiCatalogCategory.innerHTML = API_PROVIDER_CATEGORIES.map(([id, label]) =>
+        `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`
+      ).join("");
+      apiCatalogCategory.value = API_PROVIDER_CATEGORIES.some(([id]) => id === currentCategory) ? currentCategory : "all";
+
+      const selectedId = userApiKeyProvider.value || "openai";
+      const filtered = apiProviderCatalog.filter(provider => apiCatalogCategory.value === "all" || provider.category === apiCatalogCategory.value);
+      const list = filtered.length ? filtered : apiProviderCatalog;
+      userApiKeyProvider.innerHTML = list.map(provider =>
+        `<option value="${escapeHtml(provider.id)}">${escapeHtml(provider.name)}</option>`
+      ).join("");
+      userApiKeyProvider.value = list.some(provider => provider.id === selectedId) ? selectedId : list[0]?.id || "";
+      updateApiProviderInfo();
+    }
+
+    function updateApiProviderInfo() {
+      const provider = selectedCatalogProvider();
+      if (!provider) {
+        apiProviderInfo.textContent = "Каталог API пока не загружен.";
+        return;
+      }
+      const needsSecret = providerNeedsSecret(provider);
+      userApiKeyLabel.placeholder = provider.name;
+      userApiKeyValue.disabled = provider.auth === "none" || provider.auth === "oauth" || provider.status === "server_secret_required";
+      userApiKeyValue.placeholder = needsSecret ? (provider.env || "Вставь ключ или webhook URL") : authHint(provider);
+      apiProviderInfo.innerHTML = [
+        `<strong>${escapeHtml(provider.name)}</strong>`,
+        escapeHtml(provider.use || ""),
+        `<div class="provider-pills">`,
+        `<span class="provider-pill">${escapeHtml(categoryLabel(provider.category))}</span>`,
+        `<span class="provider-pill">${escapeHtml(authLabel(provider.auth))}</span>`,
+        `<span class="provider-pill">${escapeHtml(freeModeLabel(provider.freeMode))}</span>`,
+        `<span class="provider-pill">${escapeHtml(statusLabel(provider.status))}</span>`,
+        provider.env ? `<span class="provider-pill">${escapeHtml(provider.env)}</span>` : "",
+        `</div>`
+      ].filter(Boolean).join("");
+    }
+
+    function selectedCatalogProvider() {
+      return catalogProviderById(userApiKeyProvider.value) || apiProviderCatalog[0] || null;
+    }
+
+    function catalogProviderById(id) {
+      const value = String(id || "").trim();
+      return apiProviderCatalog.find(provider => provider.id === value) || null;
+    }
+
+    function providerNeedsSecret(provider) {
+      return !["none", "oauth"].includes(provider?.auth) && provider?.status !== "server_secret_required";
+    }
+
+    function openSelectedProviderDocs() {
+      const provider = selectedCatalogProvider();
+      const url = provider?.signup || provider?.docs;
+      if (!url) {
+        flashStatus("У провайдера нет ссылки");
+        return;
+      }
+      window.open(url, "_blank", "noopener,noreferrer");
+      flashStatus("Открываю официальный API docs");
+    }
+
+    function activateSelectedNoKeyProvider() {
+      const provider = selectedCatalogProvider();
+      if (!provider) return;
+      if (provider.auth !== "none") {
+        flashStatus("Для этого провайдера нужен ключ или OAuth");
+        return;
+      }
+      addOrUpdateUserApiKey({
+        provider: provider.id,
+        label: provider.name,
+        key: "",
+        auth: provider.auth,
+        category: provider.category,
+        docs: provider.docs,
+        status: provider.status
+      });
+      persistUserApiKeys("No-key источник активирован");
+      renderUserApiKeyList();
+    }
+
     function loadUserApiKeys() {
       try {
         const sessionRaw = sessionStorage.getItem(USER_API_KEYS_SESSION_KEY);
@@ -2187,42 +2367,51 @@
 
     function normalizeUserApiKeys(input) {
       const items = Array.isArray(input) ? input : [];
-      return items.slice(0, 24).map(item => ({
-        id: typeof item.id === "string" && item.id ? item.id : `key_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-        provider: normalizeUserKeyProvider(item.provider),
-        label: String(item.label || "").trim().slice(0, 80),
-        key: String(item.key || "").trim(),
-        createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString()
-      })).filter(item => item.key);
-    }
-
-    function normalizeUserKeyProvider(provider) {
-      const value = String(provider || "other").trim().toLowerCase();
-      return ["openai", "search", "media", "translation", "workflow", "other"].includes(value) ? value : "other";
+      return items.slice(0, 40).map(item => {
+        const provider = catalogProviderById(item.provider) || catalogProviderById("openai") || {};
+        const auth = String(item.auth || provider.auth || "api_key").trim();
+        const key = String(item.key || "").trim();
+        return {
+          id: typeof item.id === "string" && item.id ? item.id : `key_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+          provider: String(item.provider || provider.id || "openai").trim(),
+          label: String(item.label || provider.name || "").trim().slice(0, 80),
+          key,
+          auth,
+          category: String(item.category || provider.category || "other").trim(),
+          docs: String(item.docs || provider.docs || "").trim(),
+          status: String(item.status || provider.status || "key_slot").trim(),
+          createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString()
+        };
+      }).filter(item => item.key || item.auth === "none" || item.auth === "oauth" || item.status === "server_secret_required");
     }
 
     function saveUserApiKeyFromForm() {
-      const provider = normalizeUserKeyProvider(userApiKeyProvider.value);
+      const providerMeta = selectedCatalogProvider();
+      if (!providerMeta) return;
       const key = userApiKeyValue.value.trim();
-      const label = userApiKeyLabel.value.trim() || userKeyProviderLabel(provider);
-      if (!key) {
+      const label = userApiKeyLabel.value.trim() || providerMeta.name;
+      if (providerMeta.status === "server_secret_required") {
+        flashStatus("Этот ключ должен храниться на backend, не в браузере");
+        return;
+      }
+      if (providerMeta.auth === "oauth") {
+        flashStatus("Для этого провайдера нужен OAuth flow через Аккаунты");
+        return;
+      }
+      if (providerNeedsSecret(providerMeta) && !key) {
         flashStatus("Вставь ключ или URL");
         return;
       }
-      const existing = userApiKeys.find(item => item.provider === provider && item.label.toLowerCase() === label.toLowerCase());
-      if (existing) {
-        existing.key = key;
-        existing.createdAt = new Date().toISOString();
-      } else {
-        userApiKeys.push({
-          id: `key_${Date.now()}`,
-          provider,
-          label,
-          key,
-          createdAt: new Date().toISOString()
-        });
-      }
-      if (provider === "openai") {
+      addOrUpdateUserApiKey({
+        provider: providerMeta.id,
+        label,
+        key,
+        auth: providerMeta.auth,
+        category: providerMeta.category,
+        docs: providerMeta.docs,
+        status: providerMeta.status
+      });
+      if (providerMeta.id === "openai") {
         aiKeyInput.value = key;
         aiSettings = readAiSettingsForm();
         saveAiSettingsFromForm("OpenAI ключ сохранён");
@@ -2231,6 +2420,25 @@
       }
       userApiKeyValue.value = "";
       renderUserApiKeyList();
+    }
+
+    function addOrUpdateUserApiKey(entry) {
+      const label = String(entry.label || "").trim();
+      const provider = String(entry.provider || "").trim();
+      const existing = userApiKeys.find(item => item.provider === provider && item.label.toLowerCase() === label.toLowerCase());
+      const next = {
+        id: existing?.id || `key_${Date.now()}`,
+        provider,
+        label,
+        key: String(entry.key || "").trim(),
+        auth: String(entry.auth || "api_key").trim(),
+        category: String(entry.category || "other").trim(),
+        docs: String(entry.docs || "").trim(),
+        status: String(entry.status || "key_slot").trim(),
+        createdAt: new Date().toISOString()
+      };
+      if (existing) Object.assign(existing, next);
+      else userApiKeys.push(next);
     }
 
     function persistUserApiKeys(message = "API ключи сохранены", showStatus = true) {
@@ -2273,7 +2481,7 @@
         <div class="settings-key-row">
           <div class="settings-key-main">
             <div class="settings-key-title">${escapeHtml(item.label || userKeyProviderLabel(item.provider))}</div>
-            <div class="settings-key-meta">${escapeHtml(userKeyProviderLabel(item.provider))} · ${escapeHtml(maskSecret(item.key))}</div>
+            <div class="settings-key-meta">${escapeHtml(userKeyProviderLabel(item.provider))} · ${escapeHtml(authLabel(item.auth))} · ${escapeHtml(maskSecret(item.key, item.auth))}</div>
           </div>
           <button type="button" data-delete-key="${escapeHtml(item.id)}" title="Удалить ключ">×</button>
         </div>
@@ -2281,17 +2489,12 @@
     }
 
     function userKeyProviderLabel(provider) {
-      return {
-        openai: "OpenAI AI",
-        search: "Search / parser",
-        media: "Media generation",
-        translation: "Translation",
-        workflow: "Workflow webhook",
-        other: "Other"
-      }[provider] || "Other";
+      return catalogProviderById(provider)?.name || provider || "Other";
     }
 
-    function maskSecret(value) {
+    function maskSecret(value, auth = "api_key") {
+      if (auth === "none") return "no key";
+      if (auth === "oauth") return "OAuth";
       const clean = String(value || "").trim();
       if (!clean) return "empty";
       if (/^https?:\/\//i.test(clean)) {
@@ -2303,6 +2506,61 @@
       }
       if (clean.length <= 8) return "••••";
       return `••••${clean.slice(-4)}`;
+    }
+
+    function categoryLabel(category) {
+      return API_PROVIDER_CATEGORIES.find(([id]) => id === category)?.[1] || category || "Other";
+    }
+
+    function authLabel(auth) {
+      return {
+        none: "no key",
+        api_key: "API key",
+        optional_api_key: "optional key",
+        oauth: "OAuth",
+        webhook: "webhook URL",
+        connection_string: "connection string",
+        server_secret: "server secret"
+      }[auth] || auth || "API key";
+    }
+
+    function authHint(provider) {
+      if (provider.auth === "none") return "Ключ не нужен";
+      if (provider.auth === "oauth") return "Подключается через OAuth";
+      if (provider.status === "server_secret_required") return "Только backend env";
+      return provider.env || "Вставь ключ";
+    }
+
+    function freeModeLabel(mode) {
+      return {
+        no_key: "free no-key",
+        no_key_with_limits: "no-key limits",
+        free_key: "free key",
+        free_plan: "free plan",
+        free_tier: "free tier",
+        free_credits: "free credits",
+        free_mode: "free mode",
+        free_models_available: "free models",
+        free_quota: "free quota",
+        free_webhook: "free webhook",
+        paid_or_trial: "trial/paid",
+        paid: "paid",
+        account_key: "account key",
+        approval_required: "approval",
+        test_keys: "test keys",
+        self_hosted_or_cloud: "self-host/cloud"
+      }[mode] || mode || "unknown";
+    }
+
+    function statusLabel(status) {
+      return {
+        working_ai: "working",
+        working_public_search: "working public",
+        key_slot: "key slot",
+        server_optional_key: "server optional",
+        oauth_skeleton: "OAuth skeleton",
+        server_secret_required: "backend only"
+      }[status] || status || "slot";
     }
 
     async function testAiConnection() {
@@ -3017,7 +3275,9 @@
     }
 
     render();
+    renderApiProviderControls();
     syncAiSettingsForm();
+    loadApiProviderCatalog();
     setTimeout(fitView, 80);
   </script>
 </body>

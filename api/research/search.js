@@ -10,8 +10,11 @@ export default async function handler(request, response) {
 
   const tasks = [
     searchWikipedia(query),
+    searchWikidata(query),
+    searchCommons(query),
     searchCrossref(query),
     searchArxiv(query),
+    searchOpenLibrary(query),
     searchGithub(query)
   ];
 
@@ -63,6 +66,49 @@ async function searchCrossref(query) {
   }));
 }
 
+async function searchWikidata(query) {
+  const url = new URL("https://www.wikidata.org/w/api.php");
+  url.searchParams.set("action", "wbsearchentities");
+  url.searchParams.set("search", query);
+  url.searchParams.set("language", "en");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("limit", String(MAX_RESULTS_PER_SOURCE));
+  const data = await getJson(url, { "Api-User-Agent": userAgent() });
+  return (data.search || []).map(item => ({
+    source: "wikidata",
+    title: item.label || item.id,
+    summary: item.description || "",
+    url: item.concepturi || (item.id ? `https://www.wikidata.org/wiki/${encodeURIComponent(item.id)}` : undefined),
+    entityId: item.id
+  }));
+}
+
+async function searchCommons(query) {
+  const url = new URL("https://commons.wikimedia.org/w/api.php");
+  url.searchParams.set("action", "query");
+  url.searchParams.set("generator", "search");
+  url.searchParams.set("gsrsearch", query);
+  url.searchParams.set("gsrnamespace", "6");
+  url.searchParams.set("gsrlimit", String(MAX_RESULTS_PER_SOURCE));
+  url.searchParams.set("prop", "imageinfo");
+  url.searchParams.set("iiprop", "url|mime|extmetadata");
+  url.searchParams.set("format", "json");
+  const data = await getJson(url, { "Api-User-Agent": userAgent() });
+  return Object.values(data.query?.pages || {}).map(page => {
+    const image = page.imageinfo?.[0] || {};
+    const metadata = image.extmetadata || {};
+    return {
+      source: "commons",
+      title: String(page.title || "").replace(/^File:/, ""),
+      summary: cleanHtml(metadata.ImageDescription?.value || metadata.ObjectName?.value || ""),
+      url: image.descriptionurl || image.url,
+      mediaUrl: image.url,
+      mime: image.mime,
+      license: cleanHtml(metadata.LicenseShortName?.value || metadata.UsageTerms?.value || "")
+    };
+  });
+}
+
 async function searchArxiv(query) {
   const url = new URL("https://export.arxiv.org/api/query");
   url.searchParams.set("search_query", `all:${query}`);
@@ -80,6 +126,20 @@ async function searchArxiv(query) {
       published: tag(entry, "published")
     };
   });
+}
+
+async function searchOpenLibrary(query) {
+  const url = new URL("https://openlibrary.org/search.json");
+  url.searchParams.set("q", query);
+  url.searchParams.set("limit", String(MAX_RESULTS_PER_SOURCE));
+  const data = await getJson(url, { "User-Agent": userAgent() });
+  return (data.docs || []).map(item => ({
+    source: "openlibrary",
+    title: item.title,
+    summary: [first(item.author_name), item.first_publish_year].filter(Boolean).join(" · "),
+    url: item.key ? `https://openlibrary.org${item.key}` : undefined,
+    coverUrl: item.cover_i ? `https://covers.openlibrary.org/b/id/${item.cover_i}-M.jpg` : undefined
+  }));
 }
 
 async function searchGithub(query) {
@@ -117,15 +177,28 @@ async function searchOpenAlex(query) {
 }
 
 async function getJson(url, headers = {}) {
-  const response = await fetch(url, { headers });
+  const response = await fetchWithTimeout(url, { headers });
   if (!response.ok) throw new Error(`${url.hostname}:${response.status}`);
   return response.json();
 }
 
 async function getText(url, headers = {}) {
-  const response = await fetch(url, { headers });
+  const response = await fetchWithTimeout(url, { headers });
   if (!response.ok) throw new Error(`${url.hostname}:${response.status}`);
   return response.text();
+}
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 7000);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error(`${url.hostname}:timeout`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function first(value) {
@@ -138,6 +211,17 @@ function tag(xml, name) {
 
 function cleanXml(value) {
   return String(value).replace(/<!\[CDATA\[|\]\]>/g, "").replace(/\s+/g, " ").trim();
+}
+
+function cleanHtml(value) {
+  return String(value)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#039;|&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 320);
 }
 
 function userAgent() {
