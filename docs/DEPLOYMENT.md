@@ -89,6 +89,7 @@ When deployed on Vercel:
 
 ```bash
 curl https://your-domain.example/api/health
+curl 'https://your-domain.example/api/product?route=storage/status'
 curl https://your-domain.example/api/connectors/status
 curl 'https://your-domain.example/api/public/sources'
 curl 'https://your-domain.example/api/research/search?q=ai%20agents'
@@ -101,3 +102,23 @@ curl -X POST https://your-domain.example/api/publish-pack/validate \
   -H 'content-type: application/json' \
   --data @hermest-publish-pack.json
 ```
+
+Agent plan preview:
+
+```bash
+curl -X POST 'https://your-domain.example/api/product?route=agent/plan' \
+  -H 'content-type: application/json' \
+  --data @hermest-publish-pack.json
+```
+
+## Server Storage
+
+Local development uses a JSON-file adapter under `.data/hermest-board`.
+
+On public Vercel, project writes are disabled by default because serverless
+filesystem storage is ephemeral. Do not enable public project writes until the
+app has durable storage, user accounts, authorization, and encrypted connector
+token storage.
+
+`HERMEST_ENABLE_DEMO_STORAGE=1` can be used only for temporary demos where data
+loss is acceptable. It must not be used for private customer data.

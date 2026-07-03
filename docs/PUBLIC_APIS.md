@@ -14,6 +14,7 @@ GET /api/connectors/start?provider=youtube
 GET /api/connectors/start?provider=tiktok
 GET /api/connectors/start?provider=instagram
 GET /api/connectors/callback
+POST /api/product?route=agent/plan
 ```
 
 ## No-Key Sources
@@ -47,6 +48,7 @@ These can be added later through server-side env vars:
 - backend can search public sources after Vercel deploy;
 - UI can show users what account connectors are needed;
 - publish packs can include source research tasks.
+- backend can produce a deterministic agent execution plan and list blockers.
 
 ## What Still Needs Backend Work
 

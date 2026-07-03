@@ -43,6 +43,8 @@ npm run check
 - экспорт публикационного пакета в JSON;
 - Vercel API skeleton: health, connector status, publish-pack validation;
 - public/free research API skeleton: Wikipedia, Crossref, arXiv, GitHub public search, optional OpenAlex;
+- backend storage API contract: projects, assets, jobs, audit log, storage status;
+- backend agent plan preview that shows blockers before autopublishing;
 - per-user OAuth start skeleton for YouTube, TikTok, Instagram;
 - режим записи;
 - автосохранение в браузере;
@@ -50,7 +52,7 @@ npm run check
 
 Данные сохраняются в `localStorage` браузера. Для переноса используй кнопку экспорта JSON.
 
-Автопубликация требует подключённых аккаунтов и OAuth/API-доступов. Пока коннекторы не подключены, борд готовит структурированный пакет публикации и очередь действий агента.
+Автопубликация требует подключённых аккаунтов, постоянного backend-хранилища и OAuth/API-доступов. Пока коннекторы не подключены, борд готовит структурированный пакет публикации, backend-план агента и очередь действий.
 
 Документы:
 
@@ -58,4 +60,5 @@ npm run check
 - `docs/ARCHITECTURE.md` - текущая архитектура и backend boundary;
 - `docs/CONNECTORS.md` - что нужно для TikTok, YouTube, Shorts, Instagram;
 - `docs/PUBLIC_APIS.md` - публичные/free API и правила безопасности;
+- `docs/STORAGE_AND_AGENT_API.md` - проекты, assets, jobs, audit и backend agent plan;
 - `docs/PRODUCT_READINESS.md` - что готово и что нужно до beta/launch.

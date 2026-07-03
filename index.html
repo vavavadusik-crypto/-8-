@@ -674,6 +674,14 @@
             <button id="showConnectorGuide" title="Показать как пользователю подключить аккаунты">Аккаунты</button>
           </div>
           <div class="panel-row two">
+            <button id="showStorageStatus" title="Проверить backend-хранилище">Хранилище</button>
+            <button id="saveProjectApi" title="Сохранить борд через backend API">API save</button>
+          </div>
+          <div class="panel-row two">
+            <button id="loadProjectApi" title="Загрузить последний борд из backend API">API load</button>
+            <button id="runAgentPlan" title="Построить backend-план агента">План агента</button>
+          </div>
+          <div class="panel-row two">
             <button id="buildPublishPack" title="Собрать пакет публикации">Пакет</button>
             <button id="downloadPublishPack" title="Скачать пакет публикации JSON">JSON</button>
           </div>
@@ -753,6 +761,11 @@
           "Цель: инструмент, который помогает быстро превращать знания и разработки в обучающий контент и продукт."
         ].join("\n"),
         script: "",
+        server: {
+          projectId: "",
+          lastSyncedAt: "",
+          storageStatus: ""
+        },
         publish: {
           platforms: ["tiktok", "youtube_video", "youtube_shorts", "instagram_reels"],
           tools: ["parser", "translator", "web_media", "generated_media", "rights_check", "scheduler"],
@@ -996,9 +1009,19 @@
         plan: typeof input.plan === "string" && input.plan.trim() ? input.plan : base.plan,
         roadmap: typeof input.roadmap === "string" && input.roadmap.trim() ? input.roadmap : base.roadmap,
         script: typeof input.script === "string" ? input.script : base.script,
+        server: normalizeServer(input.server, base.server),
         publish: normalizePublish(input.publish, base.publish),
         links,
         cards: mergedCards.length ? mergedCards : base.cards
+      };
+    }
+
+    function normalizeServer(input, fallback) {
+      const source = input && typeof input === "object" ? input : {};
+      return {
+        projectId: typeof source.projectId === "string" ? source.projectId : fallback.projectId,
+        lastSyncedAt: typeof source.lastSyncedAt === "string" ? source.lastSyncedAt : fallback.lastSyncedAt,
+        storageStatus: typeof source.storageStatus === "string" ? source.storageStatus : fallback.storageStatus
       };
     }
 
@@ -1520,6 +1543,10 @@
     });
     document.getElementById("runResearchSearch").addEventListener("click", runResearchSearch);
     document.getElementById("showConnectorGuide").addEventListener("click", showConnectorGuide);
+    document.getElementById("showStorageStatus").addEventListener("click", showStorageStatus);
+    document.getElementById("saveProjectApi").addEventListener("click", saveProjectApi);
+    document.getElementById("loadProjectApi").addEventListener("click", loadProjectApi);
+    document.getElementById("runAgentPlan").addEventListener("click", runAgentPlan);
     document.getElementById("buildPublishPack").addEventListener("click", () => {
       state.publish.packageText = buildPublishPackageText();
       publishOutput.value = state.publish.packageText;
@@ -1777,6 +1804,205 @@
       saveState("Схема аккаунтов показана");
     }
 
+    async function showStorageStatus() {
+      statusEl.textContent = "Проверяю backend-хранилище";
+      try {
+        const data = await fetchJson(productApi("storage/status"));
+        state.server.storageStatus = data.adapter || "";
+        state.publish.packageText = formatStorageStatus(data);
+        publishOutput.value = state.publish.packageText;
+        saveState(data.writeEnabled ? "Backend storage доступен" : "Backend storage только для чтения");
+      } catch (error) {
+        state.publish.packageText = [
+          "BACKEND STORAGE STATUS",
+          "",
+          "API хранилище недоступно в этом режиме.",
+          "",
+          `Ошибка: ${error.message || "unknown"}`,
+          "",
+          "Локальный fallback работает через localStorage и экспорт JSON."
+        ].join("\n");
+        publishOutput.value = state.publish.packageText;
+        saveState("Storage API недоступен");
+      }
+    }
+
+    async function saveProjectApi() {
+      statusEl.textContent = "Сохраняю проект через API";
+      const payload = {
+        project: buildProjectDocument(),
+        publishPack: buildPublishPackageObject()
+      };
+      const id = state.server?.projectId;
+      try {
+        const data = await fetchJson(productApi(id ? `projects/${id}` : "projects"), {
+          method: id ? "PUT" : "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const project = data.project?.project || data.project;
+        if (project?.id) state.server.projectId = project.id;
+        state.server.lastSyncedAt = new Date().toISOString();
+        state.server.storageStatus = data.storage?.adapter || "";
+        state.publish.packageText = [
+          "API SAVE RESULT",
+          "",
+          `Project ID: ${state.server.projectId || "unknown"}`,
+          `Storage: ${data.storage?.adapter || "unknown"}`,
+          `Durable: ${data.storage?.durable ? "yes" : "no"}`,
+          `Write enabled: ${data.storage?.writeEnabled ? "yes" : "no"}`,
+          "",
+          data.storage?.warnings?.length ? `Warnings: ${data.storage.warnings.join(", ")}` : "Warnings: none"
+        ].join("\n");
+        publishOutput.value = state.publish.packageText;
+        saveState("Проект сохранён через API");
+      } catch (error) {
+        state.publish.packageText = [
+          "API SAVE BLOCKED",
+          "",
+          `Ошибка: ${error.message || "unknown"}`,
+          "",
+          "Это нормально для публичного Vercel без постоянной базы.",
+          "Борд всё равно сохранён локально в браузере. Для переноса используй экспорт JSON.",
+          "",
+          "Для настоящего server save нужны:",
+          "- durable storage adapter;",
+          "- user accounts;",
+          "- per-user authorization."
+        ].join("\n");
+        publishOutput.value = state.publish.packageText;
+        saveState("API save недоступен, локально сохранено");
+      }
+    }
+
+    async function loadProjectApi() {
+      statusEl.textContent = "Загружаю проект через API";
+      try {
+        const list = await fetchJson(productApi("projects"));
+        const latest = list.projects?.[0];
+        if (!latest) {
+          state.publish.packageText = [
+            "API LOAD RESULT",
+            "",
+            "На backend пока нет сохранённых проектов.",
+            "",
+            "Если storage write отключён, используй экспорт/импорт JSON."
+          ].join("\n");
+          publishOutput.value = state.publish.packageText;
+          saveState("На API нет проектов");
+          return;
+        }
+        const data = await fetchJson(productApi(`projects/${latest.id}`));
+        applyProjectDocument(data.project?.project || data.project);
+        state.server.projectId = latest.id;
+        state.server.lastSyncedAt = new Date().toISOString();
+        render();
+        saveState("Проект загружен через API");
+      } catch (error) {
+        state.publish.packageText = [
+          "API LOAD BLOCKED",
+          "",
+          `Ошибка: ${error.message || "unknown"}`,
+          "",
+          "Локальный борд не изменён."
+        ].join("\n");
+        publishOutput.value = state.publish.packageText;
+        saveState("API load недоступен");
+      }
+    }
+
+    async function runAgentPlan() {
+      statusEl.textContent = "Строю backend-план агента";
+      try {
+        const data = await fetchJson(productApi("agent/plan"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ publishPack: buildPublishPackageObject() })
+        });
+        state.publish.packageText = formatAgentPlan(data);
+        publishOutput.value = state.publish.packageText;
+        saveState("План агента готов");
+      } catch (error) {
+        state.publish.packageText = [
+          "AGENT PLAN ERROR",
+          "",
+          `Ошибка: ${error.message || "unknown"}`,
+          "",
+          "Локально можно собрать publish pack кнопкой Пакет."
+        ].join("\n");
+        publishOutput.value = state.publish.packageText;
+        saveState("План агента недоступен");
+      }
+    }
+
+    function buildProjectDocument() {
+      return {
+        id: state.server?.projectId || "",
+        schemaVersion: CONTENT_VERSION,
+        title: state.title,
+        view: state.view,
+        plan: state.plan,
+        roadmap: state.roadmap,
+        script: state.script,
+        server: state.server,
+        publish: state.publish,
+        links: state.links,
+        cards: state.cards
+      };
+    }
+
+    function applyProjectDocument(project) {
+      const incoming = normalize(project || {});
+      state.title = incoming.title;
+      state.view = incoming.view;
+      state.plan = incoming.plan;
+      state.roadmap = incoming.roadmap;
+      state.script = incoming.script;
+      state.server = incoming.server;
+      state.publish = incoming.publish;
+      state.links = incoming.links;
+      state.cards = incoming.cards;
+      selectedId = state.cards[0]?.id || null;
+    }
+
+    function formatStorageStatus(data) {
+      return [
+        "BACKEND STORAGE STATUS",
+        "",
+        `Adapter: ${data.adapter || "unknown"}`,
+        `Durable: ${data.durable ? "yes" : "no"}`,
+        `Write enabled: ${data.writeEnabled ? "yes" : "no"}`,
+        `Demo storage: ${data.demoStorageEnabled ? "enabled" : "disabled"}`,
+        `External config present: ${data.externalConfigPresent ? "yes" : "no"}`,
+        "",
+        "Production requirements:",
+        ...(data.requiredForProduction || []).map(item => `- ${item}`),
+        "",
+        "Warnings:",
+        ...(data.warnings?.length ? data.warnings.map(item => `- ${item}`) : ["- none"])
+      ].join("\n");
+    }
+
+    function formatAgentPlan(data) {
+      return [
+        "BACKEND AGENT PLAN",
+        "",
+        `Status: ${data.status || "unknown"}`,
+        `Autopublish: ${data.canAutopublish ? "enabled" : "disabled"}`,
+        "",
+        "Connectors:",
+        ...Object.entries(data.connectors || {}).map(([key, value]) => `- ${key}: ${value ? "configured" : "missing"}`),
+        "",
+        "Steps:",
+        ...(data.steps || []).map((step, index) => `${index + 1}. ${step.status} - ${step.description}`),
+        "",
+        "Blockers:",
+        ...(data.blockers?.length ? data.blockers.map(item => `- ${item}`) : ["- none"]),
+        "",
+        data.note || ""
+      ].join("\n");
+    }
+
     function formatResearchResults(data) {
       const results = Array.isArray(data.results) ? data.results : [];
       const lines = [
@@ -1800,10 +2026,24 @@
       return lines.join("\n");
     }
 
-    async function fetchJson(url) {
-      const response = await fetch(url, { headers: { "accept": "application/json" } });
-      if (!response.ok) throw new Error(`http_${response.status}`);
-      return response.json();
+    async function fetchJson(url, options = {}) {
+      const headers = {
+        "accept": "application/json",
+        ...(options.headers || {})
+      };
+      const response = await fetch(url, { ...options, headers });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+      if (!response.ok) {
+        const error = new Error(data.error || `http_${response.status}`);
+        error.payload = data;
+        throw error;
+      }
+      return data;
+    }
+
+    function productApi(route) {
+      return `/api/product?route=${encodeURIComponent(route)}`;
     }
 
     function buildPublishPackageObject() {

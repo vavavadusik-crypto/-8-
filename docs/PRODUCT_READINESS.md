@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Stage: alpha deploy-ready frontend.
+Stage: alpha deploy-ready product prototype with backend API contracts.
 
 The app is strong enough for:
 
@@ -17,7 +17,7 @@ It is not yet ready for:
 - real autonomous publishing;
 - paid customer accounts;
 - team collaboration;
-- storing private production data;
+- storing private production data on public hosting;
 - platform OAuth flows.
 
 ## Done
@@ -35,12 +35,14 @@ It is not yet ready for:
 - Vite production build;
 - Vercel, Netlify, Docker, and static hosting configs;
 - minimal Vercel API skeleton;
+- project, asset, job, audit, storage status, and agent-plan API contracts;
+- safe local JSON storage fallback;
+- production guard that blocks unsafe public Vercel writes without durable storage;
 - basic smoke validation.
 
 ## Required Before Beta
 
-- Real project storage outside `localStorage`;
-- backend API;
+- durable project storage outside `localStorage`;
 - user accounts;
 - OAuth connector backend;
 - server-side secrets;
@@ -51,6 +53,12 @@ It is not yet ready for:
 - error reporting;
 - usage analytics;
 - automated browser tests.
+
+## Beta Gate
+
+The next hard gate is choosing and connecting a durable storage/auth stack. Until
+that is done, the public site should be treated as a demo and recording tool, not
+as a private multi-user SaaS.
 
 ## Required Before Paid Launch
 
