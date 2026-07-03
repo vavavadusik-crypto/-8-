@@ -24,3 +24,4 @@
 - Added bootstrap owner-token write guard and API smoke checks for product routes.
 - Added first Postgres schema draft for durable storage/auth phase.
 - Added runnable draft SQL at `db/postgres-schema.sql`.
+- Added Fable 5 Ultracode maximum upgrade mandate with official standards references.

@@ -63,4 +63,5 @@ npm run check
 - `docs/STORAGE_AND_AGENT_API.md` - проекты, assets, jobs, audit и backend agent plan;
 - `docs/DATABASE_SCHEMA_DRAFT.md` - черновик Postgres-схемы для durable storage;
 - `db/postgres-schema.sql` - SQL-черновик той же схемы;
+- `docs/FABLE_ULTRACODE_MAXIMUM_UPGRADE_MANDATE.md` - professional maximum-upgrade brief for Fable 5 Ultracode;
 - `docs/PRODUCT_READINESS.md` - что готово и что нужно до beta/launch.
