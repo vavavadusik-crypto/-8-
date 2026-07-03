@@ -5,6 +5,7 @@ const failures = [];
 await checkHealth();
 await checkStorageStatus();
 await checkPreflight();
+await checkSessionCurrent();
 await checkAgentPlan();
 await checkWriteGuard();
 await checkSourceZip();
@@ -42,6 +43,13 @@ async function checkPreflight() {
   assert(json.storage?.adapterInterfaceImplemented === true, "preflight storage adapter interface");
   assert(json.storage?.durableAdapterImplemented === false, "preflight durable adapter disabled");
   assert(json.blockers?.includes("real_user_auth_not_implemented"), "preflight real auth blocker");
+}
+
+async function checkSessionCurrent() {
+  const { response, json } = await getJson(`/api/product?route=${encodeURIComponent("session/current")}`);
+  assert(response.status === 200, `session current status ${response.status}`);
+  assert(json.session?.realUserAuthImplemented === false, "session real user auth disabled");
+  assert(json.actor?.id === "anonymous", `session anonymous actor ${json.actor?.id}`);
 }
 
 async function checkAgentPlan() {

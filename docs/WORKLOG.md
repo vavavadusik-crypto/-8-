@@ -13,6 +13,7 @@
 - Added product preflight readiness route for durable storage, auth, connector, job, and autopublishing blockers.
 - Added a storage adapter boundary while keeping the current `json-file` adapter guarded for public Vercel.
 - Added project ownership metadata fields for the future workspace/user authorization layer while preserving existing ownership on updates.
+- Added current-session API contract for bootstrap actor metadata ahead of real per-user auth.
 - Hardened agent job status handling:
   - aligned API-created approval jobs with the durable schema status `waiting_for_approval`;
   - rejected invalid job status updates;

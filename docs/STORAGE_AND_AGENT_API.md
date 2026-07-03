@@ -48,6 +48,23 @@ Expected alpha behavior:
 This route is meant for deployment verification and for the next agent to see
 which 0.3.0/0.4.0 blockers remain before enabling production writes.
 
+## Current Session
+
+```text
+GET /api/product?route=session/current
+```
+
+Returns the current bootstrap actor and auth mode without exposing any secret
+values. This is not final SaaS authentication; it is a stable contract for the
+future signed per-user session layer.
+
+Expected alpha behavior:
+
+- local development returns actor `local-dev`;
+- public read-only production returns actor `anonymous`;
+- owner-token demo requests return actor `owner`;
+- `session.realUserAuthImplemented` remains `false`.
+
 ## Projects
 
 ```text

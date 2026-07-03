@@ -31,6 +31,10 @@ try {
     tools: ["parser", "translator"],
     languages: ["ru", "en"]
   }, 200);
+  const localSession = await expect("session-current-local", "GET", "session/current", null, 200);
+  if (localSession.actor.id !== "local-dev" || localSession.session.realUserAuthImplemented !== false) {
+    throw new Error(`Expected local bootstrap session, got ${JSON.stringify(localSession)}`);
+  }
 
   const created = await expect("project-create", "POST", "projects", {
     project: {
@@ -151,6 +155,10 @@ try {
   }
 
   process.env.HERMEST_OWNER_TOKEN = "local-owner-token";
+  const ownerSession = await expect("session-current-owner", "GET", "session/current", null, 200, { authorization: "Bearer local-owner-token" });
+  if (ownerSession.actor.id !== "owner" || ownerSession.session.realUserAuthImplemented !== false) {
+    throw new Error(`Expected owner bootstrap session, got ${JSON.stringify(ownerSession)}`);
+  }
   const readUnauthorized = await expect("demo-storage-read-token-required", "GET", "projects", null, 401);
   if (readUnauthorized.error !== "unauthorized") {
     throw new Error(`Expected unauthorized read guard, got ${readUnauthorized.error}`);

@@ -1,4 +1,4 @@
-import { getAuthStatus, requireReadAccess, requireWriteAccess } from "./_lib/auth.js";
+import { getAuthStatus, getRequestActor, requireReadAccess, requireWriteAccess } from "./_lib/auth.js";
 import { buildAgentPlan } from "./_lib/agent-plan.js";
 import { handleApiError, readJson, requireMethods, sendJson } from "./_lib/http.js";
 import { createProjectRecord, summarizeProject, updateProjectRecord } from "./_lib/projects.js";
@@ -40,6 +40,23 @@ export default async function handler(request, response) {
     if (path[0] === "preflight" && !path[1]) {
       if (!requireMethods(request, response, ["GET"])) return;
       sendJson(response, 200, getProductReadiness());
+      return;
+    }
+
+    if (path[0] === "session" && path[1] === "current") {
+      if (!requireMethods(request, response, ["GET"])) return;
+      const actor = getRequestActor(request);
+      sendJson(response, 200, {
+        ok: true,
+        auth: getAuthStatus(),
+        actor,
+        session: {
+          realUserAuthImplemented: false,
+          authenticated: actor.authenticated,
+          mode: actor.mode,
+          note: "Bootstrap actor only. Replace with signed per-user sessions before production writes."
+        }
+      });
       return;
     }
 

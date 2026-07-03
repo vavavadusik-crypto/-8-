@@ -43,6 +43,8 @@ publishing approval are implemented.
   disabled until auth and authorization are implemented.
 - Project records include future ownership metadata, but it is bootstrap
   metadata only and must not be treated as final authorization.
+- `session/current` exposes only bootstrap actor metadata; it is not final
+  per-user authentication.
 
 ## Known Limitations
 
