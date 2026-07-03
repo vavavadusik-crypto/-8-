@@ -1,6 +1,7 @@
 import { getAuthStatus } from "./auth.js";
 import { getOAuthStateStatus } from "./oauth-state.js";
 import { getStorageStatus } from "./storage.js";
+import { getTokenVaultStatus } from "./token-vault.js";
 
 export function getProductReadiness() {
   const storage = getStorageStatus();
@@ -10,6 +11,7 @@ export function getProductReadiness() {
   const tokenEncryptionConfigured = Boolean(process.env.HERMEST_TOKEN_ENCRYPTION_KEY);
   const sessionSecretConfigured = Boolean(process.env.HERMEST_SESSION_SECRET);
   const oauth = getOAuthStateStatus();
+  const tokenVault = getTokenVaultStatus();
   const connectors = connectorReadiness();
   const blockers = [
     !durableDbConfigured && "durable_database_not_configured",
@@ -22,7 +24,9 @@ export function getProductReadiness() {
     "per_user_authorization_not_implemented",
     !tokenEncryptionConfigured && "token_encryption_key_not_configured",
     !oauth.stateSecretConfigured && "oauth_state_secret_not_configured",
-    "encrypted_connector_token_storage_not_implemented",
+    !tokenVault.implemented && "encrypted_connector_token_storage_not_implemented",
+    "oauth_token_exchange_not_implemented",
+    "connector_disconnect_flow_not_implemented",
     "durable_job_queue_not_implemented",
     "human_publish_approval_flow_not_implemented",
     !connectors.youtube.configured && "youtube_connector_not_configured",
@@ -61,6 +65,7 @@ export function getProductReadiness() {
       valuesExposed: false
     },
     oauth,
+    tokenVault,
     connectors,
     gates: [
       gate("public_alpha_demo", true, "Static board, read-only APIs, localStorage, export/import, and dry-run planning are available."),
@@ -75,6 +80,7 @@ export function getProductReadiness() {
       "Implement user sessions and workspace ownership.",
       "Enforce authorization on every product route.",
       "Encrypt connector tokens server-side.",
+      "Implement OAuth token exchange and connector disconnect flows.",
       "Add durable job queue and approval-gated workers.",
       "Extend live verification with authorized and unauthorized flows."
     ]

@@ -25,13 +25,17 @@ Current backend behavior:
   state signing secret;
 - OAuth state is HMAC-signed and expires;
 - callbacks reject missing or invalid state before token exchange;
-- callbacks still stop before token exchange because encrypted token storage,
-  user-owned connector rows, disconnect flows, and provider review are not
-  complete.
+- connector token vault storage encrypts access/refresh tokens server-side and
+  redacts token material from API responses;
+- callbacks still stop before token exchange because provider exchange,
+  disconnect flows, final user accounts, and provider review are not complete.
 
 Use `HERMEST_OAUTH_STATE_SECRET` for OAuth state signing. `HERMEST_SESSION_SECRET`
 can act as a fallback in controlled environments, but production should keep a
 dedicated state secret.
+
+Use `HERMEST_TOKEN_ENCRYPTION_KEY` before any backend route stores connector
+tokens. Without it, token writes are rejected before storage.
 
 ## YouTube Video And Shorts
 

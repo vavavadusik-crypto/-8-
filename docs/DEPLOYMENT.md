@@ -51,6 +51,9 @@ CI/CD:
 - Configure `HERMEST_OAUTH_STATE_SECRET` before enabling connector start URLs.
   Without it, configured OAuth providers stay blocked rather than issuing
   unsigned callback state.
+- Configure `HERMEST_TOKEN_ENCRYPTION_KEY` before storing OAuth connector tokens.
+  Connector token writes are rejected without it, and token values are never
+  returned by API responses.
 
 ## Netlify
 

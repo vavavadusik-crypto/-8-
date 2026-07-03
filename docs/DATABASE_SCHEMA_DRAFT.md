@@ -193,6 +193,7 @@ The current API records map like this:
 - `projects.project.publish` / publish pack -> `projects.publish_pack`
 - local `assets` records -> `assets`
 - local `jobs` records -> `jobs`
+- local `connectors` records -> `connectors`
 - local `audit` records -> `audit_events`
 
 ## First Adapter Acceptance Criteria

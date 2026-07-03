@@ -53,7 +53,9 @@ publishing approval are implemented.
   for signed-session actors; this does not yet cover the full future workspace
   membership model.
 - OAuth connector start/callback routes use signed state validation before token
-  exchange, but token exchange and encrypted token storage are still disabled.
+  exchange, but token exchange is still disabled.
+- Connector token vault storage encrypts access/refresh tokens server-side and
+  redacts token material from API responses; token exchange is still disabled.
 
 ## Known Limitations
 
@@ -63,7 +65,8 @@ publishing approval are implemented.
 - No durable production database is connected and enabled yet.
 - No final workspace membership or role model exists for user-owned projects.
   Current signed-session authorization is only a bootstrap `workspaceId` guard.
-- No encrypted storage exists for OAuth refresh/access tokens.
+- Encrypted OAuth token storage exists as a guarded backend vault, but real
+  provider token exchange and connector lifecycle are not complete.
 - Autopublishing is intentionally not executable yet.
 - Existing owner-token guard is only a bootstrap control, not real multi-user security.
 - `DATABASE_URL`, `POSTGRES_URL`, or blob-token env presence is detected and
@@ -78,8 +81,8 @@ publishing approval are implemented.
 - API rate limiting and abuse controls are not implemented.
 - Audit logging is a local/demo contract until durable storage is attached.
 - Upload/media validation is not production-grade yet.
-- OAuth routes still need token exchange, encrypted token storage, disconnect
-  flows, and provider-specific scope review.
+- OAuth routes still need provider token exchange, disconnect flows, and
+  provider-specific scope review.
 
 ### Low
 

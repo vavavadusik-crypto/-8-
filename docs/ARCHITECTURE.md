@@ -29,6 +29,7 @@ Hermest Board is a browser-first interactive product prototype:
 - `GET`, `PUT`, `PATCH`, `DELETE /api/product?route=projects/:id` - project detail/update/delete contract;
 - `GET`, `POST /api/product?route=assets` - asset metadata contract;
 - `GET`, `POST /api/product?route=jobs` and `GET`, `PATCH /api/product?route=jobs/:id` - job contract;
+- `GET`, `POST`, `DELETE /api/product?route=connectors` - redacted encrypted connector token vault contract;
 - `GET /api/product?route=audit` - latest audit events;
 - `POST /api/product?route=agent/plan` - deterministic backend plan preview for the publish pack.
 
@@ -61,7 +62,7 @@ Recommended modules:
 
 - `projects`: stores boards, roadmaps, scripts, and publish packs;
 - `assets`: stores uploaded and generated media;
-- `connectors`: stores OAuth state and refresh tokens server-side;
+- `connectors`: stores OAuth state and encrypted access/refresh token envelopes server-side;
 - `agent-queue`: runs parser, translation, rendering, and publishing tasks;
 - `audit-log`: stores every automated action and error;
 - `scheduler`: schedules drafts and publications;

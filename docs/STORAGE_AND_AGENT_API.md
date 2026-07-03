@@ -14,7 +14,7 @@ Reports whether the current deployment can write server-side data safely.
 - Local dev: JSON-file writes are enabled under `.data/hermest-board`.
 - Public Vercel: writes are disabled unless `HERMEST_ENABLE_DEMO_STORAGE=1`.
 - Production SaaS: needs durable storage, user accounts, authorization, and
-  encrypted connector token storage.
+  final connector OAuth lifecycle.
 - Storage now goes through an explicit adapter boundary. The default adapter is
   `json-file`; a guarded `postgres-jsonb` durable adapter is implemented but is
   not active on public Vercel unless explicitly configured and enabled.
@@ -189,6 +189,34 @@ Audit records carry `workspaceId`, `ownerUserId`, `actor`, and the original
 event payload. Signed-session audit lists are filtered by `workspaceId`; local
 development and owner-token actors remain bootstrap bypasses.
 
+## Connectors
+
+```text
+GET /api/product?route=connectors
+POST /api/product?route=connectors
+GET /api/product?route=connectors/:id
+DELETE /api/product?route=connectors/:id
+```
+
+Stores OAuth connector token envelopes for controlled backend work. Connector
+storage requires `HERMEST_TOKEN_ENCRYPTION_KEY`; without it, token writes are
+rejected before storage. Access and refresh tokens are encrypted server-side with
+AES-256-GCM and are never returned by API responses.
+
+Connector records carry:
+
+- `workspaceId`
+- `ownerUserId`
+- `createdBy`
+- `updatedBy`
+
+List/detail responses are redacted and expose only safe metadata such as
+provider, scopes, connection status, token expiry, whether encrypted tokens are
+stored, and `tokenKeyId`. Signed-session connector routes are filtered or
+rejected by `workspaceId`. Token exchange with YouTube, TikTok, and Instagram is
+still intentionally disabled until full OAuth account lifecycle, disconnect
+flows, provider policy handling, and user auth are complete.
+
 ## Agent Plan
 
 ```text
@@ -211,10 +239,11 @@ npm run check
 ```
 
 `smoke:api` runs the product API directly without a server. It verifies local
-project create/update/delete, asset/job/audit ownership metadata,
-signed-session workspace authorization for projects/assets/jobs/audit,
-production storage guard, asset rights-status validation, external-storage-env guard, and
-owner-token demo-storage read/write guards.
+project create/update/delete, asset/job/audit/connector ownership metadata,
+signed-session workspace authorization for projects/assets/jobs/audit/connectors,
+encrypted connector token storage redaction, production storage guard, asset
+rights-status validation, external-storage-env guard, and owner-token
+demo-storage read/write guards.
 
 ## Durable Storage Target
 

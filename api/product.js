@@ -5,6 +5,7 @@ import { handleApiError, readJson, requireMethods, sendJson } from "./_lib/http.
 import { createProjectRecord, summarizeProject, updateProjectRecord } from "./_lib/projects.js";
 import { getProductReadiness } from "./_lib/readiness.js";
 import { createSignedSessionToken } from "./_lib/session.js";
+import { encryptSecret, redactConnector, requireTokenVault, sanitizeConnectorMetadata } from "./_lib/token-vault.js";
 import {
   appendAudit,
   createId,
@@ -25,6 +26,8 @@ const JOB_STATUSES = new Set([
   "cancelled"
 ]);
 const ASSET_RIGHTS_STATUSES = new Set(["unknown", "allowed", "restricted", "owned", "generated"]);
+const CONNECTOR_PROVIDERS = new Set(["youtube", "tiktok", "instagram"]);
+const CONNECTOR_STATUSES = new Set(["connected", "expired", "revoked", "error"]);
 
 export default async function handler(request, response) {
   try {
@@ -93,6 +96,16 @@ export default async function handler(request, response) {
 
     if (path[0] === "jobs" && path[1]) {
       await handleJobById(request, response, path[1]);
+      return;
+    }
+
+    if (path[0] === "connectors" && !path[1]) {
+      await handleConnectorsIndex(request, response);
+      return;
+    }
+
+    if (path[0] === "connectors" && path[1]) {
+      await handleConnectorById(request, response, path[1]);
       return;
     }
 
@@ -326,6 +339,108 @@ async function handleJobById(request, response, id) {
   sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), job });
 }
 
+async function handleConnectorsIndex(request, response) {
+  if (!requireMethods(request, response, ["GET", "POST"])) return;
+
+  if (request.method === "GET") {
+    const actor = requireReadAccess(request);
+    const connectors = await listRecords("connectors");
+    sendJson(response, 200, {
+      ok: true,
+      storage: getStorageStatus(),
+      auth: getAuthStatus(),
+      connectors: filterRecordsForActor(connectors, actor).map(redactConnector)
+    });
+    return;
+  }
+
+  const actor = requireWriteAccess(request);
+  requireTokenVault();
+  const body = await readJson(request);
+  const now = new Date().toISOString();
+  const provider = normalizeConnectorProvider(body.provider);
+  const accessToken = safeText(body.accessToken, 20_000);
+  const refreshToken = safeText(body.refreshToken, 20_000);
+  if (!accessToken && !refreshToken) {
+    const error = new Error("connector_token_missing");
+    error.status = 400;
+    error.code = "connector_token_missing";
+    error.note = "Connector storage requires an accessToken or refreshToken and will encrypt it server-side.";
+    throw error;
+  }
+
+  const ownership = connectorOwnership(actor);
+  const encryptedAccessToken = encryptSecret(accessToken);
+  const encryptedRefreshToken = encryptSecret(refreshToken);
+  const connector = {
+    id: createId("conn"),
+    workspaceId: ownership.workspaceId,
+    ownerUserId: ownership.ownerUserId,
+    provider,
+    accountLabel: safeText(body.accountLabel || provider, 160),
+    scopes: normalizeStringList(body.scopes, 32, 160),
+    status: normalizeConnectorStatus(body.status, "connected"),
+    tokenExpiresAt: normalizeIsoDate(body.tokenExpiresAt),
+    encryptedAccessToken,
+    encryptedRefreshToken,
+    tokenKeyId: encryptedAccessToken?.kid || encryptedRefreshToken?.kid || "",
+    metadata: sanitizeConnectorMetadata(body.metadata),
+    createdBy: ownership.actor,
+    updatedBy: ownership.actor,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  await saveRecord("connectors", connector);
+  await appendAudit("connector.created", {
+    id: connector.id,
+    workspaceId: connector.workspaceId,
+    ownerUserId: connector.ownerUserId,
+    provider: connector.provider,
+    accessTokenStored: Boolean(connector.encryptedAccessToken),
+    refreshTokenStored: Boolean(connector.encryptedRefreshToken)
+  }, actor);
+
+  sendJson(response, 201, {
+    ok: true,
+    storage: getStorageStatus(),
+    auth: getAuthStatus(),
+    connector: redactConnector(connector)
+  });
+}
+
+async function handleConnectorById(request, response, id) {
+  if (!requireMethods(request, response, ["GET", "DELETE"])) return;
+
+  if (request.method === "GET") {
+    const actor = requireReadAccess(request);
+    const existing = await getRecord("connectors", id);
+    if (!existing) {
+      sendJson(response, 404, { ok: false, error: "connector_not_found", id });
+      return;
+    }
+    requireRecordAccess(existing, actor, "read");
+    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), connector: redactConnector(existing) });
+    return;
+  }
+
+  const actor = requireWriteAccess(request);
+  const existing = await getRecord("connectors", id);
+  if (!existing) {
+    sendJson(response, 404, { ok: false, error: "connector_not_found", id });
+    return;
+  }
+  requireRecordAccess(existing, actor, "delete");
+  await deleteRecord("connectors", id);
+  await appendAudit("connector.deleted", {
+    id,
+    workspaceId: existing.workspaceId,
+    ownerUserId: existing.ownerUserId,
+    provider: existing.provider
+  }, actor);
+  sendJson(response, 200, { ok: true, id });
+}
+
 function routeParts(request) {
   const route = request.query?.route || routeFromUrl(request.url) || "";
   return String(Array.isArray(route) ? route[0] : route).split("/").filter(Boolean);
@@ -352,6 +467,14 @@ function clampTtlSeconds(value) {
   return Math.max(60, Math.min(Math.floor(ttl), 86_400));
 }
 
+function connectorOwnership(actor) {
+  return {
+    workspaceId: safeText(defaultWorkspaceId(actor), 120),
+    ownerUserId: safeText(defaultOwnerUserId(actor), 120),
+    actor: actorSnapshot(actor)
+  };
+}
+
 async function childRecordOwnership(projectIdInput, actor, action) {
   const projectId = safeText(projectIdInput, 120);
   const project = isStorageSafeId(projectId) ? await getRecord("projects", projectId) : null;
@@ -363,6 +486,43 @@ async function childRecordOwnership(projectIdInput, actor, action) {
     ownerUserId: safeText(project?.ownerUserId || project?.project?.ownerUserId || defaultOwnerUserId(actor), 120),
     actor: actorSnapshot(actor)
   };
+}
+
+function normalizeConnectorProvider(value) {
+  const provider = String(value || "").trim().toLowerCase();
+  if (CONNECTOR_PROVIDERS.has(provider)) return provider;
+
+  const error = new Error("invalid_connector_provider");
+  error.status = 400;
+  error.code = "invalid_connector_provider";
+  error.note = `Connector provider must be one of: ${[...CONNECTOR_PROVIDERS].join(", ")}.`;
+  throw error;
+}
+
+function normalizeConnectorStatus(value, fallback) {
+  const status = String(value || fallback).trim().toLowerCase();
+  if (CONNECTOR_STATUSES.has(status)) return status;
+
+  const error = new Error("invalid_connector_status");
+  error.status = 400;
+  error.code = "invalid_connector_status";
+  error.note = `Connector status must be one of: ${[...CONNECTOR_STATUSES].join(", ")}.`;
+  throw error;
+}
+
+function normalizeStringList(value, limit, itemLimit) {
+  const items = Array.isArray(value)
+    ? value
+    : String(value || "")
+      .split(/[,\s]+/)
+      .filter(Boolean);
+  return items.slice(0, limit).map(item => safeText(item, itemLimit).trim()).filter(Boolean);
+}
+
+function normalizeIsoDate(value) {
+  if (!value) return null;
+  const date = new Date(String(value));
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
 function defaultWorkspaceId(actor) {

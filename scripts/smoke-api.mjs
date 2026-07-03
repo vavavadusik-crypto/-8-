@@ -6,6 +6,8 @@ import connectorStart from "../api/connectors/start.js";
 import connectorStatus from "../api/connectors/status.js";
 import product from "../api/product.js";
 import { createSignedSessionToken } from "../api/_lib/session.js";
+import { getRecord } from "../api/_lib/storage.js";
+import { decryptSecret } from "../api/_lib/token-vault.js";
 
 const originalEnv = { ...process.env };
 const dataDir = mkdtempSync(join(tmpdir(), "hermest-api-smoke-"));
@@ -16,6 +18,8 @@ try {
   delete process.env.HERMEST_ENABLE_DEMO_STORAGE;
   delete process.env.HERMEST_OWNER_TOKEN;
   delete process.env.HERMEST_SESSION_SECRET;
+  delete process.env.HERMEST_OAUTH_STATE_SECRET;
+  delete process.env.HERMEST_TOKEN_ENCRYPTION_KEY;
 
   const storageStatus = await expect("storage", "GET", "storage/status", null, 200);
   if (storageStatus.adapter !== "json-file" || storageStatus.adapterInterfaceVersion !== 1) {
@@ -150,6 +154,61 @@ try {
   if (forbiddenSignedRead.error !== "forbidden") {
     throw new Error(`Expected forbidden signed-session project read, got ${forbiddenSignedRead.error}`);
   }
+  const missingTokenKey = await expect("connector-create-missing-token-key", "POST", "connectors", {
+    provider: "youtube",
+    accountLabel: "Smoke YouTube",
+    accessToken: "access-smoke-secret"
+  }, 501, { authorization: `Bearer ${signedToken}` });
+  if (missingTokenKey.error !== "token_encryption_key_not_configured") {
+    throw new Error(`Expected token_encryption_key_not_configured, got ${missingTokenKey.error}`);
+  }
+  process.env.HERMEST_TOKEN_ENCRYPTION_KEY = "token-encryption-secret-for-smoke-tests";
+  const signedConnector = await expect("connector-create-signed-session", "POST", "connectors", {
+    provider: "youtube",
+    accountLabel: "Smoke YouTube",
+    scopes: ["youtube.upload"],
+    accessToken: "access-smoke-secret",
+    refreshToken: "refresh-smoke-secret",
+    tokenExpiresAt: "2030-01-01T00:00:00.000Z",
+    metadata: {
+      accountId: "smoke-account",
+      apiToken: "metadata-secret-must-not-persist"
+    }
+  }, 201, { authorization: `Bearer ${signedToken}` });
+  if (signedConnector.connector.workspaceId !== "workspace_smoke" || signedConnector.connector.ownerUserId !== "user_smoke") {
+    throw new Error(`Expected signed connector ownership metadata, got ${JSON.stringify(signedConnector.connector)}`);
+  }
+  if (signedConnector.connector.accessToken || signedConnector.connector.refreshToken || signedConnector.connector.encryptedAccessToken) {
+    throw new Error(`Expected redacted connector response, got ${JSON.stringify(signedConnector.connector)}`);
+  }
+  if (signedConnector.connector.accessTokenStored !== true || signedConnector.connector.refreshTokenStored !== true || !signedConnector.connector.tokenKeyId) {
+    throw new Error(`Expected stored token metadata, got ${JSON.stringify(signedConnector.connector)}`);
+  }
+  if (signedConnector.connector.metadata.apiToken || signedConnector.connector.metadata.accountId !== "smoke-account") {
+    throw new Error(`Expected sanitized connector metadata, got ${JSON.stringify(signedConnector.connector.metadata)}`);
+  }
+  const storedConnector = await getRecord("connectors", signedConnector.connector.id);
+  const storedConnectorJson = JSON.stringify(storedConnector);
+  if (storedConnectorJson.includes("access-smoke-secret") || storedConnectorJson.includes("refresh-smoke-secret") || storedConnectorJson.includes("metadata-secret-must-not-persist")) {
+    throw new Error(`Connector storage leaked plaintext token: ${storedConnectorJson}`);
+  }
+  if (decryptSecret(storedConnector.encryptedAccessToken) !== "access-smoke-secret" || decryptSecret(storedConnector.encryptedRefreshToken) !== "refresh-smoke-secret") {
+    throw new Error("Expected encrypted connector tokens to decrypt with server key.");
+  }
+  const signedConnectorList = await expect("connector-list-signed-session", "GET", "connectors", null, 200, { authorization: `Bearer ${signedToken}` });
+  if (!signedConnectorList.connectors.some(connector => connector.id === signedConnector.connector.id)) {
+    throw new Error(`Expected signed connector in signed-session list, got ${JSON.stringify(signedConnectorList.connectors)}`);
+  }
+  const otherConnectorList = await expect("connector-list-other-session", "GET", "connectors", null, 200, { authorization: `Bearer ${otherToken}` });
+  if (otherConnectorList.connectors.some(connector => connector.id === signedConnector.connector.id)) {
+    throw new Error(`Expected other workspace connector list to exclude signed connector, got ${JSON.stringify(otherConnectorList.connectors)}`);
+  }
+  const forbiddenConnectorRead = await expect("connector-read-other-session", "GET", `connectors/${signedConnector.connector.id}`, null, 403, { authorization: `Bearer ${otherToken}` });
+  if (forbiddenConnectorRead.error !== "forbidden") {
+    throw new Error(`Expected forbidden signed-session connector read, got ${forbiddenConnectorRead.error}`);
+  }
+  await expect("connector-delete-signed-session", "DELETE", `connectors/${signedConnector.connector.id}`, null, 200, { authorization: `Bearer ${signedToken}` });
+  delete process.env.HERMEST_TOKEN_ENCRYPTION_KEY;
   const signedAsset = await expect("asset-create-signed-session", "POST", "assets", {
     projectId: signedProject.project.id,
     title: "Signed reference",

@@ -43,6 +43,7 @@ It is not yet ready for:
 - owner-token gated signed-session bootstrap issuer for controlled demos;
 - owner-token read guard for temporary public Vercel demo storage;
 - signed OAuth state generation and callback validation guard;
+- encrypted connector token vault with redacted API responses;
 - API smoke checks for product routes and guards;
 - basic smoke validation.
 
@@ -50,7 +51,7 @@ It is not yet ready for:
 
 - connect and enable durable project storage outside `localStorage`;
 - user accounts;
-- OAuth connector backend;
+- OAuth connector token exchange and account lifecycle;
 - server-side secrets;
 - asset storage;
 - job queue;

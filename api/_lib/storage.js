@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { createJsonFileStorageAdapter } from "./storage-adapters/json-file.js";
 import { createPostgresStorageAdapter } from "./storage-adapters/postgres.js";
 
-const COLLECTIONS = new Set(["projects", "assets", "jobs", "audit"]);
+const COLLECTIONS = new Set(["projects", "assets", "jobs", "audit", "connectors"]);
 const STORAGE_ADAPTER_INTERFACE_VERSION = 1;
 
 export function createId(prefix) {

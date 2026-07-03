@@ -50,6 +50,7 @@ npm run check
 - backend agent plan preview that shows blockers before autopublishing;
 - per-user OAuth start skeleton for YouTube, TikTok, Instagram;
 - signed OAuth state validation before connector token exchange;
+- encrypted connector token vault with redacted API responses;
 - режим записи;
 - автосохранение в браузере;
 - экспорт и импорт JSON.

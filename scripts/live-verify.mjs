@@ -31,6 +31,9 @@ async function checkConnectorStatus() {
   const { response, json } = await getJson("/api/connectors/status");
   assert(response.status === 200, `connectors status ${response.status}`);
   assert(json.oauth?.stateSigningImplemented === true, "connectors OAuth state signing");
+  assert(json.tokenVault?.implemented === true, "connectors token vault implemented");
+  assert(json.tokenVault?.plaintextTokenStorageAllowed === false, "connectors plaintext token storage disabled");
+  assert(json.tokenVault?.valuesExposed === false, "connectors token values hidden");
 }
 
 async function checkStorageStatus() {
