@@ -58,6 +58,9 @@ publishing approval are implemented.
   redacts token material from API responses; token exchange is still disabled.
 - Job approval route records human approve/reject decisions but keeps execution
   blocked until durable approval-gated workers exist.
+- In-board AI testing now uses a BYOK flow: user-provided OpenAI keys stay out
+  of board project JSON and are forwarded through `/api/ai/respond` only for a
+  single request.
 
 ## Known Limitations
 
@@ -87,6 +90,10 @@ publishing approval are implemented.
   provider-specific scope review.
 - Job execution still needs durable workers that enforce approval records before
   any external publishing action.
+- BYOK AI keys are currently held in browser `sessionStorage` or `localStorage`
+  by user choice. This is acceptable for alpha testing, but production should
+  add account-level key management, rate limiting, provider spend controls, and
+  clear user-facing key handling policy.
 
 ### Low
 

@@ -49,6 +49,7 @@ npm run check
 - backend production preflight route for readiness gates and blockers;
 - backend agent plan preview that shows blockers before autopublishing;
 - human approval record endpoint for publish jobs;
+- AI settings inside the board for user-owned OpenAI keys, with a BYOK response proxy and AI-answer cards;
 - per-user OAuth start skeleton for YouTube, TikTok, Instagram;
 - signed OAuth state validation before connector token exchange;
 - encrypted connector token vault with redacted API responses;

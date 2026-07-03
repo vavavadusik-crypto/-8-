@@ -18,6 +18,7 @@ Hermest Board is a browser-first interactive product prototype:
 - `GET /api/connectors/status` - reports whether connector env vars are present without exposing secrets;
 - `GET /api/public/sources` - public/free source registry;
 - `GET /api/research/search?q=...` - server-side public source search;
+- `POST /api/ai/respond` - user-key AI response proxy for in-board BYOK testing;
 - `GET /api/connectors/start?provider=...` - OAuth start URL with signed state for per-user account connection;
 - `GET /api/connectors/callback` - validates signed state, then stops before token exchange;
 - `GET /api/user-config/schema` - documents what users can configure without seeing owner secrets;
@@ -36,6 +37,10 @@ Hermest Board is a browser-first interactive product prototype:
 ## Deploy Boundary
 
 The deployed frontend is safe to host publicly because it does not contain API secrets.
+AI requests use a bring-your-own-key flow: the user's OpenAI API key is kept in
+that user's browser storage and sent to `/api/ai/respond` only for the current
+request. The server endpoint does not persist the key or include it in project
+documents.
 
 All autonomous actions need a durable backend:
 

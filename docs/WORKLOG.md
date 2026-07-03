@@ -33,6 +33,10 @@
   - rejected invalid job status updates;
   - extended API smoke coverage for blocked jobs, approval-gated jobs, and invalid status PATCH requests.
 - Added a human approval decision endpoint for jobs while keeping execution blocked until durable approval-gated workers exist.
+- Added in-board BYOK AI settings and `/api/ai/respond`:
+  - users can enter their own OpenAI API key in the board UI;
+  - keys are not included in project JSON, backend project saves, source zip, or repository code;
+  - API smoke coverage verifies missing-key rejection and mocked OpenAI proxy behavior without a real key.
 - Verified local project is its own clean git repo on `main`.
 - Verified GitHub `origin/main` matches local commit `bef87cb`.
 - Verified public production endpoints are live:

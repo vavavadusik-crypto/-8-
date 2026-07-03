@@ -4,6 +4,7 @@ import { join } from "node:path";
 import connectorCallback from "../api/connectors/callback.js";
 import connectorStart from "../api/connectors/start.js";
 import connectorStatus from "../api/connectors/status.js";
+import aiRespond from "../api/ai/respond.js";
 import product from "../api/product.js";
 import { createSignedSessionToken } from "../api/_lib/session.js";
 import { getRecord } from "../api/_lib/storage.js";
@@ -40,6 +41,47 @@ try {
     tools: ["parser", "translator"],
     languages: ["ru", "en"]
   }, 200);
+  const missingAiKey = await expectAi("ai-respond-missing-key", "POST", {
+    prompt: "hello"
+  }, 401);
+  if (missingAiKey.error !== "api_key_required") {
+    throw new Error(`Expected api_key_required, got ${missingAiKey.error}`);
+  }
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url, options = {}) => {
+      if (url !== "https://api.openai.com/v1/responses") {
+        throw new Error(`Unexpected AI provider URL: ${url}`);
+      }
+      if (options.headers?.authorization !== "Bearer smoke-user-openai-key") {
+        throw new Error("Expected user-owned key to be forwarded only in Authorization header.");
+      }
+      if (String(options.body || "").includes("smoke-user-openai-key")) {
+        throw new Error("AI request body must not contain the API key.");
+      }
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            id: "resp_smoke",
+            output_text: "AI smoke ok",
+            usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8 }
+          });
+        }
+      };
+    };
+    const aiResponse = await expectAi("ai-respond-openai-mock", "POST", {
+      prompt: "Check Hermest Board AI settings.",
+      context: "Board title: API smoke",
+      model: "gpt-4.1-mini"
+    }, 200, { authorization: "Bearer smoke-user-openai-key" });
+    if (aiResponse.text !== "AI smoke ok" || aiResponse.provider !== "openai") {
+      throw new Error(`Expected mocked AI response, got ${JSON.stringify(aiResponse)}`);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
   const connectorStatusPayload = await expectConnector("connector-status", connectorStatus, "GET", {});
   if (connectorStatusPayload.oauth.stateSigningImplemented !== true || connectorStatusPayload.oauth.stateSecretConfigured !== false) {
     throw new Error(`Expected connector state signing status, got ${JSON.stringify(connectorStatusPayload.oauth)}`);
@@ -508,6 +550,24 @@ async function expectConnector(name, handler, method, query, body = null, expect
     method,
     query,
     url: `/api/connectors/${name}?${new URLSearchParams(query).toString()}`,
+    headers,
+    body
+  }, response);
+  if (response.statusCode !== expectedStatus) {
+    throw new Error(`${name}: expected ${expectedStatus}, got ${response.statusCode} ${JSON.stringify(response.payload)}`);
+  }
+  if (response.payload?.ok === false && expectedStatus < 400) {
+    throw new Error(`${name}: expected ok payload, got ${JSON.stringify(response.payload)}`);
+  }
+  return response.payload;
+}
+
+async function expectAi(name, method, body, expectedStatus, headers = {}) {
+  const response = mockResponse();
+  await aiRespond({
+    method,
+    query: {},
+    url: "/api/ai/respond",
     headers,
     body
   }, response);

@@ -384,7 +384,9 @@
       width: 100%;
     }
 
-    .field input[type="text"] {
+    .field input[type="text"],
+    .field input[type="password"],
+    .field input[type="number"] {
       width: 100%;
       height: 34px;
       border-radius: 8px;
@@ -568,6 +570,7 @@
         <button id="addCard" title="Добавить карточку">＋</button>
         <button id="connectMode" title="Соединить выбранные карточки">⛓</button>
         <button id="fitView" title="Показать все карточки">⌖</button>
+        <button id="openAiSettings" title="AI настройки">AI</button>
         <button id="togglePanel" title="Панель настроек">☰</button>
         <button id="recordMode" title="Режим записи">◉</button>
         <button id="exportJson" title="Экспорт JSON">⇩</button>
@@ -673,6 +676,44 @@
             <button id="runResearchSearch" title="Искать через публичные web API">Public search</button>
             <button id="showConnectorGuide" title="Показать как пользователю подключить аккаунты">Аккаунты</button>
           </div>
+          <div class="panel-section" id="aiSettingsPanel">
+            <h2>AI настройки</h2>
+            <div class="field">
+              <label><span>Provider</span></label>
+              <select id="aiProvider">
+                <option value="openai">OpenAI</option>
+              </select>
+            </div>
+            <div class="field">
+              <label><span>Model</span></label>
+              <input id="aiModel" type="text" placeholder="gpt-4.1-mini" autocomplete="off">
+            </div>
+            <div class="field">
+              <label><span>API key</span></label>
+              <input id="aiKey" type="password" placeholder="sk-... / sk-proj-..." autocomplete="off" spellcheck="false">
+            </div>
+            <label class="check-item"><input id="aiRemember" type="checkbox"> Запомнить на этом устройстве</label>
+            <div class="mini-note">Ключ хранится только в этом браузере пользователя и отправляется на сервер только на время AI-запроса.</div>
+            <div class="field">
+              <label><span>Задача AI</span></label>
+              <textarea id="aiPrompt" placeholder="Например: проверь текущий борд и предложи следующий сильный шаг для продукта"></textarea>
+            </div>
+            <div class="panel-row two">
+              <button id="saveAiSettings" title="Сохранить AI настройки в этом браузере">Сохранить</button>
+              <button id="clearAiSettings" title="Удалить AI ключ из браузера">Очистить</button>
+            </div>
+            <div class="panel-row two">
+              <button id="testAiConnection" title="Проверить подключение AI">Тест AI</button>
+              <button id="runAiAssistant" title="Отправить текущий борд в AI">Запрос</button>
+            </div>
+            <div class="panel-row wide">
+              <button id="addAiResponseCard" title="Добавить последний AI ответ на борд">Ответ в карточку</button>
+            </div>
+            <div class="field">
+              <label><span>Ответ AI</span></label>
+              <textarea id="aiResponseOutput" class="script-output" placeholder="Здесь появится ответ AI внутри Hermest Board"></textarea>
+            </div>
+          </div>
           <div class="panel-row two">
             <button id="showStorageStatus" title="Проверить backend-хранилище">Хранилище</button>
             <button id="saveProjectApi" title="Сохранить борд через backend API">API save</button>
@@ -702,6 +743,8 @@
 
   <script>
     const STORAGE_KEY = "hermest-board:v1";
+    const AI_SETTINGS_LOCAL_KEY = "hermest-board:ai-settings:v1";
+    const AI_SETTINGS_SESSION_KEY = "hermest-board:ai-settings:session:v1";
     const CONTENT_VERSION = 4;
     const BOARD_WIDTH = 3000;
     const BOARD_HEIGHT = 1800;
@@ -730,8 +773,17 @@
     const mediaBriefInput = document.getElementById("mediaBriefInput");
     const publishOutput = document.getElementById("publishOutput");
     const researchQueryInput = document.getElementById("researchQueryInput");
+    const aiSettingsPanel = document.getElementById("aiSettingsPanel");
+    const aiProviderInput = document.getElementById("aiProvider");
+    const aiModelInput = document.getElementById("aiModel");
+    const aiKeyInput = document.getElementById("aiKey");
+    const aiRememberInput = document.getElementById("aiRemember");
+    const aiPromptInput = document.getElementById("aiPrompt");
+    const aiResponseOutput = document.getElementById("aiResponseOutput");
 
     const state = loadState();
+    let aiSettings = loadAiSettings();
+    let latestAiResponse = "";
     let selectedId = state.cards[0]?.id || null;
     let zCounter = Math.max(...state.cards.map(c => c.z || 1), 10);
     let mediaTargetId = null;
@@ -1547,6 +1599,20 @@
     document.getElementById("saveProjectApi").addEventListener("click", saveProjectApi);
     document.getElementById("loadProjectApi").addEventListener("click", loadProjectApi);
     document.getElementById("runAgentPlan").addEventListener("click", runAgentPlan);
+    document.getElementById("openAiSettings").addEventListener("click", () => {
+      sidePanel.hidden = false;
+      aiSettingsPanel.scrollIntoView({ block: "start", behavior: "smooth" });
+      aiKeyInput.focus();
+    });
+    document.getElementById("saveAiSettings").addEventListener("click", () => {
+      saveAiSettingsFromForm();
+    });
+    document.getElementById("clearAiSettings").addEventListener("click", () => {
+      clearAiSettings();
+    });
+    document.getElementById("testAiConnection").addEventListener("click", testAiConnection);
+    document.getElementById("runAiAssistant").addEventListener("click", runAiAssistant);
+    document.getElementById("addAiResponseCard").addEventListener("click", addAiResponseCard);
     document.getElementById("buildPublishPack").addEventListener("click", () => {
       state.publish.packageText = buildPublishPackageText();
       publishOutput.value = state.publish.packageText;
@@ -1933,6 +1999,217 @@
         publishOutput.value = state.publish.packageText;
         saveState("План агента недоступен");
       }
+    }
+
+    function loadAiSettings() {
+      const fallback = {
+        provider: "openai",
+        model: "gpt-4.1-mini",
+        apiKey: "",
+        remember: false
+      };
+      try {
+        const sessionRaw = sessionStorage.getItem(AI_SETTINGS_SESSION_KEY);
+        if (sessionRaw) return normalizeAiSettings(JSON.parse(sessionRaw), fallback);
+      } catch (_) {}
+      try {
+        const localRaw = localStorage.getItem(AI_SETTINGS_LOCAL_KEY);
+        if (localRaw) return normalizeAiSettings(JSON.parse(localRaw), { ...fallback, remember: true });
+      } catch (_) {}
+      return fallback;
+    }
+
+    function normalizeAiSettings(input, fallback) {
+      const source = input && typeof input === "object" ? input : {};
+      return {
+        provider: source.provider === "openai" ? "openai" : fallback.provider,
+        model: typeof source.model === "string" && source.model.trim() ? source.model.trim() : fallback.model,
+        apiKey: typeof source.apiKey === "string" ? source.apiKey : fallback.apiKey,
+        remember: Boolean(source.remember)
+      };
+    }
+
+    function syncAiSettingsForm() {
+      aiProviderInput.value = aiSettings.provider || "openai";
+      aiModelInput.value = aiSettings.model || "gpt-4.1-mini";
+      aiKeyInput.value = aiSettings.apiKey || "";
+      aiRememberInput.checked = Boolean(aiSettings.remember);
+      if (!aiPromptInput.value.trim()) {
+        aiPromptInput.value = "Проанализируй текущий Hermest Board и предложи следующий сильный шаг для продукта. Ответ дай структурно и без лишней воды.";
+      }
+    }
+
+    function readAiSettingsForm() {
+      return {
+        provider: aiProviderInput.value || "openai",
+        model: aiModelInput.value.trim() || "gpt-4.1-mini",
+        apiKey: aiKeyInput.value.trim(),
+        remember: aiRememberInput.checked
+      };
+    }
+
+    function saveAiSettingsFromForm(message = "AI настройки сохранены") {
+      const next = readAiSettingsForm();
+      aiSettings = next;
+      try {
+        localStorage.removeItem(AI_SETTINGS_LOCAL_KEY);
+        sessionStorage.removeItem(AI_SETTINGS_SESSION_KEY);
+        const storage = next.remember ? localStorage : sessionStorage;
+        const key = next.remember ? AI_SETTINGS_LOCAL_KEY : AI_SETTINGS_SESSION_KEY;
+        storage.setItem(key, JSON.stringify(next));
+        flashStatus(message);
+        return true;
+      } catch (_) {
+        flashStatus("AI настройки не сохранены");
+        return false;
+      }
+    }
+
+    function clearAiSettings() {
+      localStorage.removeItem(AI_SETTINGS_LOCAL_KEY);
+      sessionStorage.removeItem(AI_SETTINGS_SESSION_KEY);
+      aiSettings = {
+        provider: "openai",
+        model: "gpt-4.1-mini",
+        apiKey: "",
+        remember: false
+      };
+      syncAiSettingsForm();
+      flashStatus("AI ключ удалён из браузера");
+    }
+
+    async function testAiConnection() {
+      aiResponseOutput.value = "Проверяю AI подключение...";
+      try {
+        const data = await callAi("Ответь одной короткой фразой: Hermest AI connected.", "");
+        latestAiResponse = data.text || "";
+        aiResponseOutput.value = latestAiResponse || "AI ответил пустым текстом.";
+        flashStatus("AI подключение работает");
+      } catch (error) {
+        showAiError(error);
+      }
+    }
+
+    async function runAiAssistant() {
+      const prompt = aiPromptInput.value.trim();
+      if (!prompt) {
+        flashStatus("Впиши задачу для AI");
+        return;
+      }
+      aiResponseOutput.value = "AI анализирует текущий борд...";
+      try {
+        const data = await callAi(prompt, buildAiBoardContext());
+        latestAiResponse = data.text || "";
+        aiResponseOutput.value = latestAiResponse || "AI ответил пустым текстом.";
+        flashStatus("AI ответ готов");
+      } catch (error) {
+        showAiError(error);
+      }
+    }
+
+    async function callAi(prompt, context) {
+      const settings = readAiSettingsForm();
+      aiSettings = settings;
+      if (!settings.apiKey) {
+        throw new Error("api_key_required");
+      }
+      saveAiSettingsFromForm("AI настройки применены");
+      return fetchJson("/api/ai/respond", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "authorization": `Bearer ${settings.apiKey}`
+        },
+        body: JSON.stringify({
+          provider: settings.provider,
+          model: settings.model,
+          prompt,
+          context,
+          maxOutputTokens: 1400
+        })
+      });
+    }
+
+    function showAiError(error) {
+      const code = error?.payload?.error || error?.message || "unknown";
+      const details = error?.payload?.message || error?.payload?.note || "";
+      aiResponseOutput.value = [
+        "AI ERROR",
+        "",
+        `Ошибка: ${code}`,
+        details ? `Детали: ${details}` : "",
+        "",
+        code === "api_key_required" ? "Добавь свой OpenAI API key в AI настройки и повтори запрос." : "Проверь ключ, модель, лимиты аккаунта и доступ к сети."
+      ].filter(Boolean).join("\n");
+      flashStatus("AI запрос не выполнен");
+    }
+
+    function buildAiBoardContext() {
+      const cards = orderedCards().map((card, index) => [
+        `${index + 1}. ${card.title}`,
+        card.text,
+        Array.isArray(card.tags) && card.tags.length ? `Tags: ${card.tags.join(", ")}` : ""
+      ].filter(Boolean).join("\n")).join("\n\n");
+      return [
+        `Title: ${state.title}`,
+        "",
+        "Plan:",
+        trimForAi(state.plan, 1800),
+        "",
+        "Roadmap:",
+        trimForAi(state.roadmap, 1800),
+        "",
+        "Publish settings:",
+        JSON.stringify({
+          platforms: state.publish?.platforms || [],
+          tools: state.publish?.tools || [],
+          languages: state.publish?.languages || "",
+          researchQuery: state.publish?.researchQuery || ""
+        }, null, 2),
+        "",
+        "Cards:",
+        trimForAi(cards, 8000)
+      ].join("\n");
+    }
+
+    function addAiResponseCard() {
+      const text = (latestAiResponse || aiResponseOutput.value || "").trim();
+      if (!text || text.startsWith("AI ERROR")) {
+        flashStatus("Нет готового AI ответа для карточки");
+        return;
+      }
+      const id = `ai_${Date.now()}`;
+      const card = {
+        id,
+        x: Math.round((window.innerWidth / 2 - state.view.x) / state.view.zoom - 170),
+        y: Math.round((window.innerHeight / 2 - state.view.y) / state.view.zoom - 155),
+        w: 360,
+        h: 330,
+        z: ++zCounter,
+        rot: 0,
+        color: "#93c5fd",
+        kicker: "ai ответ",
+        title: "AI предложение",
+        text: trimForAi(text, 1200),
+        tags: ["ai", "draft"],
+        image: visual("agents", "AI RESPONSE", "ответ внутри борда")
+      };
+      state.cards.push(card);
+      selectedId = id;
+      render();
+      saveState("AI ответ добавлен на борд");
+    }
+
+    function trimForAi(text, limit) {
+      const value = String(text || "").trim();
+      if (value.length <= limit) return value;
+      return `${value.slice(0, limit - 3)}...`;
+    }
+
+    function flashStatus(message) {
+      statusEl.textContent = message;
+      clearTimeout(flashStatus.timer);
+      flashStatus.timer = setTimeout(() => statusEl.textContent = "Автосохранение включено", 1400);
     }
 
     function buildProjectDocument() {
@@ -2513,6 +2790,7 @@
     }
 
     render();
+    syncAiSettingsForm();
     setTimeout(fitView, 80);
   </script>
 </body>
