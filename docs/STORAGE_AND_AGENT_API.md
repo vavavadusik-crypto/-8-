@@ -64,6 +64,12 @@ PATCH /api/product?route=jobs/:id
 Stores publish/render job metadata for local development. Production needs a
 durable queue and workers.
 
+Job status values are intentionally constrained to the durable queue target:
+`queued`, `running`, `waiting_for_approval`, `blocked`, `failed`, `completed`,
+and `cancelled`. A job that has no connector/storage blockers still uses
+`waiting_for_approval`; autopublishing remains disabled until explicit human
+approval and OAuth safety controls exist.
+
 ## Audit
 
 ```text

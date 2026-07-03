@@ -2,6 +2,10 @@
 
 ## 2026-07-03
 
+- Hardened agent job status handling:
+  - aligned API-created approval jobs with the durable schema status `waiting_for_approval`;
+  - rejected invalid job status updates;
+  - extended API smoke coverage for blocked jobs, approval-gated jobs, and invalid status PATCH requests.
 - Verified local project is its own clean git repo on `main`.
 - Verified GitHub `origin/main` matches local commit `bef87cb`.
 - Verified public production endpoints are live:

@@ -44,10 +44,40 @@ try {
     url: "https://example.com/reference",
     rightsStatus: "unknown"
   }, 201);
-  await expect("job-create", "POST", "jobs", {
+  const blockedJob = await expect("job-create", "POST", "jobs", {
     projectId: id,
     publishPack: { platforms: ["youtube_video"], tools: ["parser"], languages: ["ru"] }
   }, 201);
+  if (blockedJob.job.status !== "blocked") {
+    throw new Error(`Expected blocked job, got ${blockedJob.job.status}`);
+  }
+
+  process.env.DATABASE_URL = "postgres://smoke.invalid/hermest";
+  process.env.YOUTUBE_CLIENT_ID = "smoke-client-id";
+  process.env.YOUTUBE_CLIENT_SECRET = "smoke-client-secret";
+  const approvalJob = await expect("job-waiting-for-approval", "POST", "jobs", {
+    projectId: id,
+    publishPack: { platforms: ["youtube_video"], tools: ["parser"], languages: ["ru"] }
+  }, 201);
+  if (approvalJob.job.status !== "waiting_for_approval") {
+    throw new Error(`Expected waiting_for_approval job, got ${approvalJob.job.status}`);
+  }
+  if (approvalJob.job.plan.status !== "ready_for_human_approval" || approvalJob.job.plan.canAutopublish !== false) {
+    throw new Error(`Expected approval-only agent plan, got ${JSON.stringify(approvalJob.job.plan)}`);
+  }
+  await expect("job-update-running", "PATCH", `jobs/${approvalJob.job.id}`, {
+    status: "running"
+  }, 200);
+  const invalidJobStatus = await expect("job-invalid-status", "PATCH", `jobs/${approvalJob.job.id}`, {
+    status: "ready_for_approval"
+  }, 400);
+  if (invalidJobStatus.error !== "invalid_job_status") {
+    throw new Error(`Expected invalid_job_status, got ${invalidJobStatus.error}`);
+  }
+  delete process.env.DATABASE_URL;
+  delete process.env.YOUTUBE_CLIENT_ID;
+  delete process.env.YOUTUBE_CLIENT_SECRET;
+
   await expect("audit-list", "GET", "audit", null, 200);
   await expect("project-delete", "DELETE", `projects/${id}`, null, 200);
 

@@ -12,6 +12,16 @@ import {
   saveRecord
 } from "./_lib/storage.js";
 
+const JOB_STATUSES = new Set([
+  "queued",
+  "running",
+  "waiting_for_approval",
+  "blocked",
+  "failed",
+  "completed",
+  "cancelled"
+]);
+
 export default async function handler(request, response) {
   try {
     const path = routeParts(request);
@@ -166,7 +176,7 @@ async function handleJobsIndex(request, response) {
     id: createId("job"),
     projectId: String(body.projectId || ""),
     type: String(body.type || "publish_plan"),
-    status: plan.blockers.length ? "blocked" : "ready_for_approval",
+    status: jobStatusFromPlan(plan),
     plan,
     createdAt: now,
     updatedAt: now
@@ -194,7 +204,7 @@ async function handleJobById(request, response, id) {
   const body = await readJson(request);
   const job = {
     ...existing,
-    status: String(body.status || existing.status),
+    status: normalizeJobStatus(body.status, existing.status),
     note: body.note ? String(body.note).slice(0, 4000) : existing.note,
     updatedAt: new Date().toISOString()
   };
@@ -216,4 +226,20 @@ function routeFromUrl(value = "") {
 
 function safeText(value, limit) {
   return String(value || "").slice(0, limit);
+}
+
+function jobStatusFromPlan(plan) {
+  return plan.blockers.length ? "blocked" : "waiting_for_approval";
+}
+
+function normalizeJobStatus(value, fallback) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const status = String(value).trim();
+  if (JOB_STATUSES.has(status)) return status;
+
+  const error = new Error("invalid_job_status");
+  error.status = 400;
+  error.code = "invalid_job_status";
+  error.note = `Job status must be one of: ${[...JOB_STATUSES].join(", ")}.`;
+  throw error;
 }
