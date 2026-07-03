@@ -153,6 +153,7 @@ GET /api/product?route=jobs
 POST /api/product?route=jobs
 GET /api/product?route=jobs/:id
 PATCH /api/product?route=jobs/:id
+POST /api/product?route=jobs/:id/approval
 ```
 
 Stores publish/render job metadata for local development. Production needs a
@@ -175,6 +176,13 @@ Job status values are intentionally constrained to the durable queue target:
 and `cancelled`. A job that has no connector/storage blockers still uses
 `waiting_for_approval`; autopublishing remains disabled until explicit human
 approval and OAuth safety controls exist.
+
+`POST /api/product?route=jobs/:id/approval` records a human `approve` or
+`reject` decision. Approving a job does not execute publishing yet; the job is
+marked with approval metadata and remains execution-blocked until durable queue
+workers, provider token exchange, and autopublishing safety controls exist.
+Rejected jobs are cancelled. Signed-session actors can only approve jobs in
+their own `workspaceId`.
 
 ## Audit
 

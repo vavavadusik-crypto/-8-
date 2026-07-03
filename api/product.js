@@ -94,6 +94,11 @@ export default async function handler(request, response) {
       return;
     }
 
+    if (path[0] === "jobs" && path[1] && path[2] === "approval") {
+      await handleJobApproval(request, response, path[1]);
+      return;
+    }
+
     if (path[0] === "jobs" && path[1]) {
       await handleJobById(request, response, path[1]);
       return;
@@ -292,6 +297,7 @@ async function handleJobsIndex(request, response) {
     type: String(body.type || "publish_plan"),
     status: jobStatusFromPlan(plan),
     plan,
+    approval: approvalStateFromPlan(plan),
     createdBy: ownership.actor,
     updatedBy: ownership.actor,
     createdAt: now,
@@ -336,6 +342,63 @@ async function handleJobById(request, response, id) {
   };
   await saveRecord("jobs", job);
   await appendAudit("job.updated", { id: job.id, workspaceId: job.workspaceId, ownerUserId: job.ownerUserId, status: job.status }, actor);
+  sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), job });
+}
+
+async function handleJobApproval(request, response, id) {
+  if (!requireMethods(request, response, ["POST"])) return;
+
+  const actor = requireWriteAccess(request);
+  const existing = await getRecord("jobs", id);
+  if (!existing) {
+    sendJson(response, 404, { ok: false, error: "job_not_found", id });
+    return;
+  }
+  requireRecordAccess(existing, actor, "approve");
+
+  if (existing.approval?.status === "blocked") {
+    const error = new Error("job_approval_blocked");
+    error.status = 409;
+    error.code = "job_approval_blocked";
+    error.note = "Resolve job plan blockers before approval.";
+    throw error;
+  }
+
+  const body = await readJson(request);
+  const action = normalizeApprovalAction(body.action || body.decision);
+  const now = new Date().toISOString();
+  const actorRecord = actorSnapshot(actor);
+  const approval = {
+    required: true,
+    status: action === "approve" ? "approved" : "rejected",
+    decidedAt: now,
+    decidedBy: actorRecord,
+    note: safeText(body.note, 4000)
+  };
+  const executionBlockers = action === "approve"
+    ? ["durable_job_queue_not_implemented", "autopublishing_disabled"]
+    : [];
+  const job = {
+    ...existing,
+    status: action === "approve" ? "blocked" : "cancelled",
+    approval,
+    execution: {
+      status: action === "approve" ? "blocked_after_approval" : "rejected_by_human",
+      blockers: executionBlockers,
+      canAutopublish: false
+    },
+    updatedBy: actorRecord,
+    updatedAt: now
+  };
+
+  await saveRecord("jobs", job);
+  await appendAudit("job.approval_decided", {
+    id: job.id,
+    workspaceId: job.workspaceId,
+    ownerUserId: job.ownerUserId,
+    decision: approval.status,
+    executionBlockers
+  }, actor);
   sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), job });
 }
 
@@ -557,6 +620,27 @@ function isStorageSafeId(id) {
 
 function jobStatusFromPlan(plan) {
   return plan.blockers.length ? "blocked" : "waiting_for_approval";
+}
+
+function approvalStateFromPlan(plan) {
+  return {
+    required: true,
+    status: plan.blockers.length ? "blocked" : "pending",
+    blockers: plan.blockers,
+    canAutopublish: false
+  };
+}
+
+function normalizeApprovalAction(value) {
+  const action = String(value || "").trim().toLowerCase();
+  if (action === "approve" || action === "approved") return "approve";
+  if (action === "reject" || action === "rejected") return "reject";
+
+  const error = new Error("invalid_approval_action");
+  error.status = 400;
+  error.code = "invalid_approval_action";
+  error.note = "Approval action must be approve or reject.";
+  throw error;
 }
 
 function normalizeJobStatus(value, fallback) {

@@ -28,7 +28,7 @@ export function getProductReadiness() {
     "oauth_token_exchange_not_implemented",
     "connector_disconnect_flow_not_implemented",
     "durable_job_queue_not_implemented",
-    "human_publish_approval_flow_not_implemented",
+    "approval_gated_worker_not_implemented",
     !connectors.youtube.configured && "youtube_connector_not_configured",
     !connectors.tiktok.configured && "tiktok_connector_not_configured",
     !connectors.instagram.configured && "instagram_connector_not_configured"
@@ -66,13 +66,18 @@ export function getProductReadiness() {
     },
     oauth,
     tokenVault,
+    jobs: {
+      approvalGateImplemented: true,
+      durableQueueImplemented: false,
+      approvalGatedWorkerImplemented: false
+    },
     connectors,
     gates: [
       gate("public_alpha_demo", true, "Static board, read-only APIs, localStorage, export/import, and dry-run planning are available."),
       gate("production_project_writes", false, "Needs durable database adapter, real auth, authorization, and live unauthorized-path tests."),
       gate("private_media_storage", false, "Needs object storage, upload validation, rights metadata, and per-user access control."),
       gate("agent_job_execution", false, "Needs durable queue, workers, retries, cancellation, and audit records."),
-      gate("autopublishing", false, "Needs OAuth token storage, provider policy checks, human approval, and disconnect/revoke flows.")
+      gate("autopublishing", false, "Needs OAuth token exchange, provider policy checks, approval-gated workers, and disconnect/revoke flows.")
     ],
     blockers,
     nextRequiredWork: [

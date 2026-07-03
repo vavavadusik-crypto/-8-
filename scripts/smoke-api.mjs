@@ -240,6 +240,9 @@ try {
   if (signedJob.job.workspaceId !== signedProject.project.workspaceId || signedJob.job.ownerUserId !== signedProject.project.ownerUserId) {
     throw new Error(`Expected signed-session job ownership metadata, got ${JSON.stringify(signedJob.job)}`);
   }
+  if (signedJob.job.approval.status !== "blocked") {
+    throw new Error(`Expected blocked signed job approval state, got ${JSON.stringify(signedJob.job.approval)}`);
+  }
   const signedJobList = await expect("job-list-signed-session", "GET", "jobs", null, 200, { authorization: `Bearer ${signedToken}` });
   if (!signedJobList.jobs.some(job => job.id === signedJob.job.id)) {
     throw new Error(`Expected signed job in signed-session list, got ${JSON.stringify(signedJobList.jobs)}`);
@@ -257,6 +260,18 @@ try {
   }, 403, { authorization: `Bearer ${otherToken}` });
   if (forbiddenJobPatch.error !== "forbidden") {
     throw new Error(`Expected forbidden signed-session job patch, got ${forbiddenJobPatch.error}`);
+  }
+  const forbiddenJobApproval = await expect("job-approval-other-session", "POST", `jobs/${signedJob.job.id}/approval`, {
+    action: "approve"
+  }, 403, { authorization: `Bearer ${otherToken}` });
+  if (forbiddenJobApproval.error !== "forbidden") {
+    throw new Error(`Expected forbidden signed-session job approval, got ${forbiddenJobApproval.error}`);
+  }
+  const blockedJobApproval = await expect("job-approval-blocked-plan", "POST", `jobs/${signedJob.job.id}/approval`, {
+    action: "approve"
+  }, 409, { authorization: `Bearer ${signedToken}` });
+  if (blockedJobApproval.error !== "job_approval_blocked") {
+    throw new Error(`Expected job_approval_blocked, got ${blockedJobApproval.error}`);
   }
   const forbiddenJobCreate = await expect("job-create-other-project-session", "POST", "jobs", {
     projectId: signedProject.project.id,
@@ -352,8 +367,21 @@ try {
   if (approvalJob.job.status !== "waiting_for_approval") {
     throw new Error(`Expected waiting_for_approval job, got ${approvalJob.job.status}`);
   }
+  if (approvalJob.job.approval.status !== "pending") {
+    throw new Error(`Expected pending approval state, got ${JSON.stringify(approvalJob.job.approval)}`);
+  }
   if (approvalJob.job.plan.status !== "ready_for_human_approval" || approvalJob.job.plan.canAutopublish !== false) {
     throw new Error(`Expected approval-only agent plan, got ${JSON.stringify(approvalJob.job.plan)}`);
+  }
+  const approvedJob = await expect("job-approval-approve", "POST", `jobs/${approvalJob.job.id}/approval`, {
+    action: "approve",
+    note: "Smoke approval"
+  }, 200);
+  if (approvedJob.job.approval.status !== "approved" || approvedJob.job.status !== "blocked" || approvedJob.job.execution.canAutopublish !== false) {
+    throw new Error(`Expected approved but execution-blocked job, got ${JSON.stringify(approvedJob.job)}`);
+  }
+  if (!approvedJob.job.execution.blockers.includes("durable_job_queue_not_implemented")) {
+    throw new Error(`Expected durable queue execution blocker, got ${JSON.stringify(approvedJob.job.execution)}`);
   }
   await expect("job-update-running", "PATCH", `jobs/${approvalJob.job.id}`, {
     status: "running"

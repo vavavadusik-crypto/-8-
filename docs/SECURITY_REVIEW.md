@@ -56,6 +56,8 @@ publishing approval are implemented.
   exchange, but token exchange is still disabled.
 - Connector token vault storage encrypts access/refresh tokens server-side and
   redacts token material from API responses; token exchange is still disabled.
+- Job approval route records human approve/reject decisions but keeps execution
+  blocked until durable approval-gated workers exist.
 
 ## Known Limitations
 
@@ -83,6 +85,8 @@ publishing approval are implemented.
 - Upload/media validation is not production-grade yet.
 - OAuth routes still need provider token exchange, disconnect flows, and
   provider-specific scope review.
+- Job execution still needs durable workers that enforce approval records before
+  any external publishing action.
 
 ### Low
 
@@ -113,7 +117,8 @@ Do not allow the agent to post to TikTok, YouTube, Shorts, or Instagram until:
 2. Publishing tokens never reach the browser.
 3. Generated media passes copyright/source policy checks.
 4. Every publishing action requires human review and approval.
-5. Jobs are durable, auditable, retry-safe, and cancellable.
+5. Jobs are durable, auditable, retry-safe, cancellable, and blocked unless a
+   human approval record exists.
 6. The user can disconnect accounts and revoke access.
 7. Provider policy limits, rate limits, and error handling are documented.
 
