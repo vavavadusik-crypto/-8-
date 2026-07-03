@@ -48,6 +48,7 @@ async function checkPreflight() {
 async function checkSessionCurrent() {
   const { response, json } = await getJson(`/api/product?route=${encodeURIComponent("session/current")}`);
   assert(response.status === 200, `session current status ${response.status}`);
+  assert(json.session?.signedSessionVerifierImplemented === true, "session verifier implemented");
   assert(json.session?.realUserAuthImplemented === false, "session real user auth disabled");
   assert(json.actor?.id === "anonymous", `session anonymous actor ${json.actor?.id}`);
 }

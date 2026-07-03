@@ -45,6 +45,8 @@ publishing approval are implemented.
   metadata only and must not be treated as final authorization.
 - `session/current` exposes only bootstrap actor metadata; it is not final
   per-user authentication.
+- Signed session token verification exists, but token issuance and full
+  per-user authorization are still intentionally blocked.
 
 ## Known Limitations
 

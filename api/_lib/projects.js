@@ -143,6 +143,7 @@ function object(value, fallback) {
 }
 
 function defaultWorkspaceId(actor) {
+  if (actor?.workspaceId) return actor.workspaceId;
   if (actor?.mode === "owner-token") return "workspace_owner";
   return DEFAULT_WORKSPACE_ID;
 }

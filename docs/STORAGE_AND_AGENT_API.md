@@ -63,6 +63,9 @@ Expected alpha behavior:
 - local development returns actor `local-dev`;
 - public read-only production returns actor `anonymous`;
 - owner-token demo requests return actor `owner`;
+- signed `hermest.v1` session tokens can be verified when
+  `HERMEST_SESSION_SECRET` is configured, but there is no public token issuer yet;
+- `session.signedSessionVerifierImplemented` is `true`;
 - `session.realUserAuthImplemented` remains `false`.
 
 ## Projects

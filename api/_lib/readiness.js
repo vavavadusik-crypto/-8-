@@ -44,6 +44,8 @@ export function getProductReadiness() {
     auth: {
       ...auth,
       sessionSecretConfigured,
+      signedSessionVerifierImplemented: auth.session.verifierImplemented,
+      signedSessionIssuerImplemented: auth.session.issuerImplemented,
       realUserAuthImplemented: false,
       authorizationImplemented: false
     },

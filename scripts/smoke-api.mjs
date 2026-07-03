@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import product from "../api/product.js";
+import { createSignedSessionToken } from "../api/_lib/session.js";
 
 const originalEnv = { ...process.env };
 const dataDir = mkdtempSync(join(tmpdir(), "hermest-api-smoke-"));
@@ -11,6 +12,7 @@ try {
   delete process.env.VERCEL;
   delete process.env.HERMEST_ENABLE_DEMO_STORAGE;
   delete process.env.HERMEST_OWNER_TOKEN;
+  delete process.env.HERMEST_SESSION_SECRET;
 
   const storageStatus = await expect("storage", "GET", "storage/status", null, 200);
   if (storageStatus.adapter !== "json-file" || storageStatus.adapterInterfaceVersion !== 1) {
@@ -35,6 +37,24 @@ try {
   if (localSession.actor.id !== "local-dev" || localSession.session.realUserAuthImplemented !== false) {
     throw new Error(`Expected local bootstrap session, got ${JSON.stringify(localSession)}`);
   }
+
+  process.env.HERMEST_SESSION_SECRET = "local-session-secret-for-smoke";
+  const signedToken = createSignedSessionToken({
+    sub: "user_smoke",
+    workspaceId: "workspace_smoke"
+  });
+  const signedSession = await expect("session-current-signed", "GET", "session/current", null, 200, { authorization: `Bearer ${signedToken}` });
+  if (signedSession.actor.id !== "user_smoke" || signedSession.actor.workspaceId !== "workspace_smoke") {
+    throw new Error(`Expected signed-session actor, got ${JSON.stringify(signedSession)}`);
+  }
+  const signedProject = await expect("project-create-signed-session", "POST", "projects", {
+    project: { title: "signed session project", cards: [] }
+  }, 201, { authorization: `Bearer ${signedToken}` });
+  if (signedProject.project.workspaceId !== "workspace_smoke" || signedProject.project.ownerUserId !== "user_smoke") {
+    throw new Error(`Expected signed-session ownership metadata, got ${JSON.stringify(signedProject.project)}`);
+  }
+  await expect("project-delete-signed-session", "DELETE", `projects/${signedProject.project.id}`, null, 200, { authorization: `Bearer ${signedToken}` });
+  delete process.env.HERMEST_SESSION_SECRET;
 
   const created = await expect("project-create", "POST", "projects", {
     project: {
@@ -124,6 +144,7 @@ try {
 
   process.env.VERCEL = "1";
   delete process.env.HERMEST_ENABLE_DEMO_STORAGE;
+  delete process.env.HERMEST_SESSION_SECRET;
   process.env.DATABASE_URL = "postgres://smoke.invalid/hermest";
   const externalStorageStatus = await expect("external-storage-status", "GET", "storage/status", null, 200);
   if (externalStorageStatus.writeEnabled !== false || externalStorageStatus.durable !== false) {

@@ -71,6 +71,10 @@ Project records now include `workspaceId`, `ownerUserId`, `createdBy`, and
 enforce against. These values are still bootstrap metadata until real sessions
 exist.
 
+The API can verify signed `hermest.v1` session tokens when
+`HERMEST_SESSION_SECRET` is configured. Token issuance, user provisioning, and
+full authorization are still deliberately unfinished.
+
 ## Data Model Draft
 
 ```text

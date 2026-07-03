@@ -51,6 +51,7 @@ export default async function handler(request, response) {
         auth: getAuthStatus(),
         actor,
         session: {
+          signedSessionVerifierImplemented: true,
           realUserAuthImplemented: false,
           authenticated: actor.authenticated,
           mode: actor.mode,

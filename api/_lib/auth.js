@@ -1,14 +1,17 @@
 import { timingSafeEqual } from "node:crypto";
+import { getSessionStatus, readSignedSession } from "./session.js";
 
 export function getAuthStatus() {
   const inVercel = Boolean(process.env.VERCEL);
   const demoStorageEnabled = process.env.HERMEST_ENABLE_DEMO_STORAGE === "1";
   const ownerTokenConfigured = Boolean(process.env.HERMEST_OWNER_TOKEN);
+  const session = getSessionStatus();
 
   return {
     ok: true,
-    mode: ownerTokenConfigured ? "owner-token" : "development-or-readonly",
+    mode: ownerTokenConfigured ? "owner-token" : session.secretConfigured ? "signed-session-or-readonly" : "development-or-readonly",
     ownerTokenConfigured,
+    session,
     readAccess: inVercel && demoStorageEnabled
       ? ownerTokenConfigured
         ? "owner_token_required"
@@ -47,6 +50,9 @@ export function requireReadAccess(request) {
 
 export function getRequestActor(request) {
   const status = getAuthStatus();
+  const signedSessionActor = readSignedSession(request);
+  if (signedSessionActor) return signedSessionActor;
+
   if (!status.ownerTokenConfigured && !process.env.VERCEL) {
     return {
       authenticated: true,
@@ -93,6 +99,7 @@ export function requireWriteAccess(request) {
 function readToken(request) {
   const headers = request.headers || {};
   const auth = header(headers, "authorization");
+  if (auth?.toLowerCase().startsWith("bearer hermest.v1.")) return "";
   if (auth?.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
   return header(headers, "x-hermest-owner-token") || "";
 }
