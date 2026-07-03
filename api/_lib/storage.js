@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createJsonFileStorageAdapter } from "./storage-adapters/json-file.js";
 
 const COLLECTIONS = new Set(["projects", "assets", "jobs", "audit"]);
+const STORAGE_ADAPTER_INTERFACE_VERSION = 1;
 
 export function createId(prefix) {
   return `${prefix}_${randomUUID()}`;
@@ -12,6 +13,7 @@ export function createId(prefix) {
 export function getStorageStatus() {
   const inVercel = Boolean(process.env.VERCEL);
   const demoStorageEnabled = process.env.HERMEST_ENABLE_DEMO_STORAGE === "1";
+  const adapter = getStorageAdapter();
   const externalConfigPresent = Boolean(
     process.env.DATABASE_URL ||
     process.env.POSTGRES_URL ||
@@ -33,7 +35,10 @@ export function getStorageStatus() {
 
   return {
     ok: true,
-    adapter: "json-file",
+    adapter: adapter.id,
+    adapterKind: adapter.kind,
+    adapterInterfaceVersion: STORAGE_ADAPTER_INTERFACE_VERSION,
+    durableAdapterImplemented: false,
     durable,
     writeEnabled,
     demoStorageEnabled,
@@ -61,51 +66,27 @@ export function ensureWriteEnabled() {
 
 export async function listRecords(collection) {
   assertCollection(collection);
-  const dir = collectionPath(collection);
-  let entries = [];
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch (_) {
-    return [];
-  }
-
-  const records = [];
-  for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
-    try {
-      const record = JSON.parse(await readFile(join(dir, entry.name), "utf8"));
-      records.push(record);
-    } catch (_) {}
-  }
-  return records.sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
+  return getStorageAdapter().listRecords(collection);
 }
 
 export async function getRecord(collection, id) {
+  assertCollection(collection);
   assertSafeId(id);
-  try {
-    return JSON.parse(await readFile(recordPath(collection, id), "utf8"));
-  } catch (_) {
-    return null;
-  }
+  return getStorageAdapter().getRecord(collection, id);
 }
 
 export async function saveRecord(collection, record) {
   assertCollection(collection);
   assertSafeId(record.id);
   ensureWriteEnabled();
-  const dir = collectionPath(collection);
-  await mkdir(dir, { recursive: true });
-  const target = recordPath(collection, record.id);
-  const tmp = `${target}.${process.pid}.tmp`;
-  await writeFile(tmp, JSON.stringify(record, null, 2));
-  await rename(tmp, target);
-  return record;
+  return getStorageAdapter().saveRecord(collection, record);
 }
 
 export async function deleteRecord(collection, id) {
+  assertCollection(collection);
   assertSafeId(id);
   ensureWriteEnabled();
-  await rm(recordPath(collection, id), { force: true });
+  await getStorageAdapter().deleteRecord(collection, id);
 }
 
 export async function appendAudit(action, payload = {}, actor = null) {
@@ -128,15 +109,12 @@ export async function appendAudit(action, payload = {}, actor = null) {
   return record;
 }
 
-function recordPath(collection, id) {
-  assertCollection(collection);
-  assertSafeId(id);
-  return join(collectionPath(collection), `${id}.json`);
-}
-
-function collectionPath(collection) {
-  assertCollection(collection);
-  return join(dataRoot(), collection);
+function getStorageAdapter() {
+  return createJsonFileStorageAdapter({
+    dataRoot: dataRoot(),
+    assertCollection,
+    assertSafeId
+  });
 }
 
 function dataRoot() {

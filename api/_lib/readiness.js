@@ -38,7 +38,8 @@ export function getProductReadiness() {
       ...storage,
       durableDbConfigured,
       objectStorageConfigured,
-      adapterImplemented: false
+      adapterInterfaceImplemented: true,
+      durableAdapterImplemented: storage.durableAdapterImplemented
     },
     auth: {
       ...auth,

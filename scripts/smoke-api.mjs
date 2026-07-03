@@ -12,10 +12,16 @@ try {
   delete process.env.HERMEST_ENABLE_DEMO_STORAGE;
   delete process.env.HERMEST_OWNER_TOKEN;
 
-  await expect("storage", "GET", "storage/status", null, 200);
+  const storageStatus = await expect("storage", "GET", "storage/status", null, 200);
+  if (storageStatus.adapter !== "json-file" || storageStatus.adapterInterfaceVersion !== 1) {
+    throw new Error(`Expected json-file storage adapter contract, got ${JSON.stringify(storageStatus)}`);
+  }
   const preflight = await expect("preflight", "GET", "preflight", null, 200);
   if (preflight.launchReady !== false || preflight.canAutopublish !== false) {
     throw new Error(`Expected blocked alpha preflight, got ${JSON.stringify(preflight)}`);
+  }
+  if (preflight.storage.adapterInterfaceImplemented !== true || preflight.storage.durableAdapterImplemented !== false) {
+    throw new Error(`Expected adapter boundary without durable adapter, got ${JSON.stringify(preflight.storage)}`);
   }
   if (!preflight.blockers.includes("real_user_auth_not_implemented")) {
     throw new Error(`Expected real auth blocker, got ${JSON.stringify(preflight.blockers)}`);

@@ -39,6 +39,8 @@ publishing approval are implemented.
   blockers, source download availability, and security headers.
 - A product preflight route reports readiness gates and blocker names without
   exposing secret values.
+- Storage now has an explicit adapter boundary; durable adapters still remain
+  disabled until auth and authorization are implemented.
 
 ## Known Limitations
 

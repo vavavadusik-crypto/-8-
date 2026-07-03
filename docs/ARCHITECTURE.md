@@ -49,6 +49,9 @@ All autonomous actions need a durable backend:
 The current JSON-file storage adapter is safe for local development. On public
 Vercel it refuses writes unless demo storage is explicitly enabled, because
 serverless `/tmp` storage is ephemeral and not suitable for private user data.
+The product API calls storage through an adapter boundary so the next durable
+Postgres/Supabase/Neon implementation can replace file IO without rewriting
+route handlers.
 
 ## Future Backend Modules
 

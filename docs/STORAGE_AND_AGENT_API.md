@@ -15,6 +15,8 @@ Reports whether the current deployment can write server-side data safely.
 - Public Vercel: writes are disabled unless `HERMEST_ENABLE_DEMO_STORAGE=1`.
 - Production SaaS: needs durable storage, user accounts, authorization, and
   encrypted connector token storage.
+- Storage now goes through an explicit adapter boundary. The current adapter is
+  `json-file`; future durable adapters must preserve the same API contract.
 
 The response also includes `auth` status:
 

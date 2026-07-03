@@ -27,6 +27,8 @@ async function checkHealth() {
 async function checkStorageStatus() {
   const { response, json } = await getJson(`/api/product?route=${encodeURIComponent("storage/status")}`);
   assert(response.status === 200, `storage status ${response.status}`);
+  assert(json.adapter === "json-file", `storage adapter ${json.adapter}`);
+  assert(json.adapterInterfaceVersion === 1, `storage adapter interface ${json.adapterInterfaceVersion}`);
   assert(json.writeEnabled === false, "production storage writes must stay disabled");
   assert(json.auth?.writeAccess === "blocked_by_storage_guard", `storage auth guard ${json.auth?.writeAccess}`);
 }
@@ -37,6 +39,8 @@ async function checkPreflight() {
   assert(json.launchReady === false, "preflight launchReady must stay false");
   assert(json.canWriteProductionProjects === false, "preflight production writes must stay false");
   assert(json.canAutopublish === false, "preflight autopublish must stay false");
+  assert(json.storage?.adapterInterfaceImplemented === true, "preflight storage adapter interface");
+  assert(json.storage?.durableAdapterImplemented === false, "preflight durable adapter disabled");
   assert(json.blockers?.includes("real_user_auth_not_implemented"), "preflight real auth blocker");
 }
 
