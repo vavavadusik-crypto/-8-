@@ -83,6 +83,16 @@ try {
 
   process.env.VERCEL = "1";
   delete process.env.HERMEST_ENABLE_DEMO_STORAGE;
+  process.env.DATABASE_URL = "postgres://smoke.invalid/hermest";
+  const externalStorageStatus = await expect("external-storage-status", "GET", "storage/status", null, 200);
+  if (externalStorageStatus.writeEnabled !== false || externalStorageStatus.durable !== false) {
+    throw new Error(`Expected external env to stay guarded, got ${JSON.stringify(externalStorageStatus)}`);
+  }
+  if (!externalStorageStatus.warnings?.includes("external_storage_env_detected_but_adapter_not_enabled_yet")) {
+    throw new Error(`Expected external storage warning, got ${JSON.stringify(externalStorageStatus.warnings)}`);
+  }
+  delete process.env.DATABASE_URL;
+
   const guarded = await expect("production-write-guard", "POST", "projects", {
     project: { title: "blocked" }
   }, 501);
@@ -91,6 +101,11 @@ try {
   }
 
   process.env.HERMEST_ENABLE_DEMO_STORAGE = "1";
+  const readAuthBlocked = await expect("demo-storage-read-auth-guard", "GET", "projects", null, 501);
+  if (readAuthBlocked.error !== "read_auth_not_configured") {
+    throw new Error(`Expected read_auth_not_configured, got ${readAuthBlocked.error}`);
+  }
+
   const authBlocked = await expect("demo-storage-auth-guard", "POST", "projects", {
     project: { title: "blocked" }
   }, 501);
@@ -99,9 +114,15 @@ try {
   }
 
   process.env.HERMEST_OWNER_TOKEN = "local-owner-token";
+  const readUnauthorized = await expect("demo-storage-read-token-required", "GET", "projects", null, 401);
+  if (readUnauthorized.error !== "unauthorized") {
+    throw new Error(`Expected unauthorized read guard, got ${readUnauthorized.error}`);
+  }
+  await expect("owner-token-read", "GET", "projects", null, 200, { authorization: "Bearer local-owner-token" });
   const authed = await expect("owner-token-write", "POST", "projects", {
     project: { title: "owner ok", cards: [] }
   }, 201, { authorization: "Bearer local-owner-token" });
+  await expect("owner-token-read-created", "GET", `projects/${authed.project.id}`, null, 200, { authorization: "Bearer local-owner-token" });
   await expect("owner-token-delete", "DELETE", `projects/${authed.project.id}`, null, 200, { authorization: "Bearer local-owner-token" });
 
   console.log("smoke:api ok");

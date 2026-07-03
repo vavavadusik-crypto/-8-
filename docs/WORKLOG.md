@@ -2,6 +2,10 @@
 
 ## 2026-07-03
 
+- Hardened temporary public demo storage:
+  - owner-token protection now covers project, asset, job, and audit read routes when `HERMEST_ENABLE_DEMO_STORAGE=1` on Vercel;
+  - external durable-storage env presence is smoke-tested to stay guarded until a real adapter/auth/authorization layer exists;
+  - API smoke coverage now checks demo-storage read guards and owner-token authenticated reads.
 - Hardened agent job status handling:
   - aligned API-created approval jobs with the durable schema status `waiting_for_approval`;
   - rejected invalid job status updates;

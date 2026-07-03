@@ -22,6 +22,8 @@ publishing approval are implemented.
 - Public production writes are blocked unless server storage is explicitly and
   safely configured.
 - Optional demo storage is guarded by `HERMEST_OWNER_TOKEN`.
+- Temporary demo-storage reads on public Vercel are also guarded by
+  `HERMEST_OWNER_TOKEN` when demo storage is enabled.
 - Platform connector routes are skeletons only; they do not publish content.
 - Agent planning is dry-run only and returns blockers before execution.
 - Security headers are configured in `vercel.json`:
@@ -45,6 +47,9 @@ publishing approval are implemented.
 - No encrypted storage exists for OAuth refresh/access tokens.
 - Autopublishing is intentionally not executable yet.
 - Existing owner-token guard is only a bootstrap control, not real multi-user security.
+- `DATABASE_URL`, `POSTGRES_URL`, or blob-token env presence is detected and
+  reported, but it intentionally does not enable production writes until an
+  adapter, authentication, and authorization are implemented.
 
 ### Medium
 

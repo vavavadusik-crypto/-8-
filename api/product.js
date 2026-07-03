@@ -1,4 +1,4 @@
-import { getAuthStatus, requireWriteAccess } from "./_lib/auth.js";
+import { getAuthStatus, requireReadAccess, requireWriteAccess } from "./_lib/auth.js";
 import { buildAgentPlan } from "./_lib/agent-plan.js";
 import { handleApiError, readJson, requireMethods, sendJson } from "./_lib/http.js";
 import { createProjectRecord, summarizeProject, updateProjectRecord } from "./_lib/projects.js";
@@ -62,6 +62,7 @@ export default async function handler(request, response) {
 
     if (path[0] === "audit" && !path[1]) {
       if (!requireMethods(request, response, ["GET"])) return;
+      requireReadAccess(request);
       const audit = await listRecords("audit");
       sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), audit: audit.slice(0, 100) });
       return;
@@ -88,6 +89,7 @@ async function handleProjectsIndex(request, response) {
   if (!requireMethods(request, response, ["GET", "POST"])) return;
 
   if (request.method === "GET") {
+    requireReadAccess(request);
     const projects = await listRecords("projects");
     sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), projects: projects.map(summarizeProject) });
     return;
@@ -103,6 +105,19 @@ async function handleProjectsIndex(request, response) {
 
 async function handleProjectById(request, response, id) {
   if (!requireMethods(request, response, ["GET", "PUT", "PATCH", "DELETE"])) return;
+
+  if (request.method === "GET") {
+    requireReadAccess(request);
+    const existing = await getRecord("projects", id);
+    if (!existing) {
+      sendJson(response, 404, { ok: false, error: "project_not_found", id });
+      return;
+    }
+    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), project: existing });
+    return;
+  }
+
+  const actor = requireWriteAccess(request);
   const existing = await getRecord("projects", id);
 
   if (!existing) {
@@ -110,12 +125,6 @@ async function handleProjectById(request, response, id) {
     return;
   }
 
-  if (request.method === "GET") {
-    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), project: existing });
-    return;
-  }
-
-  const actor = requireWriteAccess(request);
   if (request.method === "DELETE") {
     await deleteRecord("projects", id);
     await appendAudit("project.deleted", { id }, actor);
@@ -134,6 +143,7 @@ async function handleAssetsIndex(request, response) {
   if (!requireMethods(request, response, ["GET", "POST"])) return;
 
   if (request.method === "GET") {
+    requireReadAccess(request);
     const assets = await listRecords("assets");
     sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), assets });
     return;
@@ -163,6 +173,7 @@ async function handleJobsIndex(request, response) {
   if (!requireMethods(request, response, ["GET", "POST"])) return;
 
   if (request.method === "GET") {
+    requireReadAccess(request);
     const jobs = await listRecords("jobs");
     sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), jobs });
     return;
@@ -188,6 +199,19 @@ async function handleJobsIndex(request, response) {
 
 async function handleJobById(request, response, id) {
   if (!requireMethods(request, response, ["GET", "PATCH"])) return;
+
+  if (request.method === "GET") {
+    requireReadAccess(request);
+    const existing = await getRecord("jobs", id);
+    if (!existing) {
+      sendJson(response, 404, { ok: false, error: "job_not_found", id });
+      return;
+    }
+    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), job: existing });
+    return;
+  }
+
+  const actor = requireWriteAccess(request);
   const existing = await getRecord("jobs", id);
 
   if (!existing) {
@@ -195,12 +219,6 @@ async function handleJobById(request, response, id) {
     return;
   }
 
-  if (request.method === "GET") {
-    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), job: existing });
-    return;
-  }
-
-  const actor = requireWriteAccess(request);
   const body = await readJson(request);
   const job = {
     ...existing,

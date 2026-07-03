@@ -87,8 +87,8 @@ Expected production behavior:
 - project list returns JSON;
 - project write returns `501 server_storage_not_configured`;
 - agent plan returns blockers for missing connectors/storage.
-- if demo storage is enabled later, write routes must require owner token until
-  real per-user auth exists.
+- if demo storage is enabled later on public Vercel, project/asset/job/audit
+  read and write routes must require owner token until real per-user auth exists.
 
 ## Known Issue / Observation
 

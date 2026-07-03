@@ -9,6 +9,11 @@ export function getAuthStatus() {
     ok: true,
     mode: ownerTokenConfigured ? "owner-token" : "development-or-readonly",
     ownerTokenConfigured,
+    readAccess: inVercel && demoStorageEnabled
+      ? ownerTokenConfigured
+        ? "owner_token_required"
+        : "blocked_until_owner_token_configured"
+      : "public_readonly",
     writeAccess: ownerTokenConfigured
       ? "owner_token_required"
       : inVercel && demoStorageEnabled
@@ -18,6 +23,26 @@ export function getAuthStatus() {
           : "local_development_open",
     productionSafe: ownerTokenConfigured || !inVercel || !demoStorageEnabled
   };
+}
+
+export function requireReadAccess(request) {
+  const status = getAuthStatus();
+  const actor = getRequestActor(request);
+
+  if (!process.env.VERCEL || process.env.HERMEST_ENABLE_DEMO_STORAGE !== "1") {
+    return actor;
+  }
+
+  if (actor.authenticated) return actor;
+
+  const error = new Error(status.ownerTokenConfigured ? "unauthorized" : "read_auth_not_configured");
+  error.status = status.ownerTokenConfigured ? 401 : 501;
+  error.code = status.ownerTokenConfigured ? "unauthorized" : "read_auth_not_configured";
+  error.auth = status;
+  error.note = status.ownerTokenConfigured
+    ? "Demo storage read routes require Authorization: Bearer <owner token>."
+    : "Demo storage reads on public hosting require HERMEST_OWNER_TOKEN.";
+  throw error;
 }
 
 export function getRequestActor(request) {

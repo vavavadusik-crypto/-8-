@@ -20,6 +20,9 @@ The response also includes `auth` status:
 
 - local development can write without a token;
 - production/demo writes require `HERMEST_OWNER_TOKEN`;
+- temporary demo-storage reads on public Vercel also require
+  `HERMEST_OWNER_TOKEN` so saved demo projects, assets, jobs, and audit rows are
+  not listed publicly;
 - real SaaS work must replace owner-token auth with per-user sessions and
   project ownership.
 
@@ -40,6 +43,11 @@ publish settings, and optional publish pack snapshot.
 Write routes are protected by `api/_lib/auth.js`. If `HERMEST_OWNER_TOKEN` is
 configured, callers must send `Authorization: Bearer <token>` or
 `x-hermest-owner-token`. This is only a bootstrap guard, not final user auth.
+
+On public Vercel with `HERMEST_ENABLE_DEMO_STORAGE=1`, read routes for projects,
+assets, jobs, and audit are also owner-token protected. This keeps the temporary
+JSON demo adapter from becoming a public data listing if it is enabled before
+real authentication exists.
 
 ## Assets
 
@@ -101,8 +109,8 @@ npm run check
 ```
 
 `smoke:api` runs the product API directly without a server. It verifies local
-project create/update/delete, assets, jobs, audit, production storage guard, and
-owner-token demo-storage guard.
+project create/update/delete, assets, jobs, audit, production storage guard,
+external-storage-env guard, and owner-token demo-storage read/write guards.
 
 ## Durable Storage Target
 

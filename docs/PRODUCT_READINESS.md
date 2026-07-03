@@ -39,6 +39,7 @@ It is not yet ready for:
 - safe local JSON storage fallback;
 - production guard that blocks unsafe public Vercel writes without durable storage;
 - bootstrap owner-token write guard for temporary demo storage;
+- owner-token read guard for temporary public Vercel demo storage;
 - API smoke checks for product routes and guards;
 - basic smoke validation.
 

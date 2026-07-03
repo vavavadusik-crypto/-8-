@@ -127,4 +127,6 @@ app has durable storage, user accounts, authorization, and encrypted connector
 token storage.
 
 `HERMEST_ENABLE_DEMO_STORAGE=1` can be used only for temporary demos where data
-loss is acceptable. It must not be used for private customer data.
+loss is acceptable. It must not be used for private customer data. When this
+mode is enabled on public Vercel, configure `HERMEST_OWNER_TOKEN`; project,
+asset, job, and audit read/write routes are blocked without it.
