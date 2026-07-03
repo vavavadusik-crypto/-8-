@@ -62,4 +62,5 @@ npm run check
 - `docs/PUBLIC_APIS.md` - публичные/free API и правила безопасности;
 - `docs/STORAGE_AND_AGENT_API.md` - проекты, assets, jobs, audit и backend agent plan;
 - `docs/DATABASE_SCHEMA_DRAFT.md` - черновик Postgres-схемы для durable storage;
+- `db/postgres-schema.sql` - SQL-черновик той же схемы;
 - `docs/PRODUCT_READINESS.md` - что готово и что нужно до beta/launch.

@@ -1,31 +1,10 @@
-# Database Schema Draft
+-- Hermest Board durable storage draft schema.
+-- Target for phase 0.3.0 / 0.4.0.
+-- Review before running in production.
 
-This is the draft durable-storage schema for phase `0.3.0` / `0.4.0`.
-
-The current product still uses local JSON storage for development and blocks
-public production writes. This schema is the intended target for the first real
-Postgres adapter.
-
-Runnable draft SQL lives in `db/postgres-schema.sql`.
-
-## Design Goals
-
-- Every private row belongs to a user/workspace.
-- Board JSON stays portable and compatible with current export/import.
-- Assets and jobs can evolve without breaking project records.
-- Audit logs are append-only from the application perspective.
-- Connector tokens are never stored in browser state.
-
-## Extensions
-
-```sql
 create extension if not exists pgcrypto;
-```
 
-## Users And Workspaces
-
-```sql
-create table app_users (
+create table if not exists app_users (
   id uuid primary key default gen_random_uuid(),
   provider text not null,
   provider_subject text not null,
@@ -36,7 +15,7 @@ create table app_users (
   unique (provider, provider_subject)
 );
 
-create table workspaces (
+create table if not exists workspaces (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   owner_user_id uuid not null references app_users(id) on delete cascade,
@@ -44,19 +23,15 @@ create table workspaces (
   updated_at timestamptz not null default now()
 );
 
-create table workspace_members (
+create table if not exists workspace_members (
   workspace_id uuid not null references workspaces(id) on delete cascade,
   user_id uuid not null references app_users(id) on delete cascade,
   role text not null check (role in ('owner', 'admin', 'editor', 'viewer')),
   created_at timestamptz not null default now(),
   primary key (workspace_id, user_id)
 );
-```
 
-## Projects
-
-```sql
-create table projects (
+create table if not exists projects (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   owner_user_id uuid not null references app_users(id) on delete restrict,
@@ -68,18 +43,14 @@ create table projects (
   deleted_at timestamptz
 );
 
-create index projects_workspace_updated_idx
+create index if not exists projects_workspace_updated_idx
   on projects (workspace_id, updated_at desc)
   where deleted_at is null;
 
-create index projects_board_json_gin_idx
+create index if not exists projects_board_json_gin_idx
   on projects using gin (board_json);
-```
 
-## Assets
-
-```sql
-create table assets (
+create table if not exists assets (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   project_id uuid references projects(id) on delete set null,
@@ -96,14 +67,10 @@ create table assets (
   updated_at timestamptz not null default now()
 );
 
-create index assets_project_idx on assets (project_id, created_at desc);
-create index assets_workspace_idx on assets (workspace_id, created_at desc);
-```
+create index if not exists assets_project_idx on assets (project_id, created_at desc);
+create index if not exists assets_workspace_idx on assets (workspace_id, created_at desc);
 
-## Jobs
-
-```sql
-create table jobs (
+create table if not exists jobs (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   project_id uuid references projects(id) on delete cascade,
@@ -131,17 +98,13 @@ create table jobs (
   updated_at timestamptz not null default now()
 );
 
-create index jobs_queue_idx
+create index if not exists jobs_queue_idx
   on jobs (status, run_after nulls first, created_at)
   where status in ('queued', 'failed');
 
-create index jobs_project_idx on jobs (project_id, created_at desc);
-```
+create index if not exists jobs_project_idx on jobs (project_id, created_at desc);
 
-## Connectors
-
-```sql
-create table connectors (
+create table if not exists connectors (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   user_id uuid not null references app_users(id) on delete cascade,
@@ -159,16 +122,9 @@ create table connectors (
   unique (workspace_id, user_id, provider)
 );
 
-create index connectors_workspace_idx on connectors (workspace_id, provider, status);
-```
+create index if not exists connectors_workspace_idx on connectors (workspace_id, provider, status);
 
-Token encryption should be handled in application code or a managed secret/KMS
-layer. Do not store plaintext tokens.
-
-## Audit Log
-
-```sql
-create table audit_events (
+create table if not exists audit_events (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid references workspaces(id) on delete set null,
   project_id uuid references projects(id) on delete set null,
@@ -180,25 +136,5 @@ create table audit_events (
   created_at timestamptz not null default now()
 );
 
-create index audit_workspace_created_idx on audit_events (workspace_id, created_at desc);
-create index audit_project_created_idx on audit_events (project_id, created_at desc);
-```
-
-## Adapter Mapping
-
-The current API records map like this:
-
-- `projects.project.board_json` -> `projects.board_json`
-- `projects.project.publish` / publish pack -> `projects.publish_pack`
-- local `assets` records -> `assets`
-- local `jobs` records -> `jobs`
-- local `audit` records -> `audit_events`
-
-## First Adapter Acceptance Criteria
-
-- `GET /api/product?route=storage/status` reports a durable adapter.
-- `POST /api/product?route=projects` requires an authenticated user.
-- project list only returns rows for the current workspace.
-- project update/delete enforces workspace membership.
-- audit events record actor and project.
-- production write guard is removed only after these checks are in place.
+create index if not exists audit_workspace_created_idx on audit_events (workspace_id, created_at desc);
+create index if not exists audit_project_created_idx on audit_events (project_id, created_at desc);
