@@ -93,14 +93,13 @@ export async function appendAudit(action, payload = {}, actor = null) {
   const storage = getStorageStatus();
   if (!storage.writeEnabled) return null;
   const now = new Date().toISOString();
+  const actorRecord = actorSnapshot(actor);
   const record = {
     id: createId("aud"),
+    workspaceId: safeText(payload.workspaceId || defaultWorkspaceId(actor), 120),
+    ownerUserId: safeText(payload.ownerUserId || defaultOwnerUserId(actor), 120),
     action,
-    actor: actor ? {
-      id: actor.id || "unknown",
-      mode: actor.mode || "unknown",
-      authenticated: Boolean(actor.authenticated)
-    } : null,
+    actor: actorRecord,
     payload,
     createdAt: now,
     updatedAt: now
@@ -119,6 +118,36 @@ function getStorageAdapter() {
 
 function dataRoot() {
   return process.env.HERMEST_DATA_DIR || join(process.env.VERCEL ? tmpdir() : process.cwd(), ".data", "hermest-board");
+}
+
+function defaultWorkspaceId(actor) {
+  if (actor?.workspaceId) return actor.workspaceId;
+  if (actor?.mode === "owner-token") return "workspace_owner";
+  return "workspace_local";
+}
+
+function defaultOwnerUserId(actor) {
+  return actor?.id || "local-dev";
+}
+
+function actorSnapshot(actor) {
+  if (!actor) {
+    return {
+      id: "unknown",
+      mode: "unknown",
+      authenticated: false
+    };
+  }
+
+  return {
+    id: safeText(actor.id || "unknown", 120),
+    mode: safeText(actor.mode || "unknown", 80),
+    authenticated: Boolean(actor.authenticated)
+  };
+}
+
+function safeText(value, limit) {
+  return String(value || "").slice(0, limit);
 }
 
 function assertCollection(collection) {

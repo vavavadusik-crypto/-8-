@@ -173,6 +173,10 @@ GET /api/product?route=audit
 Returns the latest local audit events. Production must make audit logs durable
 and tamper-resistant enough for support and debugging.
 
+Audit records carry `workspaceId`, `ownerUserId`, `actor`, and the original
+event payload. Signed-session audit lists are filtered by `workspaceId`; local
+development and owner-token actors remain bootstrap bypasses.
+
 ## Agent Plan
 
 ```text
@@ -195,9 +199,9 @@ npm run check
 ```
 
 `smoke:api` runs the product API directly without a server. It verifies local
-project create/update/delete, asset/job ownership metadata, signed-session
-workspace authorization for projects/assets/jobs, audit, production storage
-guard, asset rights-status validation, external-storage-env guard, and
+project create/update/delete, asset/job/audit ownership metadata,
+signed-session workspace authorization for projects/assets/jobs/audit,
+production storage guard, asset rights-status validation, external-storage-env guard, and
 owner-token demo-storage read/write guards.
 
 ## Durable Storage Target

@@ -89,9 +89,9 @@ export default async function handler(request, response) {
 
     if (path[0] === "audit" && !path[1]) {
       if (!requireMethods(request, response, ["GET"])) return;
-      requireReadAccess(request);
+      const actor = requireReadAccess(request);
       const audit = await listRecords("audit");
-      sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), audit: audit.slice(0, 100) });
+      sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), audit: filterRecordsForActor(audit, actor).slice(0, 100) });
       return;
     }
 

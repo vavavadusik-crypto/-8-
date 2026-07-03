@@ -20,6 +20,7 @@
   - new assets/jobs inherit project ownership metadata when linked to a project;
   - signed-session list/read/update paths are filtered or rejected by `workspaceId`;
   - API smoke coverage now verifies cross-workspace denial for projects, assets, and jobs.
+- Added workspace ownership metadata and signed-session filtering for audit records.
 - Hardened agent job status handling:
   - aligned API-created approval jobs with the durable schema status `waiting_for_approval`;
   - rejected invalid job status updates;

@@ -125,6 +125,17 @@ try {
   if (forbiddenJobCreate.error !== "forbidden") {
     throw new Error(`Expected forbidden signed-session job create, got ${forbiddenJobCreate.error}`);
   }
+  const signedAudit = await expect("audit-list-signed-session", "GET", "audit", null, 200, { authorization: `Bearer ${signedToken}` });
+  if (!signedAudit.audit.some(entry => entry.action === "asset.created" && entry.workspaceId === "workspace_smoke")) {
+    throw new Error(`Expected signed-session audit list to include owned asset event, got ${JSON.stringify(signedAudit.audit)}`);
+  }
+  if (signedAudit.audit.some(entry => entry.workspaceId !== "workspace_smoke")) {
+    throw new Error(`Expected signed-session audit list to contain only workspace_smoke, got ${JSON.stringify(signedAudit.audit)}`);
+  }
+  const otherAudit = await expect("audit-list-other-session", "GET", "audit", null, 200, { authorization: `Bearer ${otherToken}` });
+  if (otherAudit.audit.some(entry => entry.workspaceId === "workspace_smoke")) {
+    throw new Error(`Expected other workspace audit list to exclude signed audit entries, got ${JSON.stringify(otherAudit.audit)}`);
+  }
   await expect("project-delete-signed-session", "DELETE", `projects/${signedProject.project.id}`, null, 200, { authorization: `Bearer ${signedToken}` });
   delete process.env.HERMEST_SESSION_SECRET;
 
@@ -217,7 +228,10 @@ try {
   delete process.env.YOUTUBE_CLIENT_ID;
   delete process.env.YOUTUBE_CLIENT_SECRET;
 
-  await expect("audit-list", "GET", "audit", null, 200);
+  const auditList = await expect("audit-list", "GET", "audit", null, 200);
+  if (auditList.audit.some(entry => !entry.workspaceId || !entry.ownerUserId)) {
+    throw new Error(`Expected audit entries to include ownership metadata, got ${JSON.stringify(auditList.audit)}`);
+  }
   await expect("project-delete", "DELETE", `projects/${id}`, null, 200);
 
   process.env.VERCEL = "1";
