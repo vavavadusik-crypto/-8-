@@ -73,8 +73,10 @@ enforce against. These values are still bootstrap metadata until real sessions
 exist.
 
 The API can verify signed `hermest.v1` session tokens when
-`HERMEST_SESSION_SECRET` is configured. Token issuance, user provisioning, and
-full authorization are still deliberately unfinished.
+`HERMEST_SESSION_SECRET` is configured. It also has an owner-token gated
+bootstrap issuer for controlled demo/migration sessions. Public user
+registration, user provisioning, OAuth session exchange, and full authorization
+are still deliberately unfinished.
 
 ## Data Model Draft
 

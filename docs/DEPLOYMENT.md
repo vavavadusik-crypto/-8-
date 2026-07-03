@@ -144,3 +144,8 @@ HERMEST_SESSION_SECRET=<long random secret>
 Without `HERMEST_ENABLE_DURABLE_STORAGE=1`, Vercel keeps using the safe read-only
 guard. Without `HERMEST_OWNER_TOKEN` or `HERMEST_SESSION_SECRET`, durable writes
 stay blocked even if the Postgres adapter is enabled.
+
+When both `HERMEST_OWNER_TOKEN` and `HERMEST_SESSION_SECRET` are configured,
+`POST /api/product?route=session/bootstrap` can issue a short-lived signed
+session token for controlled demos or migration testing. Keep this behind the
+owner token; it is not a public login system.

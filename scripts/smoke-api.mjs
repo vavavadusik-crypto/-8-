@@ -34,11 +34,41 @@ try {
     languages: ["ru", "en"]
   }, 200);
   const localSession = await expect("session-current-local", "GET", "session/current", null, 200);
-  if (localSession.actor.id !== "local-dev" || localSession.session.realUserAuthImplemented !== false) {
+  if (localSession.actor.id !== "local-dev" || localSession.session.realUserAuthImplemented !== false || localSession.session.signedSessionIssuerImplemented !== true) {
     throw new Error(`Expected local bootstrap session, got ${JSON.stringify(localSession)}`);
   }
 
+  process.env.HERMEST_OWNER_TOKEN = "session-bootstrap-owner-token";
+  const missingSessionSecret = await expect("session-bootstrap-missing-secret", "POST", "session/bootstrap", {
+    sub: "user_bootstrap_smoke",
+    workspaceId: "workspace_bootstrap_smoke"
+  }, 501, { authorization: "Bearer session-bootstrap-owner-token" });
+  if (missingSessionSecret.error !== "session_secret_not_configured") {
+    throw new Error(`Expected session_secret_not_configured, got ${missingSessionSecret.error}`);
+  }
+
   process.env.HERMEST_SESSION_SECRET = "local-session-secret-for-smoke";
+  const unauthorizedBootstrap = await expect("session-bootstrap-unauthorized", "POST", "session/bootstrap", {
+    sub: "user_bootstrap_smoke",
+    workspaceId: "workspace_bootstrap_smoke"
+  }, 401);
+  if (unauthorizedBootstrap.error !== "unauthorized") {
+    throw new Error(`Expected unauthorized bootstrap issuer, got ${unauthorizedBootstrap.error}`);
+  }
+  const bootstrap = await expect("session-bootstrap-owner-token", "POST", "session/bootstrap", {
+    sub: "user_bootstrap_smoke",
+    workspaceId: "workspace_bootstrap_smoke",
+    ttlSeconds: 120
+  }, 201, { authorization: "Bearer session-bootstrap-owner-token" });
+  if (!String(bootstrap.token || "").startsWith("hermest.v1.") || bootstrap.actor.workspaceId !== "workspace_bootstrap_smoke") {
+    throw new Error(`Expected bootstrap signed session token, got ${JSON.stringify(bootstrap)}`);
+  }
+  const bootstrapSession = await expect("session-current-bootstrap-token", "GET", "session/current", null, 200, { authorization: `Bearer ${bootstrap.token}` });
+  if (bootstrapSession.actor.id !== "user_bootstrap_smoke" || bootstrapSession.actor.workspaceId !== "workspace_bootstrap_smoke") {
+    throw new Error(`Expected bootstrap token to authenticate, got ${JSON.stringify(bootstrapSession)}`);
+  }
+  delete process.env.HERMEST_OWNER_TOKEN;
+
   const signedToken = createSignedSessionToken({
     sub: "user_smoke",
     workspaceId: "workspace_smoke"

@@ -46,8 +46,9 @@ publishing approval are implemented.
   metadata only and must not be treated as final authorization.
 - `session/current` exposes only bootstrap actor metadata; it is not final
   per-user authentication.
-- Signed session token verification exists, but token issuance and full
-  per-user authorization are still intentionally blocked.
+- Signed session token verification exists, and an owner-token gated bootstrap
+  issuer can mint short-lived demo/migration tokens. Public token issuance and
+  full per-user authorization are still intentionally blocked.
 - Project, asset, job, and audit routes enforce bootstrap `workspaceId` checks
   for signed-session actors; this does not yet cover the full future workspace
   membership model.

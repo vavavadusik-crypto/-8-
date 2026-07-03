@@ -6,7 +6,8 @@ export function getSessionStatus() {
   return {
     secretConfigured: Boolean(process.env.HERMEST_SESSION_SECRET),
     verifierImplemented: true,
-    issuerImplemented: false,
+    issuerImplemented: true,
+    ownerTokenBootstrapIssuerAvailable: Boolean(process.env.HERMEST_SESSION_SECRET && process.env.HERMEST_OWNER_TOKEN),
     cookieName: "hermest_session"
   };
 }

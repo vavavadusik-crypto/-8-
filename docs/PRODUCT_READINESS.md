@@ -40,6 +40,7 @@ It is not yet ready for:
 - guarded Postgres JSONB storage adapter foundation;
 - production guard that blocks unsafe public Vercel writes without durable storage;
 - bootstrap owner-token write guard for temporary demo storage;
+- owner-token gated signed-session bootstrap issuer for controlled demos;
 - owner-token read guard for temporary public Vercel demo storage;
 - API smoke checks for product routes and guards;
 - basic smoke validation.

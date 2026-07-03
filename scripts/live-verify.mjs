@@ -6,6 +6,7 @@ await checkHealth();
 await checkStorageStatus();
 await checkPreflight();
 await checkSessionCurrent();
+await checkSessionBootstrapGuard();
 await checkAgentPlan();
 await checkWriteGuard();
 await checkSourceZip();
@@ -52,8 +53,21 @@ async function checkSessionCurrent() {
   const { response, json } = await getJson(`/api/product?route=${encodeURIComponent("session/current")}`);
   assert(response.status === 200, `session current status ${response.status}`);
   assert(json.session?.signedSessionVerifierImplemented === true, "session verifier implemented");
+  assert(json.session?.signedSessionIssuerImplemented === true, "session bootstrap issuer code implemented");
+  assert(json.session?.ownerTokenBootstrapIssuerAvailable === false, "session bootstrap issuer must stay unavailable on public production");
   assert(json.session?.realUserAuthImplemented === false, "session real user auth disabled");
   assert(json.actor?.id === "anonymous", `session anonymous actor ${json.actor?.id}`);
+}
+
+async function checkSessionBootstrapGuard() {
+  const response = await fetch(`${base}/api/product?route=${encodeURIComponent("session/bootstrap")}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ sub: "live_verify", workspaceId: "live_verify" })
+  });
+  const json = await response.json();
+  assert(response.status === 501, `session bootstrap guard status ${response.status}`);
+  assert(json.error === "owner_token_not_configured", `session bootstrap guard error ${json.error}`);
 }
 
 async function checkAgentPlan() {

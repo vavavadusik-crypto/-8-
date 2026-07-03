@@ -45,6 +45,7 @@ npm run check
 - public/free research API skeleton: Wikipedia, Crossref, arXiv, GitHub public search, optional OpenAlex;
 - backend storage API contract: projects, assets, jobs, audit log, storage status;
 - guarded Postgres JSONB adapter foundation for future durable storage;
+- signed-session verification and owner-token bootstrap issuer foundation;
 - backend production preflight route for readiness gates and blockers;
 - backend agent plan preview that shows blockers before autopublishing;
 - per-user OAuth start skeleton for YouTube, TikTok, Instagram;

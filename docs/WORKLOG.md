@@ -15,6 +15,7 @@
 - Added project ownership metadata fields for the future workspace/user authorization layer while preserving existing ownership on updates.
 - Added current-session API contract for bootstrap actor metadata ahead of real per-user auth.
 - Added signed session token verification foundation without adding a public token issuer or enabling production writes.
+- Added an owner-token gated signed-session bootstrap issuer for controlled demo/migration tokens without enabling public auth.
 - Added signed-session project authorization checks against bootstrap `workspaceId`.
 - Extended bootstrap signed-session workspace authorization to asset and job records:
   - new assets/jobs inherit project ownership metadata when linked to a project;

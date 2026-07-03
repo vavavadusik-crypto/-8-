@@ -1,9 +1,10 @@
-import { getAuthStatus, getRequestActor, requireReadAccess, requireWriteAccess } from "./_lib/auth.js";
+import { getAuthStatus, getRequestActor, requireOwnerToken, requireReadAccess, requireWriteAccess } from "./_lib/auth.js";
 import { filterRecordsForActor, requireRecordAccess } from "./_lib/authorization.js";
 import { buildAgentPlan } from "./_lib/agent-plan.js";
 import { handleApiError, readJson, requireMethods, sendJson } from "./_lib/http.js";
 import { createProjectRecord, summarizeProject, updateProjectRecord } from "./_lib/projects.js";
 import { getProductReadiness } from "./_lib/readiness.js";
+import { createSignedSessionToken } from "./_lib/session.js";
 import {
   appendAudit,
   createId,
@@ -47,18 +48,26 @@ export default async function handler(request, response) {
     if (path[0] === "session" && path[1] === "current") {
       if (!requireMethods(request, response, ["GET"])) return;
       const actor = getRequestActor(request);
+      const auth = getAuthStatus();
       sendJson(response, 200, {
         ok: true,
-        auth: getAuthStatus(),
+        auth,
         actor,
         session: {
-          signedSessionVerifierImplemented: true,
+          signedSessionVerifierImplemented: auth.session.verifierImplemented,
+          signedSessionIssuerImplemented: auth.session.issuerImplemented,
+          ownerTokenBootstrapIssuerAvailable: auth.session.ownerTokenBootstrapIssuerAvailable,
           realUserAuthImplemented: false,
           authenticated: actor.authenticated,
           mode: actor.mode,
           note: "Bootstrap actor only. Replace with signed per-user sessions before production writes."
         }
       });
+      return;
+    }
+
+    if (path[0] === "session" && path[1] === "bootstrap") {
+      await handleSessionBootstrap(request, response);
       return;
     }
 
@@ -110,6 +119,50 @@ export default async function handler(request, response) {
   } catch (error) {
     handleApiError(response, error);
   }
+}
+
+async function handleSessionBootstrap(request, response) {
+  if (!requireMethods(request, response, ["POST"])) return;
+
+  const owner = requireOwnerToken(request);
+  const auth = getAuthStatus();
+  if (!auth.session.secretConfigured) {
+    const error = new Error("session_secret_not_configured");
+    error.status = 501;
+    error.code = "session_secret_not_configured";
+    error.note = "Set HERMEST_SESSION_SECRET before issuing bootstrap signed session tokens.";
+    throw error;
+  }
+
+  const body = await readJson(request);
+  const sub = safeSessionId(body.sub || body.userId, "user_bootstrap");
+  const workspaceId = safeSessionId(body.workspaceId, "workspace_bootstrap");
+  const ttlSeconds = clampTtlSeconds(body.ttlSeconds);
+  const now = Math.floor(Date.now() / 1000);
+  const exp = now + ttlSeconds;
+  const token = createSignedSessionToken({ sub, workspaceId, iat: now, exp });
+
+  await appendAudit("session.bootstrap_issued", {
+    workspaceId,
+    ownerUserId: sub,
+    ttlSeconds,
+    expiresAt: new Date(exp * 1000).toISOString()
+  }, owner);
+
+  sendJson(response, 201, {
+    ok: true,
+    auth,
+    tokenType: "Bearer",
+    token,
+    actor: {
+      authenticated: true,
+      id: sub,
+      workspaceId,
+      mode: "signed-session"
+    },
+    expiresAt: new Date(exp * 1000).toISOString(),
+    note: "Owner-token bootstrap token. Do not expose it in browser bundles or public logs."
+  });
 }
 
 async function handleProjectsIndex(request, response) {
@@ -286,6 +339,17 @@ function routeFromUrl(value = "") {
 
 function safeText(value, limit) {
   return String(value || "").slice(0, limit);
+}
+
+function safeSessionId(value, fallback) {
+  const id = safeText(value, 120).trim();
+  return /^[a-z0-9_-]{2,120}$/i.test(id) ? id : fallback;
+}
+
+function clampTtlSeconds(value) {
+  const ttl = Number(value || 3600);
+  if (!Number.isFinite(ttl)) return 3600;
+  return Math.max(60, Math.min(Math.floor(ttl), 86_400));
 }
 
 async function childRecordOwnership(projectIdInput, actor, action) {

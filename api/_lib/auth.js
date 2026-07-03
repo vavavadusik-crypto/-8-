@@ -100,6 +100,22 @@ export function requireWriteAccess(request) {
   throw error;
 }
 
+export function requireOwnerToken(request) {
+  const status = getAuthStatus();
+  const actor = getRequestActor(request);
+
+  if (actor.authenticated && actor.mode === "owner-token") return actor;
+
+  const error = new Error(status.ownerTokenConfigured ? "unauthorized" : "owner_token_not_configured");
+  error.status = status.ownerTokenConfigured ? 401 : 501;
+  error.code = status.ownerTokenConfigured ? "unauthorized" : "owner_token_not_configured";
+  error.auth = status;
+  error.note = status.ownerTokenConfigured
+    ? "This bootstrap route requires Authorization: Bearer <owner token>."
+    : "This bootstrap route requires HERMEST_OWNER_TOKEN before it can issue signed session tokens.";
+  throw error;
+}
+
 function isDurableStorageEnabled() {
   const adapter = String(process.env.HERMEST_STORAGE_ADAPTER || "").trim().toLowerCase();
   const databaseConfigured = Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL);

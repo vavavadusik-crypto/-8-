@@ -55,6 +55,7 @@ and explicit enablement.
 
 ```text
 GET /api/product?route=session/current
+POST /api/product?route=session/bootstrap
 ```
 
 Returns the current bootstrap actor and auth mode without exposing any secret
@@ -67,9 +68,17 @@ Expected alpha behavior:
 - public read-only production returns actor `anonymous`;
 - owner-token demo requests return actor `owner`;
 - signed `hermest.v1` session tokens can be verified when
-  `HERMEST_SESSION_SECRET` is configured, but there is no public token issuer yet;
+  `HERMEST_SESSION_SECRET` is configured;
 - `session.signedSessionVerifierImplemented` is `true`;
+- `session.signedSessionIssuerImplemented` is `true`, but only through an
+  owner-token gated bootstrap endpoint;
 - `session.realUserAuthImplemented` remains `false`.
+
+`POST /api/product?route=session/bootstrap` issues a short-lived signed session
+token only when both `HERMEST_OWNER_TOKEN` and `HERMEST_SESSION_SECRET` are
+configured and the request includes the owner token. This is for controlled demo
+or migration work only; it is not public registration, OAuth, or final SaaS auth.
+The route never writes the issued token to audit payloads.
 
 ## Projects
 
