@@ -20,3 +20,4 @@
 - Blocked unsafe public Vercel writes unless demo storage is explicitly enabled.
 - Connected UI buttons for storage status, API save/load, and backend agent plan.
 - Updated product readiness, architecture, deployment, and API docs.
+- Added Fable handoff and roadmap documentation for continuing the project toward 1.0.0.
