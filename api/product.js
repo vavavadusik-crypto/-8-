@@ -2,6 +2,7 @@ import { getAuthStatus, requireReadAccess, requireWriteAccess } from "./_lib/aut
 import { buildAgentPlan } from "./_lib/agent-plan.js";
 import { handleApiError, readJson, requireMethods, sendJson } from "./_lib/http.js";
 import { createProjectRecord, summarizeProject, updateProjectRecord } from "./_lib/projects.js";
+import { getProductReadiness } from "./_lib/readiness.js";
 import {
   appendAudit,
   createId,
@@ -21,6 +22,7 @@ const JOB_STATUSES = new Set([
   "completed",
   "cancelled"
 ]);
+const ASSET_RIGHTS_STATUSES = new Set(["unknown", "allowed", "restricted", "owned", "generated"]);
 
 export default async function handler(request, response) {
   try {
@@ -32,6 +34,12 @@ export default async function handler(request, response) {
         ...getStorageStatus(),
         auth: getAuthStatus()
       });
+      return;
+    }
+
+    if (path[0] === "preflight" && !path[1]) {
+      if (!requireMethods(request, response, ["GET"])) return;
+      sendJson(response, 200, getProductReadiness());
       return;
     }
 
@@ -159,7 +167,7 @@ async function handleAssetsIndex(request, response) {
     source: safeText(body.source || "manual", 120),
     title: safeText(body.title || "Untitled asset", 200),
     url: safeText(body.url, 2000),
-    rightsStatus: safeText(body.rightsStatus || "unknown", 80),
+    rightsStatus: normalizeAssetRightsStatus(body.rightsStatus),
     metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : {},
     createdAt: now,
     updatedAt: now
@@ -259,5 +267,16 @@ function normalizeJobStatus(value, fallback) {
   error.status = 400;
   error.code = "invalid_job_status";
   error.note = `Job status must be one of: ${[...JOB_STATUSES].join(", ")}.`;
+  throw error;
+}
+
+function normalizeAssetRightsStatus(value) {
+  const status = String(value || "unknown").trim() || "unknown";
+  if (ASSET_RIGHTS_STATUSES.has(status)) return status;
+
+  const error = new Error("invalid_asset_rights_status");
+  error.status = 400;
+  error.code = "invalid_asset_rights_status";
+  error.note = `Asset rightsStatus must be one of: ${[...ASSET_RIGHTS_STATUSES].join(", ")}.`;
   throw error;
 }

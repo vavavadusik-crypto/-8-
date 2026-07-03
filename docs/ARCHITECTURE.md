@@ -23,6 +23,7 @@ Hermest Board is a browser-first interactive product prototype:
 - `GET /api/user-config/schema` - documents what users can configure without seeing owner secrets;
 - `POST /api/publish-pack/validate` - validates publish pack shape before real publishing exists;
 - `GET /api/product?route=storage/status` - reports storage durability and production blockers;
+- `GET /api/product?route=preflight` - reports production-readiness gates without exposing secret values;
 - `GET /api/product?route=projects` and `POST /api/product?route=projects` - project list/create contract;
 - `GET`, `PUT`, `PATCH`, `DELETE /api/product?route=projects/:id` - project detail/update/delete contract;
 - `GET`, `POST /api/product?route=assets` - asset metadata contract;

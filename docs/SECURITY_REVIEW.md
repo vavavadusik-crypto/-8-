@@ -26,6 +26,7 @@ publishing approval are implemented.
   `HERMEST_OWNER_TOKEN` when demo storage is enabled.
 - Platform connector routes are skeletons only; they do not publish content.
 - Agent planning is dry-run only and returns blockers before execution.
+- Asset metadata rejects rights-status values outside the durable schema enum.
 - Security headers are configured in `vercel.json`:
   - `X-Content-Type-Options: nosniff`
   - `Referrer-Policy: strict-origin-when-cross-origin`
@@ -36,6 +37,8 @@ publishing approval are implemented.
 - CI runs validation, API smoke tests, production build, and render smoke tests.
 - A live verification script checks production health, storage guards, agent
   blockers, source download availability, and security headers.
+- A product preflight route reports readiness gates and blocker names without
+  exposing secret values.
 
 ## Known Limitations
 

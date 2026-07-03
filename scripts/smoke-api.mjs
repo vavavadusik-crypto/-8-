@@ -13,6 +13,13 @@ try {
   delete process.env.HERMEST_OWNER_TOKEN;
 
   await expect("storage", "GET", "storage/status", null, 200);
+  const preflight = await expect("preflight", "GET", "preflight", null, 200);
+  if (preflight.launchReady !== false || preflight.canAutopublish !== false) {
+    throw new Error(`Expected blocked alpha preflight, got ${JSON.stringify(preflight)}`);
+  }
+  if (!preflight.blockers.includes("real_user_auth_not_implemented")) {
+    throw new Error(`Expected real auth blocker, got ${JSON.stringify(preflight.blockers)}`);
+  }
   await expect("agent-plan", "POST", "agent/plan", {
     platforms: ["youtube_video"],
     tools: ["parser", "translator"],
@@ -44,6 +51,14 @@ try {
     url: "https://example.com/reference",
     rightsStatus: "unknown"
   }, 201);
+  const invalidAssetRights = await expect("asset-invalid-rights-status", "POST", "assets", {
+    projectId: id,
+    title: "Invalid rights",
+    rightsStatus: "unreviewed"
+  }, 400);
+  if (invalidAssetRights.error !== "invalid_asset_rights_status") {
+    throw new Error(`Expected invalid_asset_rights_status, got ${invalidAssetRights.error}`);
+  }
   const blockedJob = await expect("job-create", "POST", "jobs", {
     projectId: id,
     publishPack: { platforms: ["youtube_video"], tools: ["parser"], languages: ["ru"] }

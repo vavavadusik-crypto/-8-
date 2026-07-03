@@ -6,6 +6,11 @@
   - owner-token protection now covers project, asset, job, and audit read routes when `HERMEST_ENABLE_DEMO_STORAGE=1` on Vercel;
   - external durable-storage env presence is smoke-tested to stay guarded until a real adapter/auth/authorization layer exists;
   - API smoke coverage now checks demo-storage read guards and owner-token authenticated reads.
+- Aligned asset rights metadata with the durable schema:
+  - `rightsStatus` now accepts only `unknown`, `allowed`, `restricted`, `owned`, or `generated`;
+  - API smoke coverage rejects invalid asset rights status values before storage.
+- Reactivated Fable 5 Ultracode handoff with hourly waiting mode and disabled Codex auto-resume to avoid agent conflicts.
+- Added product preflight readiness route for durable storage, auth, connector, job, and autopublishing blockers.
 - Hardened agent job status handling:
   - aligned API-created approval jobs with the durable schema status `waiting_for_approval`;
   - rejected invalid job status updates;

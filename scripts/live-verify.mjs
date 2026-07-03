@@ -4,6 +4,7 @@ const failures = [];
 
 await checkHealth();
 await checkStorageStatus();
+await checkPreflight();
 await checkAgentPlan();
 await checkWriteGuard();
 await checkSourceZip();
@@ -28,6 +29,15 @@ async function checkStorageStatus() {
   assert(response.status === 200, `storage status ${response.status}`);
   assert(json.writeEnabled === false, "production storage writes must stay disabled");
   assert(json.auth?.writeAccess === "blocked_by_storage_guard", `storage auth guard ${json.auth?.writeAccess}`);
+}
+
+async function checkPreflight() {
+  const { response, json } = await getJson(`/api/product?route=${encodeURIComponent("preflight")}`);
+  assert(response.status === 200, `preflight status ${response.status}`);
+  assert(json.launchReady === false, "preflight launchReady must stay false");
+  assert(json.canWriteProductionProjects === false, "preflight production writes must stay false");
+  assert(json.canAutopublish === false, "preflight autopublish must stay false");
+  assert(json.blockers?.includes("real_user_auth_not_implemented"), "preflight real auth blocker");
 }
 
 async function checkAgentPlan() {

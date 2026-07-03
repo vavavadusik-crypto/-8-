@@ -44,6 +44,7 @@ npm run check
 - Vercel API skeleton: health, connector status, publish-pack validation;
 - public/free research API skeleton: Wikipedia, Crossref, arXiv, GitHub public search, optional OpenAlex;
 - backend storage API contract: projects, assets, jobs, audit log, storage status;
+- backend production preflight route for readiness gates and blockers;
 - backend agent plan preview that shows blockers before autopublishing;
 - per-user OAuth start skeleton for YouTube, TikTok, Instagram;
 - режим записи;

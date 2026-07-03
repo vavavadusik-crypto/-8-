@@ -26,6 +26,26 @@ The response also includes `auth` status:
 - real SaaS work must replace owner-token auth with per-user sessions and
   project ownership.
 
+## Product Preflight
+
+```text
+GET /api/product?route=preflight
+```
+
+Reports launch readiness without exposing secret values. The response includes
+safe booleans for durable database configuration, object storage, session secret,
+token encryption, connector configuration, and product gates.
+
+Expected alpha behavior:
+
+- `launchReady: false`
+- `canWriteProductionProjects: false`
+- `canRunAgentJobs: false`
+- `canAutopublish: false`
+
+This route is meant for deployment verification and for the next agent to see
+which 0.3.0/0.4.0 blockers remain before enabling production writes.
+
 ## Projects
 
 ```text
@@ -59,6 +79,11 @@ POST /api/product?route=assets
 Stores metadata for uploaded, found, or generated assets. It does not store
 large binary media yet. A real launch needs Blob/S3/R2/Vercel Blob style object
 storage plus rights metadata.
+
+`rightsStatus` is constrained to the durable schema enum:
+`unknown`, `allowed`, `restricted`, `owned`, or `generated`. Invalid values are
+rejected before storage so the JSON adapter and future Postgres adapter keep the
+same contract.
 
 ## Jobs
 
@@ -110,7 +135,8 @@ npm run check
 
 `smoke:api` runs the product API directly without a server. It verifies local
 project create/update/delete, assets, jobs, audit, production storage guard,
-external-storage-env guard, and owner-token demo-storage read/write guards.
+asset rights-status validation, external-storage-env guard, and owner-token
+demo-storage read/write guards.
 
 ## Durable Storage Target
 
