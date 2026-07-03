@@ -17,6 +17,22 @@ Current frontend behavior:
 - prepares platform-specific title, description, hashtags, and asset requirements;
 - exports a publish pack JSON.
 
+## OAuth Safety Baseline
+
+Current backend behavior:
+
+- connector start URLs require provider client ID, redirect URI, and an OAuth
+  state signing secret;
+- OAuth state is HMAC-signed and expires;
+- callbacks reject missing or invalid state before token exchange;
+- callbacks still stop before token exchange because encrypted token storage,
+  user-owned connector rows, disconnect flows, and provider review are not
+  complete.
+
+Use `HERMEST_OAUTH_STATE_SECRET` for OAuth state signing. `HERMEST_SESSION_SECRET`
+can act as a fallback in controlled environments, but production should keep a
+dedicated state secret.
+
 ## YouTube Video And Shorts
 
 Needed:

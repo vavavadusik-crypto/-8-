@@ -1,3 +1,5 @@
+import { createOAuthState } from "../_lib/oauth-state.js";
+
 const PROVIDERS = {
   youtube: {
     clientIdEnv: "YOUTUBE_CLIENT_ID",
@@ -46,7 +48,22 @@ export default function handler(request, response) {
     return;
   }
 
-  const state = crypto.randomUUID();
+  let state = "";
+  try {
+    state = createOAuthState({
+      provider,
+      workspaceId: request.query?.workspaceId
+    });
+  } catch (error) {
+    response.status(error.status || 500).json({
+      ok: false,
+      error: error.code || error.message || "oauth_state_error",
+      provider,
+      note: error.note || "OAuth state could not be created."
+    });
+    return;
+  }
+
   const url = new URL(config.authUrl);
   url.searchParams.set("client_id", clientId);
   url.searchParams.set("redirect_uri", redirectUri);
@@ -60,6 +77,6 @@ export default function handler(request, response) {
     provider,
     authUrl: url.toString(),
     state,
-    note: "Token exchange and token storage are intentionally not implemented yet. They need database-backed sessions."
+    note: "State is signed. Token exchange and token storage are intentionally not implemented yet. They need database-backed sessions and encrypted token storage."
   });
 }

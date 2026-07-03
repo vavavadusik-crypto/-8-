@@ -42,6 +42,7 @@ It is not yet ready for:
 - bootstrap owner-token write guard for temporary demo storage;
 - owner-token gated signed-session bootstrap issuer for controlled demos;
 - owner-token read guard for temporary public Vercel demo storage;
+- signed OAuth state generation and callback validation guard;
 - API smoke checks for product routes and guards;
 - basic smoke validation.
 

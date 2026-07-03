@@ -40,7 +40,8 @@ These can be added later through server-side env vars:
 - Users should connect YouTube, TikTok, and Instagram through OAuth.
 - Owner platform secrets stay server-side.
 - User tokens must later be encrypted and stored per user.
-- The current OAuth endpoints only create start URLs or report missing config; token exchange is not implemented yet.
+- The current OAuth endpoints create signed-state start URLs and validate
+  callback state; token exchange is not implemented yet.
 
 ## What This Enables Now
 
@@ -53,7 +54,7 @@ These can be added later through server-side env vars:
 ## What Still Needs Backend Work
 
 - database-backed users;
-- OAuth sessions and callback token exchange;
+- OAuth token exchange after signed-state callback validation;
 - encrypted token storage;
 - parser worker;
 - translation worker;

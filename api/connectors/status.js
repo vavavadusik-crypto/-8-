@@ -1,6 +1,9 @@
+import { getOAuthStateStatus } from "../_lib/oauth-state.js";
+
 export default function handler(_request, response) {
   response.status(200).json({
     ok: true,
+    oauth: getOAuthStateStatus(),
     connectors: {
       tiktok: Boolean(process.env.TIKTOK_CLIENT_ID),
       youtube: Boolean(process.env.YOUTUBE_CLIENT_ID),

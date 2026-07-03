@@ -1,6 +1,9 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import connectorCallback from "../api/connectors/callback.js";
+import connectorStart from "../api/connectors/start.js";
+import connectorStatus from "../api/connectors/status.js";
 import product from "../api/product.js";
 import { createSignedSessionToken } from "../api/_lib/session.js";
 
@@ -33,6 +36,54 @@ try {
     tools: ["parser", "translator"],
     languages: ["ru", "en"]
   }, 200);
+  const connectorStatusPayload = await expectConnector("connector-status", connectorStatus, "GET", {});
+  if (connectorStatusPayload.oauth.stateSigningImplemented !== true || connectorStatusPayload.oauth.stateSecretConfigured !== false) {
+    throw new Error(`Expected connector state signing status, got ${JSON.stringify(connectorStatusPayload.oauth)}`);
+  }
+  const connectorMissingConfig = await expectConnector("connector-start-missing-config", connectorStart, "GET", { provider: "youtube" }, null, 501);
+  if (connectorMissingConfig.error !== "connector_not_configured") {
+    throw new Error(`Expected connector_not_configured, got ${connectorMissingConfig.error}`);
+  }
+  process.env.YOUTUBE_CLIENT_ID = "smoke-youtube-client";
+  process.env.YOUTUBE_REDIRECT_URI = "https://example.com/api/connectors/callback?provider=youtube";
+  const connectorMissingStateSecret = await expectConnector("connector-start-missing-state-secret", connectorStart, "GET", { provider: "youtube" }, null, 501);
+  if (connectorMissingStateSecret.error !== "oauth_state_secret_not_configured") {
+    throw new Error(`Expected oauth_state_secret_not_configured, got ${connectorMissingStateSecret.error}`);
+  }
+  process.env.HERMEST_OAUTH_STATE_SECRET = "oauth-state-secret-for-smoke";
+  const connectorStartPayload = await expectConnector("connector-start-signed-state", connectorStart, "GET", {
+    provider: "youtube",
+    workspaceId: "workspace_oauth_smoke"
+  });
+  if (!String(connectorStartPayload.state || "").startsWith("hermest.oauth.v1.") || !connectorStartPayload.authUrl.includes(encodeURIComponent(connectorStartPayload.state))) {
+    throw new Error(`Expected signed OAuth state in auth URL, got ${JSON.stringify(connectorStartPayload)}`);
+  }
+  const invalidCallback = await expectConnector("connector-callback-invalid-state", connectorCallback, "GET", {
+    provider: "youtube",
+    state: "bad-state",
+    code: "code"
+  }, null, 400);
+  if (invalidCallback.error !== "invalid_oauth_state") {
+    throw new Error(`Expected invalid_oauth_state, got ${invalidCallback.error}`);
+  }
+  const missingCodeCallback = await expectConnector("connector-callback-missing-code", connectorCallback, "GET", {
+    provider: "youtube",
+    state: connectorStartPayload.state
+  }, null, 400);
+  if (missingCodeCallback.error !== "oauth_code_missing" || missingCodeCallback.stateValid !== true) {
+    throw new Error(`Expected valid state with missing code error, got ${JSON.stringify(missingCodeCallback)}`);
+  }
+  const blockedCallback = await expectConnector("connector-callback-token-exchange-blocked", connectorCallback, "GET", {
+    provider: "youtube",
+    state: connectorStartPayload.state,
+    code: "provider-code"
+  }, null, 501);
+  if (blockedCallback.error !== "oauth_token_exchange_not_implemented" || blockedCallback.stateValid !== true) {
+    throw new Error(`Expected token exchange blocker after state validation, got ${JSON.stringify(blockedCallback)}`);
+  }
+  delete process.env.HERMEST_OAUTH_STATE_SECRET;
+  delete process.env.YOUTUBE_CLIENT_ID;
+  delete process.env.YOUTUBE_REDIRECT_URI;
   const localSession = await expect("session-current-local", "GET", "session/current", null, 200);
   if (localSession.actor.id !== "local-dev" || localSession.session.realUserAuthImplemented !== false || localSession.session.signedSessionIssuerImplemented !== true) {
     throw new Error(`Expected local bootstrap session, got ${JSON.stringify(localSession)}`);
@@ -352,6 +403,24 @@ async function expect(name, method, route, body, expectedStatus, headers = {}) {
     method,
     query: { route },
     url: `/api/product?route=${encodeURIComponent(route)}`,
+    headers,
+    body
+  }, response);
+  if (response.statusCode !== expectedStatus) {
+    throw new Error(`${name}: expected ${expectedStatus}, got ${response.statusCode} ${JSON.stringify(response.payload)}`);
+  }
+  if (response.payload?.ok === false && expectedStatus < 400) {
+    throw new Error(`${name}: expected ok payload, got ${JSON.stringify(response.payload)}`);
+  }
+  return response.payload;
+}
+
+async function expectConnector(name, handler, method, query, body = null, expectedStatus = 200, headers = {}) {
+  const response = mockResponse();
+  await handler({
+    method,
+    query,
+    url: `/api/connectors/${name}?${new URLSearchParams(query).toString()}`,
     headers,
     body
   }, response);

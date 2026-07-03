@@ -3,6 +3,7 @@ const base = (process.env.HERMEST_LIVE_URL || "https://hermest-board.vercel.app"
 const failures = [];
 
 await checkHealth();
+await checkConnectorStatus();
 await checkStorageStatus();
 await checkPreflight();
 await checkSessionCurrent();
@@ -24,6 +25,12 @@ async function checkHealth() {
   assert(response.status === 200, `health status ${response.status}`);
   assert(json.ok === true, "health ok flag");
   assert(json.version === "0.2.0", `health version ${json.version}`);
+}
+
+async function checkConnectorStatus() {
+  const { response, json } = await getJson("/api/connectors/status");
+  assert(response.status === 200, `connectors status ${response.status}`);
+  assert(json.oauth?.stateSigningImplemented === true, "connectors OAuth state signing");
 }
 
 async function checkStorageStatus() {

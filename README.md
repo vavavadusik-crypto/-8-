@@ -49,6 +49,7 @@ npm run check
 - backend production preflight route for readiness gates and blockers;
 - backend agent plan preview that shows blockers before autopublishing;
 - per-user OAuth start skeleton for YouTube, TikTok, Instagram;
+- signed OAuth state validation before connector token exchange;
 - режим записи;
 - автосохранение в браузере;
 - экспорт и импорт JSON.

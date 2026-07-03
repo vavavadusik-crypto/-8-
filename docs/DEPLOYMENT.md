@@ -48,6 +48,9 @@ CI/CD:
 - Add `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` as GitHub repository secrets.
 - Use `.github/workflows/deploy-vercel.yml` after moving this folder to its own repository.
 - Keep platform API secrets in Vercel or a backend service. Do not expose them as frontend variables.
+- Configure `HERMEST_OAUTH_STATE_SECRET` before enabling connector start URLs.
+  Without it, configured OAuth providers stay blocked rather than issuing
+  unsigned callback state.
 
 ## Netlify
 

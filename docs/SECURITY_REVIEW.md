@@ -52,6 +52,8 @@ publishing approval are implemented.
 - Project, asset, job, and audit routes enforce bootstrap `workspaceId` checks
   for signed-session actors; this does not yet cover the full future workspace
   membership model.
+- OAuth connector start/callback routes use signed state validation before token
+  exchange, but token exchange and encrypted token storage are still disabled.
 
 ## Known Limitations
 
@@ -76,8 +78,8 @@ publishing approval are implemented.
 - API rate limiting and abuse controls are not implemented.
 - Audit logging is a local/demo contract until durable storage is attached.
 - Upload/media validation is not production-grade yet.
-- OAuth routes need state validation, callback verification, token encryption,
-  disconnect flows, and provider-specific scope review.
+- OAuth routes still need token exchange, encrypted token storage, disconnect
+  flows, and provider-specific scope review.
 
 ### Low
 
@@ -95,7 +97,8 @@ Do not enable public project writes until all of the following are complete:
 3. Every project, asset, job, and audit record has owner/workspace ownership.
 4. Every read/write route enforces authorization.
 5. Secrets and OAuth tokens are encrypted server-side.
-6. OAuth providers are configured with state checks and callback validation.
+6. OAuth providers are configured with state checks, callback validation, token
+   exchange, and encrypted token storage.
 7. API rate limits or equivalent abuse controls are active.
 8. Live verification covers authorized and unauthorized paths.
 

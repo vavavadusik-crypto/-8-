@@ -17,6 +17,7 @@
 - Added signed session token verification foundation without adding a public token issuer or enabling production writes.
 - Added an owner-token gated signed-session bootstrap issuer for controlled demo/migration tokens without enabling public auth.
 - Added signed-session project authorization checks against bootstrap `workspaceId`.
+- Added signed OAuth state generation and callback validation guards for connector routes while keeping token exchange disabled.
 - Extended bootstrap signed-session workspace authorization to asset and job records:
   - new assets/jobs inherit project ownership metadata when linked to a project;
   - signed-session list/read/update paths are filtered or rejected by `workspaceId`;

@@ -18,8 +18,8 @@ Hermest Board is a browser-first interactive product prototype:
 - `GET /api/connectors/status` - reports whether connector env vars are present without exposing secrets;
 - `GET /api/public/sources` - public/free source registry;
 - `GET /api/research/search?q=...` - server-side public source search;
-- `GET /api/connectors/start?provider=...` - OAuth start URL skeleton for per-user account connection;
-- `GET /api/connectors/callback` - placeholder until sessions/token exchange exist;
+- `GET /api/connectors/start?provider=...` - OAuth start URL with signed state for per-user account connection;
+- `GET /api/connectors/callback` - validates signed state, then stops before token exchange;
 - `GET /api/user-config/schema` - documents what users can configure without seeing owner secrets;
 - `POST /api/publish-pack/validate` - validates publish pack shape before real publishing exists;
 - `GET /api/product?route=storage/status` - reports storage durability and production blockers;
