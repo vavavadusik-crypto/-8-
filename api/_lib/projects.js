@@ -3,6 +3,8 @@ import { createId } from "./storage.js";
 const MAX_CARDS = 250;
 const MAX_TEXT = 50000;
 const MAX_IMAGE = 900000;
+const DEFAULT_WORKSPACE_ID = "workspace_local";
+const DEFAULT_OWNER_USER_ID = "local-dev";
 
 export function normalizeProjectDocument(input = {}) {
   const source = input && typeof input === "object" ? input : {};
@@ -10,6 +12,8 @@ export function normalizeProjectDocument(input = {}) {
   return {
     id: safeId(source.id) || "",
     schemaVersion: Number(source.schemaVersion || 1),
+    workspaceId: safeId(source.workspaceId) || "",
+    ownerUserId: safeId(source.ownerUserId) || "",
     title: text(source.title || "Hermest Board", 180),
     view: object(source.view, { x: 0, y: 0, zoom: 1 }),
     plan: text(source.plan, MAX_TEXT),
@@ -23,30 +27,48 @@ export function normalizeProjectDocument(input = {}) {
   };
 }
 
-export function createProjectRecord(body = {}) {
+export function createProjectRecord(body = {}, actor = null) {
   const project = normalizeProjectDocument(body.project || body);
   const now = new Date().toISOString();
   const id = safeId(project.id) || createId("prj");
+  const workspaceId = safeId(body.workspaceId || project.workspaceId) || defaultWorkspaceId(actor);
+  const ownerUserId = safeId(body.ownerUserId || project.ownerUserId) || defaultOwnerUserId(actor);
+  const actorRecord = actorSnapshot(actor);
   project.id = id;
+  project.workspaceId = workspaceId;
+  project.ownerUserId = ownerUserId;
   project.createdAt = now;
   project.updatedAt = now;
   return {
     id,
+    workspaceId,
+    ownerUserId,
     title: project.title,
     project,
     publishPack: object(body.publishPack, null),
     stats: projectStats(project),
+    createdBy: actorRecord,
+    updatedBy: actorRecord,
     createdAt: now,
     updatedAt: now
   };
 }
 
-export function updateProjectRecord(existing, body = {}) {
-  const next = createProjectRecord(body);
+export function updateProjectRecord(existing, body = {}, actor = null) {
+  const next = createProjectRecord({
+    ...body,
+    workspaceId: existing.workspaceId || existing.project?.workspaceId,
+    ownerUserId: existing.ownerUserId || existing.project?.ownerUserId
+  }, actor);
   next.id = existing.id;
   next.project.id = existing.id;
+  next.workspaceId = existing.workspaceId || next.workspaceId;
+  next.ownerUserId = existing.ownerUserId || next.ownerUserId;
+  next.project.workspaceId = next.workspaceId;
+  next.project.ownerUserId = next.ownerUserId;
   next.createdAt = existing.createdAt || next.createdAt;
   next.project.createdAt = existing.project?.createdAt || next.project.createdAt;
+  next.createdBy = existing.createdBy || next.createdBy;
   next.updatedAt = new Date().toISOString();
   next.project.updatedAt = next.updatedAt;
   return next;
@@ -55,6 +77,8 @@ export function updateProjectRecord(existing, body = {}) {
 export function summarizeProject(record) {
   return {
     id: record.id,
+    workspaceId: record.workspaceId || record.project?.workspaceId || "",
+    ownerUserId: record.ownerUserId || record.project?.ownerUserId || "",
     title: record.title || record.project?.title || "Hermest Board",
     stats: record.stats || projectStats(record.project || {}),
     createdAt: record.createdAt,
@@ -116,4 +140,28 @@ function number(value, fallback) {
 
 function object(value, fallback) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+}
+
+function defaultWorkspaceId(actor) {
+  if (actor?.mode === "owner-token") return "workspace_owner";
+  return DEFAULT_WORKSPACE_ID;
+}
+
+function defaultOwnerUserId(actor) {
+  return safeId(actor?.id) || DEFAULT_OWNER_USER_ID;
+}
+
+function actorSnapshot(actor) {
+  if (!actor) {
+    return {
+      id: "unknown",
+      mode: "unknown",
+      authenticated: false
+    };
+  }
+  return {
+    id: text(actor.id || "unknown", 120),
+    mode: text(actor.mode || "unknown", 80),
+    authenticated: Boolean(actor.authenticated)
+  };
 }

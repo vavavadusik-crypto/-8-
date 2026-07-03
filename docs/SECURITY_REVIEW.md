@@ -41,6 +41,8 @@ publishing approval are implemented.
   exposing secret values.
 - Storage now has an explicit adapter boundary; durable adapters still remain
   disabled until auth and authorization are implemented.
+- Project records include future ownership metadata, but it is bootstrap
+  metadata only and must not be treated as final authorization.
 
 ## Known Limitations
 

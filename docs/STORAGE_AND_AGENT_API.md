@@ -62,6 +62,17 @@ DELETE /api/product?route=projects/:id
 A project contains the board title, cards, links, view, plan, roadmap, script,
 publish settings, and optional publish pack snapshot.
 
+Project records already carry future authorization metadata:
+
+- `workspaceId`
+- `ownerUserId`
+- `createdBy`
+- `updatedBy`
+
+The current bootstrap API preserves existing ownership during updates instead of
+accepting ownership changes from request payloads. Real SaaS auth must replace
+these defaults with session-backed user/workspace IDs.
+
 Write routes are protected by `api/_lib/auth.js`. If `HERMEST_OWNER_TOKEN` is
 configured, callers must send `Authorization: Bearer <token>` or
 `x-hermest-owner-token`. This is only a bootstrap guard, not final user auth.

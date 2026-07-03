@@ -41,16 +41,32 @@ try {
     }
   }, 201);
   const id = created.project.id;
+  if (created.project.workspaceId !== "workspace_local" || created.project.ownerUserId !== "local-dev") {
+    throw new Error(`Expected local project ownership metadata, got ${JSON.stringify(created.project)}`);
+  }
+  if (created.project.project.workspaceId !== created.project.workspaceId || created.project.project.ownerUserId !== created.project.ownerUserId) {
+    throw new Error(`Expected board document ownership metadata, got ${JSON.stringify(created.project.project)}`);
+  }
 
-  await expect("project-get", "GET", `projects/${id}`, null, 200);
-  await expect("project-update", "PUT", `projects/${id}`, {
+  const fetched = await expect("project-get", "GET", `projects/${id}`, null, 200);
+  if (fetched.project.workspaceId !== created.project.workspaceId || fetched.project.ownerUserId !== created.project.ownerUserId) {
+    throw new Error(`Expected fetched ownership metadata to persist, got ${JSON.stringify(fetched.project)}`);
+  }
+  const updated = await expect("project-update", "PUT", `projects/${id}`, {
+    workspaceId: "workspace_payload_must_not_take_over",
+    ownerUserId: "payload-owner",
     project: {
       title: "API smoke updated",
+      workspaceId: "workspace_payload_must_not_take_over",
+      ownerUserId: "payload-owner",
       cards: [{ id: "card1", title: "One", text: "Updated" }],
       links: [],
       publish: { platforms: ["youtube_video"], languages: "ru,en" }
     }
   }, 200);
+  if (updated.project.workspaceId !== created.project.workspaceId || updated.project.ownerUserId !== created.project.ownerUserId) {
+    throw new Error(`Expected update to preserve ownership metadata, got ${JSON.stringify(updated.project)}`);
+  }
   await expect("asset-create", "POST", "assets", {
     projectId: id,
     title: "Reference",
@@ -143,6 +159,9 @@ try {
   const authed = await expect("owner-token-write", "POST", "projects", {
     project: { title: "owner ok", cards: [] }
   }, 201, { authorization: "Bearer local-owner-token" });
+  if (authed.project.workspaceId !== "workspace_owner" || authed.project.ownerUserId !== "owner") {
+    throw new Error(`Expected owner-token ownership metadata, got ${JSON.stringify(authed.project)}`);
+  }
   await expect("owner-token-read-created", "GET", `projects/${authed.project.id}`, null, 200, { authorization: "Bearer local-owner-token" });
   await expect("owner-token-delete", "DELETE", `projects/${authed.project.id}`, null, 200, { authorization: "Bearer local-owner-token" });
 

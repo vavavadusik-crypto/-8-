@@ -105,9 +105,9 @@ async function handleProjectsIndex(request, response) {
 
   const actor = requireWriteAccess(request);
   const body = await readJson(request);
-  const record = createProjectRecord(body);
+  const record = createProjectRecord(body, actor);
   await saveRecord("projects", record);
-  await appendAudit("project.created", { id: record.id, title: record.title }, actor);
+  await appendAudit("project.created", { id: record.id, title: record.title, workspaceId: record.workspaceId, ownerUserId: record.ownerUserId }, actor);
   sendJson(response, 201, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), project: record });
 }
 
@@ -141,9 +141,9 @@ async function handleProjectById(request, response, id) {
   }
 
   const body = await readJson(request);
-  const record = updateProjectRecord(existing, body);
+  const record = updateProjectRecord(existing, body, actor);
   await saveRecord("projects", record);
-  await appendAudit("project.updated", { id: record.id, title: record.title }, actor);
+  await appendAudit("project.updated", { id: record.id, title: record.title, workspaceId: record.workspaceId, ownerUserId: record.ownerUserId }, actor);
   sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), project: record });
 }
 

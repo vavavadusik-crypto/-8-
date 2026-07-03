@@ -65,6 +65,11 @@ Recommended modules:
 - `scheduler`: schedules drafts and publications;
 - `metrics`: stores published links and platform metrics.
 
+Project records now include `workspaceId`, `ownerUserId`, `createdBy`, and
+`updatedBy` metadata so the future authorization layer has stable fields to
+enforce against. These values are still bootstrap metadata until real sessions
+exist.
+
 ## Data Model Draft
 
 ```text
