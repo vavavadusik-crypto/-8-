@@ -16,7 +16,7 @@ eventually publish approved videos to connected user accounts.
 - Production URL: `https://hermest-board.vercel.app`
 - Current version: `0.2.0`
 - Current branch: `main`
-- Last known product commit before this handoff: `799cf44 docs: add postgres schema sql draft`
+- Last known product commit before this handoff refresh: `8cfe66b docs: add fable ultracode upgrade mandate`
 
 ## Current Product State
 
@@ -267,6 +267,7 @@ First read:
 - docs/STORAGE_AND_AGENT_API.md
 - docs/DATABASE_SCHEMA_DRAFT.md
 - db/postgres-schema.sql
+- docs/SECURITY_REVIEW.md
 - docs/PRODUCT_READINESS.md
 - docs/WORKLOG.md
 - .github/workflows/deploy-vercel.yml

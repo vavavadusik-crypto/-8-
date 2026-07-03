@@ -25,3 +25,5 @@
 - Added first Postgres schema draft for durable storage/auth phase.
 - Added runnable draft SQL at `db/postgres-schema.sql`.
 - Added Fable 5 Ultracode maximum upgrade mandate with official standards references.
+- Confirmed Fable auto-resume created infrastructure but no product commits; paused the timer to avoid more limit burn and agent conflicts.
+- Added a security review baseline, CSP/COOP headers, and a live production verification script.

@@ -88,6 +88,12 @@ Static-only hosts will not run the `api/` endpoints. Use Vercel or another backe
 When deployed on Vercel:
 
 ```bash
+npm run verify:live
+```
+
+Manual checks:
+
+```bash
 curl https://your-domain.example/api/health
 curl 'https://your-domain.example/api/product?route=storage/status'
 curl https://your-domain.example/api/connectors/status

@@ -12,6 +12,7 @@
     "audit:secrets": "node scripts/audit-secrets-file.mjs",
     "smoke:api": "node scripts/smoke-api.mjs",
     "smoke": "node scripts/smoke-render.mjs",
+    "verify:live": "node scripts/live-verify.mjs",
     "check": "npm run validate && npm run smoke:api && npm run build && npm run smoke"
   },
   "devDependencies": {
