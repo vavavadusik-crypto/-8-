@@ -93,6 +93,10 @@ The current bootstrap API preserves existing ownership during updates instead of
 accepting ownership changes from request payloads. Real SaaS auth must replace
 these defaults with session-backed user/workspace IDs.
 
+Signed-session actors are filtered and checked against `workspaceId` for project
+list/detail/update/delete routes. Owner-token and local development actors still
+act as bootstrap bypasses until the real workspace membership model exists.
+
 Write routes are protected by `api/_lib/auth.js`. If `HERMEST_OWNER_TOKEN` is
 configured, callers must send `Authorization: Bearer <token>` or
 `x-hermest-owner-token`. This is only a bootstrap guard, not final user auth.

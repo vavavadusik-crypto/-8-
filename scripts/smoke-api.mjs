@@ -53,6 +53,22 @@ try {
   if (signedProject.project.workspaceId !== "workspace_smoke" || signedProject.project.ownerUserId !== "user_smoke") {
     throw new Error(`Expected signed-session ownership metadata, got ${JSON.stringify(signedProject.project)}`);
   }
+  const otherToken = createSignedSessionToken({
+    sub: "user_other",
+    workspaceId: "workspace_other"
+  });
+  const signedList = await expect("project-list-signed-session", "GET", "projects", null, 200, { authorization: `Bearer ${signedToken}` });
+  if (!signedList.projects.some(project => project.id === signedProject.project.id)) {
+    throw new Error(`Expected signed project in signed-session list, got ${JSON.stringify(signedList.projects)}`);
+  }
+  const otherList = await expect("project-list-other-session", "GET", "projects", null, 200, { authorization: `Bearer ${otherToken}` });
+  if (otherList.projects.some(project => project.id === signedProject.project.id)) {
+    throw new Error(`Expected other workspace list to exclude signed project, got ${JSON.stringify(otherList.projects)}`);
+  }
+  const forbiddenSignedRead = await expect("project-read-other-session", "GET", `projects/${signedProject.project.id}`, null, 403, { authorization: `Bearer ${otherToken}` });
+  if (forbiddenSignedRead.error !== "forbidden") {
+    throw new Error(`Expected forbidden signed-session project read, got ${forbiddenSignedRead.error}`);
+  }
   await expect("project-delete-signed-session", "DELETE", `projects/${signedProject.project.id}`, null, 200, { authorization: `Bearer ${signedToken}` });
   delete process.env.HERMEST_SESSION_SECRET;
 

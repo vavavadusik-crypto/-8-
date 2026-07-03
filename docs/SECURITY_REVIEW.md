@@ -47,6 +47,8 @@ publishing approval are implemented.
   per-user authentication.
 - Signed session token verification exists, but token issuance and full
   per-user authorization are still intentionally blocked.
+- Project routes enforce bootstrap `workspaceId` checks for signed-session
+  actors; this does not yet cover the full future workspace membership model.
 
 ## Known Limitations
 

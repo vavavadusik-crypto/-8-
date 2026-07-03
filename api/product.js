@@ -1,4 +1,5 @@
 import { getAuthStatus, getRequestActor, requireReadAccess, requireWriteAccess } from "./_lib/auth.js";
+import { filterRecordsForActor, requireRecordAccess } from "./_lib/authorization.js";
 import { buildAgentPlan } from "./_lib/agent-plan.js";
 import { handleApiError, readJson, requireMethods, sendJson } from "./_lib/http.js";
 import { createProjectRecord, summarizeProject, updateProjectRecord } from "./_lib/projects.js";
@@ -115,9 +116,9 @@ async function handleProjectsIndex(request, response) {
   if (!requireMethods(request, response, ["GET", "POST"])) return;
 
   if (request.method === "GET") {
-    requireReadAccess(request);
+    const actor = requireReadAccess(request);
     const projects = await listRecords("projects");
-    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), projects: projects.map(summarizeProject) });
+    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), projects: filterRecordsForActor(projects, actor).map(summarizeProject) });
     return;
   }
 
@@ -133,12 +134,13 @@ async function handleProjectById(request, response, id) {
   if (!requireMethods(request, response, ["GET", "PUT", "PATCH", "DELETE"])) return;
 
   if (request.method === "GET") {
-    requireReadAccess(request);
+    const actor = requireReadAccess(request);
     const existing = await getRecord("projects", id);
     if (!existing) {
       sendJson(response, 404, { ok: false, error: "project_not_found", id });
       return;
     }
+    requireRecordAccess(existing, actor, "read");
     sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), project: existing });
     return;
   }
@@ -150,6 +152,7 @@ async function handleProjectById(request, response, id) {
     sendJson(response, 404, { ok: false, error: "project_not_found", id });
     return;
   }
+  requireRecordAccess(existing, actor, request.method.toLowerCase());
 
   if (request.method === "DELETE") {
     await deleteRecord("projects", id);
