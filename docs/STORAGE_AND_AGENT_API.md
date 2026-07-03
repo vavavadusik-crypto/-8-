@@ -97,3 +97,7 @@ npm run check
 `smoke:api` runs the product API directly without a server. It verifies local
 project create/update/delete, assets, jobs, audit, production storage guard, and
 owner-token demo-storage guard.
+
+## Durable Storage Target
+
+See `docs/DATABASE_SCHEMA_DRAFT.md` for the first Postgres schema target.

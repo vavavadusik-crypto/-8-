@@ -265,6 +265,7 @@ First read:
 - docs/FABLE_HANDOFF_AND_ROADMAP.md
 - docs/ARCHITECTURE.md
 - docs/STORAGE_AND_AGENT_API.md
+- docs/DATABASE_SCHEMA_DRAFT.md
 - docs/PRODUCT_READINESS.md
 - docs/WORKLOG.md
 - .github/workflows/deploy-vercel.yml
