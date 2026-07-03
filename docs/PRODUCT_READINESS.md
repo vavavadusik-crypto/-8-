@@ -38,6 +38,8 @@ It is not yet ready for:
 - project, asset, job, audit, storage status, and agent-plan API contracts;
 - safe local JSON storage fallback;
 - production guard that blocks unsafe public Vercel writes without durable storage;
+- bootstrap owner-token write guard for temporary demo storage;
+- API smoke checks for product routes and guards;
 - basic smoke validation.
 
 ## Required Before Beta

@@ -21,3 +21,4 @@
 - Connected UI buttons for storage status, API save/load, and backend agent plan.
 - Updated product readiness, architecture, deployment, and API docs.
 - Added Fable handoff and roadmap documentation for continuing the project toward 1.0.0.
+- Added bootstrap owner-token write guard and API smoke checks for product routes.

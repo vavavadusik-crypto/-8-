@@ -23,6 +23,7 @@ export function handleApiError(response, error) {
     ok: false,
     error: error?.code || error?.message || "internal_error",
     note: error?.note || undefined,
+    auth: error?.auth || undefined,
     storage: error?.storage || undefined
   });
 }

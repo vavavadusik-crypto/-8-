@@ -1,0 +1,117 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import product from "../api/product.js";
+
+const originalEnv = { ...process.env };
+const dataDir = mkdtempSync(join(tmpdir(), "hermest-api-smoke-"));
+
+try {
+  process.env.HERMEST_DATA_DIR = dataDir;
+  delete process.env.VERCEL;
+  delete process.env.HERMEST_ENABLE_DEMO_STORAGE;
+  delete process.env.HERMEST_OWNER_TOKEN;
+
+  await expect("storage", "GET", "storage/status", null, 200);
+  await expect("agent-plan", "POST", "agent/plan", {
+    platforms: ["youtube_video"],
+    tools: ["parser", "translator"],
+    languages: ["ru", "en"]
+  }, 200);
+
+  const created = await expect("project-create", "POST", "projects", {
+    project: {
+      title: "API smoke",
+      cards: [{ id: "card1", title: "One", text: "Test" }],
+      links: [],
+      publish: { platforms: ["youtube_video"], languages: "ru" }
+    }
+  }, 201);
+  const id = created.project.id;
+
+  await expect("project-get", "GET", `projects/${id}`, null, 200);
+  await expect("project-update", "PUT", `projects/${id}`, {
+    project: {
+      title: "API smoke updated",
+      cards: [{ id: "card1", title: "One", text: "Updated" }],
+      links: [],
+      publish: { platforms: ["youtube_video"], languages: "ru,en" }
+    }
+  }, 200);
+  await expect("asset-create", "POST", "assets", {
+    projectId: id,
+    title: "Reference",
+    url: "https://example.com/reference",
+    rightsStatus: "unknown"
+  }, 201);
+  await expect("job-create", "POST", "jobs", {
+    projectId: id,
+    publishPack: { platforms: ["youtube_video"], tools: ["parser"], languages: ["ru"] }
+  }, 201);
+  await expect("audit-list", "GET", "audit", null, 200);
+  await expect("project-delete", "DELETE", `projects/${id}`, null, 200);
+
+  process.env.VERCEL = "1";
+  delete process.env.HERMEST_ENABLE_DEMO_STORAGE;
+  const guarded = await expect("production-write-guard", "POST", "projects", {
+    project: { title: "blocked" }
+  }, 501);
+  if (guarded.error !== "server_storage_not_configured") {
+    throw new Error(`Expected storage guard, got ${guarded.error}`);
+  }
+
+  process.env.HERMEST_ENABLE_DEMO_STORAGE = "1";
+  const authBlocked = await expect("demo-storage-auth-guard", "POST", "projects", {
+    project: { title: "blocked" }
+  }, 501);
+  if (authBlocked.error !== "write_auth_not_configured") {
+    throw new Error(`Expected auth guard, got ${authBlocked.error}`);
+  }
+
+  process.env.HERMEST_OWNER_TOKEN = "local-owner-token";
+  const authed = await expect("owner-token-write", "POST", "projects", {
+    project: { title: "owner ok", cards: [] }
+  }, 201, { authorization: "Bearer local-owner-token" });
+  await expect("owner-token-delete", "DELETE", `projects/${authed.project.id}`, null, 200, { authorization: "Bearer local-owner-token" });
+
+  console.log("smoke:api ok");
+} finally {
+  process.env = originalEnv;
+  rmSync(dataDir, { recursive: true, force: true });
+}
+
+async function expect(name, method, route, body, expectedStatus, headers = {}) {
+  const response = mockResponse();
+  await product({
+    method,
+    query: { route },
+    url: `/api/product?route=${encodeURIComponent(route)}`,
+    headers,
+    body
+  }, response);
+  if (response.statusCode !== expectedStatus) {
+    throw new Error(`${name}: expected ${expectedStatus}, got ${response.statusCode} ${JSON.stringify(response.payload)}`);
+  }
+  if (response.payload?.ok === false && expectedStatus < 400) {
+    throw new Error(`${name}: expected ok payload, got ${JSON.stringify(response.payload)}`);
+  }
+  return response.payload;
+}
+
+function mockResponse() {
+  return {
+    statusCode: 200,
+    headers: {},
+    setHeader(key, value) {
+      this.headers[key] = value;
+    },
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload) {
+      this.payload = payload;
+      return this;
+    }
+  };
+}

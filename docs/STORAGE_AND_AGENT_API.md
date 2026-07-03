@@ -16,6 +16,13 @@ Reports whether the current deployment can write server-side data safely.
 - Production SaaS: needs durable storage, user accounts, authorization, and
   encrypted connector token storage.
 
+The response also includes `auth` status:
+
+- local development can write without a token;
+- production/demo writes require `HERMEST_OWNER_TOKEN`;
+- real SaaS work must replace owner-token auth with per-user sessions and
+  project ownership.
+
 ## Projects
 
 ```text
@@ -29,6 +36,10 @@ DELETE /api/product?route=projects/:id
 
 A project contains the board title, cards, links, view, plan, roadmap, script,
 publish settings, and optional publish pack snapshot.
+
+Write routes are protected by `api/_lib/auth.js`. If `HERMEST_OWNER_TOKEN` is
+configured, callers must send `Authorization: Bearer <token>` or
+`x-hermest-owner-token`. This is only a bootstrap guard, not final user auth.
 
 ## Assets
 
@@ -75,3 +86,14 @@ Accepts a publish pack and returns:
 - blockers such as missing OAuth connectors or durable storage;
 - `canAutopublish: false` until explicit approval and connector safety are
   implemented.
+
+## Smoke Checks
+
+```bash
+npm run smoke:api
+npm run check
+```
+
+`smoke:api` runs the product API directly without a server. It verifies local
+project create/update/delete, assets, jobs, audit, production storage guard, and
+owner-token demo-storage guard.

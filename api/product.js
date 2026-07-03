@@ -1,3 +1,4 @@
+import { getAuthStatus, requireWriteAccess } from "./_lib/auth.js";
 import { buildAgentPlan } from "./_lib/agent-plan.js";
 import { handleApiError, readJson, requireMethods, sendJson } from "./_lib/http.js";
 import { createProjectRecord, summarizeProject, updateProjectRecord } from "./_lib/projects.js";
@@ -17,7 +18,10 @@ export default async function handler(request, response) {
 
     if (path[0] === "storage" && path[1] === "status") {
       if (!requireMethods(request, response, ["GET"])) return;
-      sendJson(response, 200, getStorageStatus());
+      sendJson(response, 200, {
+        ...getStorageStatus(),
+        auth: getAuthStatus()
+      });
       return;
     }
 
@@ -49,7 +53,7 @@ export default async function handler(request, response) {
     if (path[0] === "audit" && !path[1]) {
       if (!requireMethods(request, response, ["GET"])) return;
       const audit = await listRecords("audit");
-      sendJson(response, 200, { ok: true, storage: getStorageStatus(), audit: audit.slice(0, 100) });
+      sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), audit: audit.slice(0, 100) });
       return;
     }
 
@@ -75,15 +79,16 @@ async function handleProjectsIndex(request, response) {
 
   if (request.method === "GET") {
     const projects = await listRecords("projects");
-    sendJson(response, 200, { ok: true, storage: getStorageStatus(), projects: projects.map(summarizeProject) });
+    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), projects: projects.map(summarizeProject) });
     return;
   }
 
+  const actor = requireWriteAccess(request);
   const body = await readJson(request);
   const record = createProjectRecord(body);
   await saveRecord("projects", record);
-  await appendAudit("project.created", { id: record.id, title: record.title });
-  sendJson(response, 201, { ok: true, storage: getStorageStatus(), project: record });
+  await appendAudit("project.created", { id: record.id, title: record.title }, actor);
+  sendJson(response, 201, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), project: record });
 }
 
 async function handleProjectById(request, response, id) {
@@ -96,13 +101,14 @@ async function handleProjectById(request, response, id) {
   }
 
   if (request.method === "GET") {
-    sendJson(response, 200, { ok: true, storage: getStorageStatus(), project: existing });
+    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), project: existing });
     return;
   }
 
+  const actor = requireWriteAccess(request);
   if (request.method === "DELETE") {
     await deleteRecord("projects", id);
-    await appendAudit("project.deleted", { id });
+    await appendAudit("project.deleted", { id }, actor);
     sendJson(response, 200, { ok: true, id });
     return;
   }
@@ -110,8 +116,8 @@ async function handleProjectById(request, response, id) {
   const body = await readJson(request);
   const record = updateProjectRecord(existing, body);
   await saveRecord("projects", record);
-  await appendAudit("project.updated", { id: record.id, title: record.title });
-  sendJson(response, 200, { ok: true, storage: getStorageStatus(), project: record });
+  await appendAudit("project.updated", { id: record.id, title: record.title }, actor);
+  sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), project: record });
 }
 
 async function handleAssetsIndex(request, response) {
@@ -119,10 +125,11 @@ async function handleAssetsIndex(request, response) {
 
   if (request.method === "GET") {
     const assets = await listRecords("assets");
-    sendJson(response, 200, { ok: true, storage: getStorageStatus(), assets });
+    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), assets });
     return;
   }
 
+  const actor = requireWriteAccess(request);
   const body = await readJson(request);
   const now = new Date().toISOString();
   const asset = {
@@ -138,8 +145,8 @@ async function handleAssetsIndex(request, response) {
     updatedAt: now
   };
   await saveRecord("assets", asset);
-  await appendAudit("asset.created", { id: asset.id, projectId: asset.projectId, rightsStatus: asset.rightsStatus });
-  sendJson(response, 201, { ok: true, storage: getStorageStatus(), asset });
+  await appendAudit("asset.created", { id: asset.id, projectId: asset.projectId, rightsStatus: asset.rightsStatus }, actor);
+  sendJson(response, 201, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), asset });
 }
 
 async function handleJobsIndex(request, response) {
@@ -147,10 +154,11 @@ async function handleJobsIndex(request, response) {
 
   if (request.method === "GET") {
     const jobs = await listRecords("jobs");
-    sendJson(response, 200, { ok: true, storage: getStorageStatus(), jobs });
+    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), jobs });
     return;
   }
 
+  const actor = requireWriteAccess(request);
   const body = await readJson(request);
   const now = new Date().toISOString();
   const plan = buildAgentPlan(body.publishPack || body.pack || {});
@@ -164,8 +172,8 @@ async function handleJobsIndex(request, response) {
     updatedAt: now
   };
   await saveRecord("jobs", job);
-  await appendAudit("job.created", { id: job.id, type: job.type, status: job.status });
-  sendJson(response, 201, { ok: true, storage: getStorageStatus(), job });
+  await appendAudit("job.created", { id: job.id, type: job.type, status: job.status }, actor);
+  sendJson(response, 201, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), job });
 }
 
 async function handleJobById(request, response, id) {
@@ -178,10 +186,11 @@ async function handleJobById(request, response, id) {
   }
 
   if (request.method === "GET") {
-    sendJson(response, 200, { ok: true, storage: getStorageStatus(), job: existing });
+    sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), job: existing });
     return;
   }
 
+  const actor = requireWriteAccess(request);
   const body = await readJson(request);
   const job = {
     ...existing,
@@ -190,8 +199,8 @@ async function handleJobById(request, response, id) {
     updatedAt: new Date().toISOString()
   };
   await saveRecord("jobs", job);
-  await appendAudit("job.updated", { id: job.id, status: job.status });
-  sendJson(response, 200, { ok: true, storage: getStorageStatus(), job });
+  await appendAudit("job.updated", { id: job.id, status: job.status }, actor);
+  sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), job });
 }
 
 function routeParts(request) {

@@ -108,13 +108,18 @@ export async function deleteRecord(collection, id) {
   await rm(recordPath(collection, id), { force: true });
 }
 
-export async function appendAudit(action, payload = {}) {
+export async function appendAudit(action, payload = {}, actor = null) {
   const storage = getStorageStatus();
   if (!storage.writeEnabled) return null;
   const now = new Date().toISOString();
   const record = {
     id: createId("aud"),
     action,
+    actor: actor ? {
+      id: actor.id || "unknown",
+      mode: actor.mode || "unknown",
+      authenticated: Boolean(actor.authenticated)
+    } : null,
     payload,
     createdAt: now,
     updatedAt: now

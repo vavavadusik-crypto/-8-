@@ -33,6 +33,7 @@ Hermest Board currently has:
 - public source search API;
 - connector status/start skeletons;
 - product API contract for storage/projects/assets/jobs/audit/agent plan;
+- bootstrap write guard for future demo storage via `HERMEST_OWNER_TOKEN`;
 - production write guard to avoid storing private user data on ephemeral Vercel storage;
 - GitHub Actions deploy workflow.
 
@@ -44,6 +45,8 @@ The app is still alpha. It is not ready for paid users or private customer data.
 - Do not paste or print token values in terminal output or docs.
 - Public Vercel writes must stay blocked until durable storage, auth, and authorization exist.
 - Autopublish must stay disabled until OAuth, encrypted token storage, policy checks, and human approval exist.
+- `HERMEST_OWNER_TOKEN` is only a bootstrap write guard. It is not a replacement
+  for real per-user auth.
 - Keep within Vercel Hobby serverless function limits. The product API is intentionally combined under one endpoint:
   - `GET /api/product?route=storage/status`
   - `GET|POST /api/product?route=projects`
@@ -64,6 +67,8 @@ npm run check
 git status --short --branch
 ```
 
+`npm run check` includes API smoke coverage through `npm run smoke:api`.
+
 Live checks:
 
 ```bash
@@ -82,6 +87,8 @@ Expected production behavior:
 - project list returns JSON;
 - project write returns `501 server_storage_not_configured`;
 - agent plan returns blockers for missing connectors/storage.
+- if demo storage is enabled later, write routes must require owner token until
+  real per-user auth exists.
 
 ## Known Issue / Observation
 
@@ -116,6 +123,7 @@ Goal: replace demo/local JSON storage with a real adapter.
 Tasks:
 
 - add a storage adapter interface;
+- keep `api/_lib/auth.js` as the temporary write guard until real auth replaces it;
 - implement Postgres-backed projects;
 - implement asset metadata;
 - implement audit rows;
