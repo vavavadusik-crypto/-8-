@@ -45,7 +45,7 @@ It is not yet ready for:
 - signed OAuth state generation and callback validation guard;
 - encrypted connector token vault with redacted API responses;
 - human approval record endpoint for jobs;
-- in-board BYOK AI settings and `/api/ai/respond` proxy for user-owned OpenAI keys;
+- in-board Settings button with BYOK AI settings, local future-module key slots, and `/api/ai/respond` proxy for user-owned OpenAI keys;
 - API smoke checks for product routes and guards;
 - basic smoke validation.
 
@@ -60,6 +60,7 @@ It is not yet ready for:
 - approval-gated worker execution;
 - real parser, translator, and media generation workers;
 - production-grade AI key/account policy, rate limits, and usage controls;
+- production-grade secret handling for any user-owned parser/media/translation/workflow keys;
 - error reporting;
 - usage analytics;
 - automated browser tests.

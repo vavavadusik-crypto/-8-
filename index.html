@@ -481,6 +481,54 @@
       margin-bottom: 8px;
     }
 
+    .settings-list {
+      display: grid;
+      gap: 7px;
+      margin: 10px 0 12px;
+    }
+
+    .settings-key-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 40px;
+      padding: 8px;
+      border: 1px solid rgba(123, 220, 255, .16);
+      border-radius: 8px;
+      background: rgba(3, 9, 18, .5);
+    }
+
+    .settings-key-main {
+      min-width: 0;
+    }
+
+    .settings-key-title {
+      color: #dffcff;
+      font-size: 12px;
+      font-weight: 800;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .settings-key-meta {
+      margin-top: 2px;
+      color: #7894a9;
+      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .settings-key-row button {
+      width: 34px;
+      min-width: 34px;
+      height: 32px;
+      color: #fecdd3;
+      border-color: rgba(251, 113, 133, .34);
+    }
+
     .hint {
       color: #7894a9;
       font-size: 12px;
@@ -570,7 +618,7 @@
         <button id="addCard" title="Добавить карточку">＋</button>
         <button id="connectMode" title="Соединить выбранные карточки">⛓</button>
         <button id="fitView" title="Показать все карточки">⌖</button>
-        <button id="openAiSettings" title="AI настройки">AI</button>
+        <button id="openSettings" title="Настройки">⚙</button>
         <button id="togglePanel" title="Панель настроек">☰</button>
         <button id="recordMode" title="Режим записи">◉</button>
         <button id="exportJson" title="Экспорт JSON">⇩</button>
@@ -676,42 +724,74 @@
             <button id="runResearchSearch" title="Искать через публичные web API">Public search</button>
             <button id="showConnectorGuide" title="Показать как пользователю подключить аккаунты">Аккаунты</button>
           </div>
-          <div class="panel-section" id="aiSettingsPanel">
-            <h2>AI настройки</h2>
-            <div class="field">
-              <label><span>Provider</span></label>
-              <select id="aiProvider">
-                <option value="openai">OpenAI</option>
-              </select>
+          <div class="panel-section" id="settingsPanel">
+            <h2>Настройки</h2>
+            <div class="mini-note">Пользовательские ключи живут только в этом браузере. Экспорт JSON и backend save их не забирают.</div>
+            <div class="panel-section">
+              <h2>AI</h2>
+              <div class="field">
+                <label><span>Provider</span></label>
+                <select id="aiProvider">
+                  <option value="openai">OpenAI</option>
+                </select>
+              </div>
+              <div class="field">
+                <label><span>Model</span></label>
+                <input id="aiModel" type="text" placeholder="gpt-4.1-mini" autocomplete="off">
+              </div>
+              <div class="field">
+                <label><span>API key</span></label>
+                <input id="aiKey" type="password" placeholder="sk-... / sk-proj-..." autocomplete="off" spellcheck="false">
+              </div>
+              <label class="check-item"><input id="aiRemember" type="checkbox"> Запомнить на этом устройстве</label>
+              <div class="mini-note">OpenAI ключ отправляется на сервер только на время AI-запроса через BYOK proxy.</div>
+              <div class="field">
+                <label><span>Задача AI</span></label>
+                <textarea id="aiPrompt" placeholder="Например: проверь текущий борд и предложи следующий сильный шаг для продукта"></textarea>
+              </div>
+              <div class="panel-row two">
+                <button id="saveAiSettings" title="Сохранить AI настройки в этом браузере">Сохранить</button>
+                <button id="clearAiSettings" title="Удалить AI ключ из браузера">Очистить</button>
+              </div>
+              <div class="panel-row two">
+                <button id="testAiConnection" title="Проверить подключение AI">Тест AI</button>
+                <button id="runAiAssistant" title="Отправить текущий борд в AI">Запрос</button>
+              </div>
+              <div class="panel-row wide">
+                <button id="addAiResponseCard" title="Добавить последний AI ответ на борд">Ответ в карточку</button>
+              </div>
+              <div class="field">
+                <label><span>Ответ AI</span></label>
+                <textarea id="aiResponseOutput" class="script-output" placeholder="Здесь появится ответ AI внутри Hermest Board"></textarea>
+              </div>
             </div>
-            <div class="field">
-              <label><span>Model</span></label>
-              <input id="aiModel" type="text" placeholder="gpt-4.1-mini" autocomplete="off">
-            </div>
-            <div class="field">
-              <label><span>API key</span></label>
-              <input id="aiKey" type="password" placeholder="sk-... / sk-proj-..." autocomplete="off" spellcheck="false">
-            </div>
-            <label class="check-item"><input id="aiRemember" type="checkbox"> Запомнить на этом устройстве</label>
-            <div class="mini-note">Ключ хранится только в этом браузере пользователя и отправляется на сервер только на время AI-запроса.</div>
-            <div class="field">
-              <label><span>Задача AI</span></label>
-              <textarea id="aiPrompt" placeholder="Например: проверь текущий борд и предложи следующий сильный шаг для продукта"></textarea>
-            </div>
-            <div class="panel-row two">
-              <button id="saveAiSettings" title="Сохранить AI настройки в этом браузере">Сохранить</button>
-              <button id="clearAiSettings" title="Удалить AI ключ из браузера">Очистить</button>
-            </div>
-            <div class="panel-row two">
-              <button id="testAiConnection" title="Проверить подключение AI">Тест AI</button>
-              <button id="runAiAssistant" title="Отправить текущий борд в AI">Запрос</button>
-            </div>
-            <div class="panel-row wide">
-              <button id="addAiResponseCard" title="Добавить последний AI ответ на борд">Ответ в карточку</button>
-            </div>
-            <div class="field">
-              <label><span>Ответ AI</span></label>
-              <textarea id="aiResponseOutput" class="script-output" placeholder="Здесь появится ответ AI внутри Hermest Board"></textarea>
+            <div class="panel-section">
+              <h2>Локальные API ключи</h2>
+              <div class="settings-list" id="userApiKeyList"></div>
+              <div class="field">
+                <label><span>Модуль</span></label>
+                <select id="userApiKeyProvider">
+                  <option value="openai">OpenAI AI</option>
+                  <option value="search">Search / parser</option>
+                  <option value="media">Media generation</option>
+                  <option value="translation">Translation</option>
+                  <option value="workflow">Workflow webhook</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div class="field">
+                <label><span>Название</span></label>
+                <input id="userApiKeyLabel" type="text" placeholder="Например: мой OpenAI или media worker" autocomplete="off">
+              </div>
+              <div class="field">
+                <label><span>Ключ / URL</span></label>
+                <input id="userApiKeyValue" type="password" placeholder="Вставь свой ключ или webhook URL" autocomplete="off" spellcheck="false">
+              </div>
+              <div class="panel-row two">
+                <button id="saveUserApiKey" title="Сохранить ключ локально">Добавить</button>
+                <button id="clearUserApiKeys" title="Удалить все локальные ключи">Очистить</button>
+              </div>
+              <div class="mini-note">Сейчас реально используется OpenAI ключ. Остальные слоты готовят интерфейс под parser, media, translation и workflow workers.</div>
             </div>
           </div>
           <div class="panel-row two">
@@ -745,6 +825,8 @@
     const STORAGE_KEY = "hermest-board:v1";
     const AI_SETTINGS_LOCAL_KEY = "hermest-board:ai-settings:v1";
     const AI_SETTINGS_SESSION_KEY = "hermest-board:ai-settings:session:v1";
+    const USER_API_KEYS_LOCAL_KEY = "hermest-board:user-api-keys:v1";
+    const USER_API_KEYS_SESSION_KEY = "hermest-board:user-api-keys:session:v1";
     const CONTENT_VERSION = 4;
     const BOARD_WIDTH = 3000;
     const BOARD_HEIGHT = 1800;
@@ -773,16 +855,21 @@
     const mediaBriefInput = document.getElementById("mediaBriefInput");
     const publishOutput = document.getElementById("publishOutput");
     const researchQueryInput = document.getElementById("researchQueryInput");
-    const aiSettingsPanel = document.getElementById("aiSettingsPanel");
+    const settingsPanel = document.getElementById("settingsPanel");
     const aiProviderInput = document.getElementById("aiProvider");
     const aiModelInput = document.getElementById("aiModel");
     const aiKeyInput = document.getElementById("aiKey");
     const aiRememberInput = document.getElementById("aiRemember");
     const aiPromptInput = document.getElementById("aiPrompt");
     const aiResponseOutput = document.getElementById("aiResponseOutput");
+    const userApiKeyList = document.getElementById("userApiKeyList");
+    const userApiKeyProvider = document.getElementById("userApiKeyProvider");
+    const userApiKeyLabel = document.getElementById("userApiKeyLabel");
+    const userApiKeyValue = document.getElementById("userApiKeyValue");
 
     const state = loadState();
     let aiSettings = loadAiSettings();
+    let userApiKeys = loadUserApiKeys();
     let latestAiResponse = "";
     let selectedId = state.cards[0]?.id || null;
     let zCounter = Math.max(...state.cards.map(c => c.z || 1), 10);
@@ -1599,10 +1686,10 @@
     document.getElementById("saveProjectApi").addEventListener("click", saveProjectApi);
     document.getElementById("loadProjectApi").addEventListener("click", loadProjectApi);
     document.getElementById("runAgentPlan").addEventListener("click", runAgentPlan);
-    document.getElementById("openAiSettings").addEventListener("click", () => {
+    document.getElementById("openSettings").addEventListener("click", () => {
       sidePanel.hidden = false;
-      aiSettingsPanel.scrollIntoView({ block: "start", behavior: "smooth" });
-      aiKeyInput.focus();
+      settingsPanel.scrollIntoView({ block: "start", behavior: "smooth" });
+      aiModelInput.focus();
     });
     document.getElementById("saveAiSettings").addEventListener("click", () => {
       saveAiSettingsFromForm();
@@ -1613,6 +1700,12 @@
     document.getElementById("testAiConnection").addEventListener("click", testAiConnection);
     document.getElementById("runAiAssistant").addEventListener("click", runAiAssistant);
     document.getElementById("addAiResponseCard").addEventListener("click", addAiResponseCard);
+    document.getElementById("saveUserApiKey").addEventListener("click", saveUserApiKeyFromForm);
+    document.getElementById("clearUserApiKeys").addEventListener("click", clearUserApiKeys);
+    userApiKeyList.addEventListener("click", event => {
+      const id = event.target.closest("button")?.dataset.deleteKey;
+      if (id) deleteUserApiKey(id);
+    });
     document.getElementById("buildPublishPack").addEventListener("click", () => {
       state.publish.packageText = buildPublishPackageText();
       publishOutput.value = state.publish.packageText;
@@ -2037,6 +2130,7 @@
       if (!aiPromptInput.value.trim()) {
         aiPromptInput.value = "Проанализируй текущий Hermest Board и предложи следующий сильный шаг для продукта. Ответ дай структурно и без лишней воды.";
       }
+      renderUserApiKeyList();
     }
 
     function readAiSettingsForm() {
@@ -2057,6 +2151,7 @@
         const storage = next.remember ? localStorage : sessionStorage;
         const key = next.remember ? AI_SETTINGS_LOCAL_KEY : AI_SETTINGS_SESSION_KEY;
         storage.setItem(key, JSON.stringify(next));
+        persistUserApiKeys("", false);
         flashStatus(message);
         return true;
       } catch (_) {
@@ -2076,6 +2171,138 @@
       };
       syncAiSettingsForm();
       flashStatus("AI ключ удалён из браузера");
+    }
+
+    function loadUserApiKeys() {
+      try {
+        const sessionRaw = sessionStorage.getItem(USER_API_KEYS_SESSION_KEY);
+        if (sessionRaw) return normalizeUserApiKeys(JSON.parse(sessionRaw));
+      } catch (_) {}
+      try {
+        const localRaw = localStorage.getItem(USER_API_KEYS_LOCAL_KEY);
+        if (localRaw) return normalizeUserApiKeys(JSON.parse(localRaw));
+      } catch (_) {}
+      return [];
+    }
+
+    function normalizeUserApiKeys(input) {
+      const items = Array.isArray(input) ? input : [];
+      return items.slice(0, 24).map(item => ({
+        id: typeof item.id === "string" && item.id ? item.id : `key_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        provider: normalizeUserKeyProvider(item.provider),
+        label: String(item.label || "").trim().slice(0, 80),
+        key: String(item.key || "").trim(),
+        createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString()
+      })).filter(item => item.key);
+    }
+
+    function normalizeUserKeyProvider(provider) {
+      const value = String(provider || "other").trim().toLowerCase();
+      return ["openai", "search", "media", "translation", "workflow", "other"].includes(value) ? value : "other";
+    }
+
+    function saveUserApiKeyFromForm() {
+      const provider = normalizeUserKeyProvider(userApiKeyProvider.value);
+      const key = userApiKeyValue.value.trim();
+      const label = userApiKeyLabel.value.trim() || userKeyProviderLabel(provider);
+      if (!key) {
+        flashStatus("Вставь ключ или URL");
+        return;
+      }
+      const existing = userApiKeys.find(item => item.provider === provider && item.label.toLowerCase() === label.toLowerCase());
+      if (existing) {
+        existing.key = key;
+        existing.createdAt = new Date().toISOString();
+      } else {
+        userApiKeys.push({
+          id: `key_${Date.now()}`,
+          provider,
+          label,
+          key,
+          createdAt: new Date().toISOString()
+        });
+      }
+      if (provider === "openai") {
+        aiKeyInput.value = key;
+        aiSettings = readAiSettingsForm();
+        saveAiSettingsFromForm("OpenAI ключ сохранён");
+      } else {
+        persistUserApiKeys("API ключ сохранён");
+      }
+      userApiKeyValue.value = "";
+      renderUserApiKeyList();
+    }
+
+    function persistUserApiKeys(message = "API ключи сохранены", showStatus = true) {
+      try {
+        localStorage.removeItem(USER_API_KEYS_LOCAL_KEY);
+        sessionStorage.removeItem(USER_API_KEYS_SESSION_KEY);
+        const remember = Boolean(aiRememberInput.checked || aiSettings.remember);
+        const storage = remember ? localStorage : sessionStorage;
+        const key = remember ? USER_API_KEYS_LOCAL_KEY : USER_API_KEYS_SESSION_KEY;
+        storage.setItem(key, JSON.stringify(userApiKeys));
+        if (showStatus && message) flashStatus(message);
+        return true;
+      } catch (_) {
+        if (showStatus) flashStatus("API ключи не сохранены");
+        return false;
+      }
+    }
+
+    function deleteUserApiKey(id) {
+      userApiKeys = userApiKeys.filter(item => item.id !== id);
+      persistUserApiKeys("API ключ удалён");
+      renderUserApiKeyList();
+    }
+
+    function clearUserApiKeys() {
+      userApiKeys = [];
+      localStorage.removeItem(USER_API_KEYS_LOCAL_KEY);
+      sessionStorage.removeItem(USER_API_KEYS_SESSION_KEY);
+      renderUserApiKeyList();
+      flashStatus("Локальные API ключи очищены");
+    }
+
+    function renderUserApiKeyList() {
+      if (!userApiKeyList) return;
+      if (!userApiKeys.length) {
+        userApiKeyList.innerHTML = `<div class="mini-note">Локальных ключей пока нет.</div>`;
+        return;
+      }
+      userApiKeyList.innerHTML = userApiKeys.map(item => `
+        <div class="settings-key-row">
+          <div class="settings-key-main">
+            <div class="settings-key-title">${escapeHtml(item.label || userKeyProviderLabel(item.provider))}</div>
+            <div class="settings-key-meta">${escapeHtml(userKeyProviderLabel(item.provider))} · ${escapeHtml(maskSecret(item.key))}</div>
+          </div>
+          <button type="button" data-delete-key="${escapeHtml(item.id)}" title="Удалить ключ">×</button>
+        </div>
+      `).join("");
+    }
+
+    function userKeyProviderLabel(provider) {
+      return {
+        openai: "OpenAI AI",
+        search: "Search / parser",
+        media: "Media generation",
+        translation: "Translation",
+        workflow: "Workflow webhook",
+        other: "Other"
+      }[provider] || "Other";
+    }
+
+    function maskSecret(value) {
+      const clean = String(value || "").trim();
+      if (!clean) return "empty";
+      if (/^https?:\/\//i.test(clean)) {
+        try {
+          return new URL(clean).host;
+        } catch (_) {
+          return "webhook URL";
+        }
+      }
+      if (clean.length <= 8) return "••••";
+      return `••••${clean.slice(-4)}`;
     }
 
     async function testAiConnection() {

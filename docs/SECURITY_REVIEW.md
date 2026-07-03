@@ -61,6 +61,9 @@ publishing approval are implemented.
 - In-board AI testing now uses a BYOK flow: user-provided OpenAI keys stay out
   of board project JSON and are forwarded through `/api/ai/respond` only for a
   single request.
+- The Settings button includes browser-only user key slots for future modules;
+  these values are intentionally not part of project export, project save, or
+  server-side connector storage.
 
 ## Known Limitations
 
@@ -94,6 +97,8 @@ publishing approval are implemented.
   by user choice. This is acceptable for alpha testing, but production should
   add account-level key management, rate limiting, provider spend controls, and
   clear user-facing key handling policy.
+- Local future-module key slots are not connected to production workers yet and
+  must not be treated as a secure multi-user vault.
 
 ### Low
 

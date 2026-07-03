@@ -6,6 +6,7 @@ import connectorStart from "../api/connectors/start.js";
 import connectorStatus from "../api/connectors/status.js";
 import aiRespond from "../api/ai/respond.js";
 import product from "../api/product.js";
+import userConfigSchema from "../api/user-config/schema.js";
 import { createSignedSessionToken } from "../api/_lib/session.js";
 import { getRecord } from "../api/_lib/storage.js";
 import { decryptSecret } from "../api/_lib/token-vault.js";
@@ -85,6 +86,11 @@ try {
   const connectorStatusPayload = await expectConnector("connector-status", connectorStatus, "GET", {});
   if (connectorStatusPayload.oauth.stateSigningImplemented !== true || connectorStatusPayload.oauth.stateSecretConfigured !== false) {
     throw new Error(`Expected connector state signing status, got ${JSON.stringify(connectorStatusPayload.oauth)}`);
+  }
+  const userConfig = await expectConnector("user-config-schema", userConfigSchema, "GET", {});
+  const openAiUserKey = userConfig.userVisibleFields?.find(field => field.key === "openaiApiKey");
+  if (!openAiUserKey?.secret || !openAiUserKey?.browserOnly || !userConfig.hiddenServerSideSecrets?.includes("OPENAI_API_KEY")) {
+    throw new Error(`Expected user BYOK schema to stay separate from owner secrets, got ${JSON.stringify(userConfig)}`);
   }
   const connectorMissingConfig = await expectConnector("connector-start-missing-config", connectorStart, "GET", { provider: "youtube" }, null, 501);
   if (connectorMissingConfig.error !== "connector_not_configured") {

@@ -37,6 +37,10 @@
   - users can enter their own OpenAI API key in the board UI;
   - keys are not included in project JSON, backend project saves, source zip, or repository code;
   - API smoke coverage verifies missing-key rejection and mocked OpenAI proxy behavior without a real key.
+- Expanded the AI entrypoint into a general Settings button:
+  - OpenAI BYOK remains the working AI path;
+  - browser-only slots now exist for future parser/media/translation/workflow keys;
+  - user config schema documents browser-only user keys separately from hidden owner/server secrets.
 - Verified local project is its own clean git repo on `main`.
 - Verified GitHub `origin/main` matches local commit `bef87cb`.
 - Verified public production endpoints are live:

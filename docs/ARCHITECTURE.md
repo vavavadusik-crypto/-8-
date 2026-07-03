@@ -37,10 +37,12 @@ Hermest Board is a browser-first interactive product prototype:
 ## Deploy Boundary
 
 The deployed frontend is safe to host publicly because it does not contain API secrets.
-AI requests use a bring-your-own-key flow: the user's OpenAI API key is kept in
-that user's browser storage and sent to `/api/ai/respond` only for the current
-request. The server endpoint does not persist the key or include it in project
-documents.
+The Settings button owns local BYOK configuration. AI requests use a
+bring-your-own-key flow: the user's OpenAI API key is kept in that user's
+browser storage and sent to `/api/ai/respond` only for the current request. The
+server endpoint does not persist the key or include it in project documents.
+The same settings area has browser-only slots for future parser, media,
+translation, and workflow keys; these slots are not a production secret vault.
 
 All autonomous actions need a durable backend:
 
