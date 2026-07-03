@@ -16,7 +16,7 @@ eventually publish approved videos to connected user accounts.
 - Production URL: `https://hermest-board.vercel.app`
 - Current version: `0.2.0`
 - Current branch: `main`
-- Last known product commit before this handoff: `45b1e81 feat: add product API storage contract`
+- Last known product commit before this handoff: `799cf44 docs: add postgres schema sql draft`
 
 ## Current Product State
 
