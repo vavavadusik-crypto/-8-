@@ -41,8 +41,11 @@ async function checkPreflight() {
   assert(json.canWriteProductionProjects === false, "preflight production writes must stay false");
   assert(json.canAutopublish === false, "preflight autopublish must stay false");
   assert(json.storage?.adapterInterfaceImplemented === true, "preflight storage adapter interface");
-  assert(json.storage?.durableAdapterImplemented === false, "preflight durable adapter disabled");
+  assert(json.storage?.durableAdapterImplemented === true, "preflight durable adapter implementation");
+  assert(json.storage?.durableAdapterConfigured === false, "preflight durable adapter must stay unconfigured on production");
+  assert(json.storage?.durableAdapterEnabled === false, "preflight durable adapter must stay disabled on production");
   assert(json.blockers?.includes("real_user_auth_not_implemented"), "preflight real auth blocker");
+  assert(json.blockers?.includes("durable_storage_adapter_not_configured"), "preflight durable storage configuration blocker");
 }
 
 async function checkSessionCurrent() {
