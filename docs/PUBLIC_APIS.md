@@ -11,6 +11,7 @@ GET /api/public/sources
 GET /api/research/search?q=ai+agents
 GET /api/user-config/schema
 GET /api-provider-catalog.json
+POST /api/ai/respond
 GET /api/connectors/start?provider=youtube
 GET /api/connectors/start?provider=tiktok
 GET /api/connectors/start?provider=instagram
@@ -48,6 +49,10 @@ routers, public search, stock media, voice, social publishing, workflow
 automation, email, payments, and storage. The catalog stores official docs and
 signup URLs, not secret values. Users must bring their own keys or activate
 no-key sources.
+
+`POST /api/ai/respond` supports BYOK AI requests for OpenAI and selected
+OpenAI-compatible providers. The key is passed per request and is not stored by
+the endpoint.
 
 ## Security Rules
 

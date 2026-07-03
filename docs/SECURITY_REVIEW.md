@@ -58,9 +58,9 @@ publishing approval are implemented.
   redacts token material from API responses; token exchange is still disabled.
 - Job approval route records human approve/reject decisions but keeps execution
   blocked until durable approval-gated workers exist.
-- In-board AI testing now uses a BYOK flow: user-provided OpenAI keys stay out
-  of board project JSON and are forwarded through `/api/ai/respond` only for a
-  single request.
+- In-board AI testing now uses a BYOK flow: user-provided AI provider keys stay
+  out of board project JSON and are forwarded through `/api/ai/respond` only
+  for a single request.
 - The Settings button includes browser-only user key slots for future modules;
   these values are intentionally not part of project export, project save, or
   server-side connector storage.

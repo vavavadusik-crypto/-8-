@@ -51,26 +51,49 @@ try {
   const originalFetch = globalThis.fetch;
   try {
     globalThis.fetch = async (url, options = {}) => {
-      if (url !== "https://api.openai.com/v1/responses") {
-        throw new Error(`Unexpected AI provider URL: ${url}`);
-      }
-      if (options.headers?.authorization !== "Bearer smoke-user-openai-key") {
-        throw new Error("Expected user-owned key to be forwarded only in Authorization header.");
-      }
-      if (String(options.body || "").includes("smoke-user-openai-key")) {
-        throw new Error("AI request body must not contain the API key.");
-      }
-      return {
-        ok: true,
-        status: 200,
-        async text() {
-          return JSON.stringify({
-            id: "resp_smoke",
-            output_text: "AI smoke ok",
-            usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8 }
-          });
+      if (url === "https://api.openai.com/v1/responses") {
+        if (options.headers?.authorization !== "Bearer smoke-user-openai-key") {
+          throw new Error("Expected user-owned OpenAI key to be forwarded only in Authorization header.");
         }
-      };
+        if (String(options.body || "").includes("smoke-user-openai-key")) {
+          throw new Error("AI request body must not contain the OpenAI API key.");
+        }
+        return {
+          ok: true,
+          status: 200,
+          async text() {
+            return JSON.stringify({
+              id: "resp_smoke",
+              output_text: "AI smoke ok",
+              usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8 }
+            });
+          }
+        };
+      }
+      if (url === "https://api.groq.com/openai/v1/chat/completions") {
+        if (options.headers?.authorization !== "Bearer smoke-user-groq-key") {
+          throw new Error("Expected user-owned Groq key to be forwarded only in Authorization header.");
+        }
+        if (String(options.body || "").includes("smoke-user-groq-key")) {
+          throw new Error("AI request body must not contain the Groq API key.");
+        }
+        const request = JSON.parse(String(options.body || "{}"));
+        if (!Array.isArray(request.messages) || request.max_tokens !== 1400) {
+          throw new Error(`Expected chat completions payload, got ${JSON.stringify(request)}`);
+        }
+        return {
+          ok: true,
+          status: 200,
+          async text() {
+            return JSON.stringify({
+              id: "chatcmpl_smoke",
+              choices: [{ message: { content: "Groq smoke ok" } }],
+              usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 }
+            });
+          }
+        };
+      }
+      throw new Error(`Unexpected AI provider URL: ${url}`);
     };
     const aiResponse = await expectAi("ai-respond-openai-mock", "POST", {
       prompt: "Check Hermest Board AI settings.",
@@ -79,6 +102,16 @@ try {
     }, 200, { authorization: "Bearer smoke-user-openai-key" });
     if (aiResponse.text !== "AI smoke ok" || aiResponse.provider !== "openai") {
       throw new Error(`Expected mocked AI response, got ${JSON.stringify(aiResponse)}`);
+    }
+    const groqResponse = await expectAi("ai-respond-groq-mock", "POST", {
+      provider: "groq",
+      prompt: "Check Hermest Board Groq settings.",
+      context: "Board title: API smoke",
+      model: "llama-3.3-70b-versatile",
+      maxOutputTokens: 1400
+    }, 200, { authorization: "Bearer smoke-user-groq-key" });
+    if (groqResponse.text !== "Groq smoke ok" || groqResponse.provider !== "groq") {
+      throw new Error(`Expected mocked Groq response, got ${JSON.stringify(groqResponse)}`);
     }
   } finally {
     globalThis.fetch = originalFetch;

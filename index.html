@@ -761,6 +761,11 @@
                 <label><span>Provider</span></label>
                 <select id="aiProvider">
                   <option value="openai">OpenAI</option>
+                  <option value="groq">Groq</option>
+                  <option value="mistral">Mistral AI</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="together">Together AI</option>
                 </select>
               </div>
               <div class="field">
@@ -772,7 +777,7 @@
                 <input id="aiKey" type="password" placeholder="sk-... / sk-proj-..." autocomplete="off" spellcheck="false">
               </div>
               <label class="check-item"><input id="aiRemember" type="checkbox"> Запомнить на этом устройстве</label>
-              <div class="mini-note">OpenAI ключ отправляется на сервер только на время AI-запроса через BYOK proxy.</div>
+              <div class="mini-note">AI ключ выбранного провайдера отправляется на сервер только на время BYOK-запроса.</div>
               <div class="field">
                 <label><span>Задача AI</span></label>
                 <textarea id="aiPrompt" placeholder="Например: проверь текущий борд и предложи следующий сильный шаг для продукта"></textarea>
@@ -874,6 +879,14 @@
       ["email", "Email"],
       ["payments", "Payments"]
     ];
+    const AI_PROVIDER_DEFAULT_MODELS = {
+      openai: "gpt-4.1-mini",
+      groq: "llama-3.3-70b-versatile",
+      mistral: "mistral-small-latest",
+      openrouter: "openai/gpt-4.1-mini",
+      deepseek: "deepseek-chat",
+      together: "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+    };
     const FALLBACK_API_PROVIDER_CATALOG = [
       { id: "openai", name: "OpenAI", category: "ai_text", auth: "api_key", freeMode: "paid_or_trial", env: "OPENAI_API_KEY", docs: "https://platform.openai.com/docs", signup: "https://platform.openai.com/api-keys", use: "Primary BYOK AI assistant", status: "working_ai" },
       { id: "gemini", name: "Google Gemini API", category: "ai_text", auth: "api_key", freeMode: "free_tier", env: "GEMINI_API_KEY", docs: "https://ai.google.dev/gemini-api/docs", signup: "https://aistudio.google.com/apikey", use: "Alternative multimodal AI provider", status: "key_slot" },
@@ -1751,6 +1764,15 @@
     document.getElementById("saveAiSettings").addEventListener("click", () => {
       saveAiSettingsFromForm();
     });
+    aiProviderInput.addEventListener("change", () => {
+      const provider = aiProviderInput.value;
+      const defaultModel = AI_PROVIDER_DEFAULT_MODELS[provider] || AI_PROVIDER_DEFAULT_MODELS.openai;
+      if (!aiModelInput.value.trim() || Object.values(AI_PROVIDER_DEFAULT_MODELS).includes(aiModelInput.value.trim())) {
+        aiModelInput.value = defaultModel;
+      }
+      const savedKey = userApiKeys.find(item => item.provider === provider && item.key);
+      if (savedKey) aiKeyInput.value = savedKey.key;
+    });
     document.getElementById("clearAiSettings").addEventListener("click", () => {
       clearAiSettings();
     });
@@ -2178,9 +2200,10 @@
 
     function normalizeAiSettings(input, fallback) {
       const source = input && typeof input === "object" ? input : {};
+      const provider = AI_PROVIDER_DEFAULT_MODELS[source.provider] ? source.provider : fallback.provider;
       return {
-        provider: source.provider === "openai" ? "openai" : fallback.provider,
-        model: typeof source.model === "string" && source.model.trim() ? source.model.trim() : fallback.model,
+        provider,
+        model: typeof source.model === "string" && source.model.trim() ? source.model.trim() : AI_PROVIDER_DEFAULT_MODELS[provider],
         apiKey: typeof source.apiKey === "string" ? source.apiKey : fallback.apiKey,
         remember: Boolean(source.remember)
       };
@@ -2198,9 +2221,10 @@
     }
 
     function readAiSettingsForm() {
+      const provider = AI_PROVIDER_DEFAULT_MODELS[aiProviderInput.value] ? aiProviderInput.value : "openai";
       return {
-        provider: aiProviderInput.value || "openai",
-        model: aiModelInput.value.trim() || "gpt-4.1-mini",
+        provider,
+        model: aiModelInput.value.trim() || AI_PROVIDER_DEFAULT_MODELS[provider],
         apiKey: aiKeyInput.value.trim(),
         remember: aiRememberInput.checked
       };
@@ -2411,10 +2435,14 @@
         docs: providerMeta.docs,
         status: providerMeta.status
       });
-      if (providerMeta.id === "openai") {
+      if (AI_PROVIDER_DEFAULT_MODELS[providerMeta.id]) {
+        aiProviderInput.value = providerMeta.id;
+        if (!aiModelInput.value.trim() || Object.values(AI_PROVIDER_DEFAULT_MODELS).includes(aiModelInput.value.trim())) {
+          aiModelInput.value = AI_PROVIDER_DEFAULT_MODELS[providerMeta.id];
+        }
         aiKeyInput.value = key;
         aiSettings = readAiSettingsForm();
-        saveAiSettingsFromForm("OpenAI ключ сохранён");
+        saveAiSettingsFromForm(`${providerMeta.name} ключ сохранён`);
       } else {
         persistUserApiKeys("API ключ сохранён");
       }
@@ -2555,6 +2583,7 @@
     function statusLabel(status) {
       return {
         working_ai: "working",
+        working_ai_compatible: "working AI",
         working_public_search: "working public",
         key_slot: "key slot",
         server_optional_key: "server optional",

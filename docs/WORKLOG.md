@@ -45,6 +45,10 @@
   - 40+ provider slots across AI, search, media, speech, social publishing, automation, storage, email, and payments;
   - catalog stores official docs/signup links and free/no-key metadata, not API secrets;
   - settings UI can filter providers by category, open official docs, activate no-key sources, and store user-owned keys locally.
+- Expanded `/api/ai/respond` beyond OpenAI:
+  - OpenAI still uses the Responses API;
+  - Groq, Mistral, OpenRouter, DeepSeek, and Together AI use chat-completions style BYOK requests;
+  - smoke coverage checks both OpenAI Responses and Groq-compatible paths without real keys.
 - Expanded no-key public research:
   - added Wikidata, Wikimedia Commons, and Open Library search;
   - added per-provider timeout so slow public APIs do not block the whole research response.

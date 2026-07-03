@@ -19,7 +19,7 @@ Hermest Board is a browser-first interactive product prototype:
 - `GET /api/public/sources` - public/free source registry;
 - `GET /api/research/search?q=...` - server-side public source search;
 - `GET /api-provider-catalog.json` - static provider catalog for settings and BYOK key slots;
-- `POST /api/ai/respond` - user-key AI response proxy for in-board BYOK testing;
+- `POST /api/ai/respond` - user-key AI response proxy for in-board BYOK testing across OpenAI and supported OpenAI-compatible providers;
 - `GET /api/connectors/start?provider=...` - OAuth start URL with signed state for per-user account connection;
 - `GET /api/connectors/callback` - validates signed state, then stops before token exchange;
 - `GET /api/user-config/schema` - documents what users can configure without seeing owner secrets;
@@ -39,9 +39,11 @@ Hermest Board is a browser-first interactive product prototype:
 
 The deployed frontend is safe to host publicly because it does not contain API secrets.
 The Settings button owns local BYOK configuration. AI requests use a
-bring-your-own-key flow: the user's OpenAI API key is kept in that user's
-browser storage and sent to `/api/ai/respond` only for the current request. The
-server endpoint does not persist the key or include it in project documents.
+bring-your-own-key flow: the user's selected provider key is kept in that user's
+browser storage and sent to `/api/ai/respond` only for the current request.
+The server endpoint does not persist the key or include it in project documents.
+The current working AI providers are OpenAI Responses API plus OpenAI-compatible
+chat-completions providers: Groq, Mistral, OpenRouter, DeepSeek, and Together AI.
 The same settings area has browser-only slots for future parser, media,
 translation, and workflow keys; these slots are not a production secret vault.
 The provider catalog stores docs/signup metadata only. It does not include API

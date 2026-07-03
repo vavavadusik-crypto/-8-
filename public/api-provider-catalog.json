@@ -36,7 +36,7 @@
       "docs": "https://console.groq.com/docs/quickstart",
       "signup": "https://console.groq.com/keys",
       "use": "Fast OpenAI-compatible chat models",
-      "status": "key_slot"
+      "status": "working_ai_compatible"
     },
     {
       "id": "mistral",
@@ -48,7 +48,7 @@
       "docs": "https://docs.mistral.ai/",
       "signup": "https://console.mistral.ai/api-keys/",
       "use": "Alternative LLM, coding, translation and analysis",
-      "status": "key_slot"
+      "status": "working_ai_compatible"
     },
     {
       "id": "huggingface",
@@ -72,7 +72,7 @@
       "docs": "https://openrouter.ai/docs/quickstart",
       "signup": "https://openrouter.ai/settings/keys",
       "use": "Multi-model OpenAI-compatible router",
-      "status": "key_slot"
+      "status": "working_ai_compatible"
     },
     {
       "id": "deepseek",
@@ -84,7 +84,7 @@
       "docs": "https://api-docs.deepseek.com/",
       "signup": "https://platform.deepseek.com/api_keys",
       "use": "OpenAI-compatible reasoning and chat models",
-      "status": "key_slot"
+      "status": "working_ai_compatible"
     },
     {
       "id": "together",
@@ -96,7 +96,7 @@
       "docs": "https://docs.together.ai/docs/quickstart",
       "signup": "https://api.together.ai/settings/api-keys",
       "use": "OpenAI-compatible open-source and specialist models",
-      "status": "key_slot"
+      "status": "working_ai_compatible"
     },
     {
       "id": "anthropic",

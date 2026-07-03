@@ -51,7 +51,7 @@ npm run check
 - human approval record endpoint for publish jobs;
 - Settings button inside the board for user-owned OpenAI keys and future local parser/media/translation/workflow keys;
 - API provider catalog with 40+ AI, search, media, speech, social, automation, storage, email, and payment providers;
-- BYOK AI response proxy and AI-answer cards;
+- BYOK AI response proxy and AI-answer cards for OpenAI plus OpenAI-compatible providers such as Groq, Mistral, OpenRouter, DeepSeek, and Together AI;
 - per-user OAuth start skeleton for YouTube, TikTok, Instagram;
 - signed OAuth state validation before connector token exchange;
 - encrypted connector token vault with redacted API responses;

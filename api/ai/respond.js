@@ -1,7 +1,43 @@
 import { readJson, requireMethods, sendJson } from "../_lib/http.js";
 
-const DEFAULT_MODEL = "gpt-4.1-mini";
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+const AI_PROVIDERS = {
+  openai: {
+    label: "OpenAI",
+    mode: "responses",
+    url: "https://api.openai.com/v1/responses",
+    defaultModel: "gpt-4.1-mini"
+  },
+  groq: {
+    label: "Groq",
+    mode: "chat_completions",
+    url: "https://api.groq.com/openai/v1/chat/completions",
+    defaultModel: "llama-3.3-70b-versatile"
+  },
+  mistral: {
+    label: "Mistral AI",
+    mode: "chat_completions",
+    url: "https://api.mistral.ai/v1/chat/completions",
+    defaultModel: "mistral-small-latest"
+  },
+  openrouter: {
+    label: "OpenRouter",
+    mode: "chat_completions",
+    url: "https://openrouter.ai/api/v1/chat/completions",
+    defaultModel: "openai/gpt-4.1-mini"
+  },
+  deepseek: {
+    label: "DeepSeek",
+    mode: "chat_completions",
+    url: "https://api.deepseek.com/chat/completions",
+    defaultModel: "deepseek-chat"
+  },
+  together: {
+    label: "Together AI",
+    mode: "chat_completions",
+    url: "https://api.together.xyz/v1/chat/completions",
+    defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+  }
+};
 
 export default async function handler(request, response) {
   if (!requireMethods(request, response, ["POST"])) return;
@@ -9,11 +45,12 @@ export default async function handler(request, response) {
   try {
     const body = await readJson(request);
     const provider = normalizeProvider(body.provider);
-    if (provider !== "openai") {
+    const providerConfig = AI_PROVIDERS[provider];
+    if (!providerConfig) {
       sendJson(response, 400, {
         ok: false,
         error: "unsupported_ai_provider",
-        supportedProviders: ["openai"]
+        supportedProviders: Object.keys(AI_PROVIDERS)
       });
       return;
     }
@@ -23,7 +60,7 @@ export default async function handler(request, response) {
       sendJson(response, 401, {
         ok: false,
         error: "api_key_required",
-        note: "Send a user-owned OpenAI API key in the Authorization header."
+        note: `Send a user-owned ${providerConfig.label} API key in the Authorization header.`
       });
       return;
     }
@@ -37,22 +74,19 @@ export default async function handler(request, response) {
       return;
     }
 
-    const model = sanitizeModel(body.model) || DEFAULT_MODEL;
-    const upstreamPayload = {
-      model,
-      input: buildInput(prompt, body.context)
-    };
+    const model = sanitizeModel(body.model) || providerConfig.defaultModel;
+    const upstreamPayload = buildUpstreamPayload(providerConfig, model, prompt, body.context);
     const temperature = sanitizeNumber(body.temperature, 0, 2);
     if (temperature !== null) upstreamPayload.temperature = temperature;
     const maxOutputTokens = sanitizeInteger(body.maxOutputTokens, 64, 6000);
-    if (maxOutputTokens !== null) upstreamPayload.max_output_tokens = maxOutputTokens;
+    if (maxOutputTokens !== null) {
+      if (providerConfig.mode === "responses") upstreamPayload.max_output_tokens = maxOutputTokens;
+      else upstreamPayload.max_tokens = maxOutputTokens;
+    }
 
-    const upstream = await fetch(OPENAI_RESPONSES_URL, {
+    const upstream = await fetch(providerConfig.url, {
       method: "POST",
-      headers: {
-        "authorization": `Bearer ${apiKey}`,
-        "content-type": "application/json"
-      },
+      headers: providerHeaders(provider, apiKey),
       body: JSON.stringify(upstreamPayload)
     });
     const text = await upstream.text();
@@ -72,6 +106,7 @@ export default async function handler(request, response) {
     sendJson(response, 200, {
       ok: true,
       provider,
+      providerLabel: providerConfig.label,
       model,
       text: extractOutputText(data),
       responseId: data?.id || "",
@@ -84,6 +119,38 @@ export default async function handler(request, response) {
       message: sanitizeProviderMessage(error?.message || "unknown_error")
     });
   }
+}
+
+function providerHeaders(provider, apiKey) {
+  const headers = {
+    "authorization": `Bearer ${apiKey}`,
+    "content-type": "application/json"
+  };
+  if (provider === "openrouter") {
+    headers["HTTP-Referer"] = "https://hermest-board.vercel.app";
+    headers["X-Title"] = "Hermest Board";
+  }
+  return headers;
+}
+
+function buildUpstreamPayload(providerConfig, model, prompt, context) {
+  const input = buildInput(prompt, context);
+  if (providerConfig.mode === "responses") {
+    return { model, input };
+  }
+  return {
+    model,
+    messages: [
+      {
+        role: "system",
+        content: "You are an AI assistant inside Hermest Board. Be concise, structured, and practical."
+      },
+      {
+        role: "user",
+        content: input
+      }
+    ]
+  };
 }
 
 function normalizeProvider(provider) {
@@ -137,6 +204,11 @@ function parseJson(text) {
 
 function extractOutputText(data) {
   if (typeof data?.output_text === "string") return data.output_text.trim();
+  const chatText = data?.choices?.[0]?.message?.content;
+  if (typeof chatText === "string") return chatText.trim();
+  if (Array.isArray(chatText)) {
+    return chatText.map(part => typeof part === "string" ? part : part?.text || "").filter(Boolean).join("\n").trim();
+  }
   const parts = [];
   for (const item of data?.output || []) {
     for (const content of item?.content || []) {
