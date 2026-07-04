@@ -752,6 +752,9 @@
             <button id="runResearchSearch" title="Искать через публичные web API">Public search</button>
             <button id="showConnectorGuide" title="Показать как пользователю подключить аккаунты">Аккаунты</button>
           </div>
+          <div class="panel-row wide">
+            <button id="showReadinessReport" title="Проверить готовность продукта к версии 1.0.0">1.0 статус</button>
+          </div>
           <div class="panel-section" id="settingsPanel">
             <h2>Настройки</h2>
             <div class="mini-note">Пользовательские ключи живут только в этом браузере. Экспорт JSON и backend save их не забирают.</div>
@@ -1752,6 +1755,7 @@
     });
     document.getElementById("runResearchSearch").addEventListener("click", runResearchSearch);
     document.getElementById("showConnectorGuide").addEventListener("click", showConnectorGuide);
+    document.getElementById("showReadinessReport").addEventListener("click", showReadinessReport);
     document.getElementById("showStorageStatus").addEventListener("click", showStorageStatus);
     document.getElementById("saveProjectApi").addEventListener("click", saveProjectApi);
     document.getElementById("loadProjectApi").addEventListener("click", loadProjectApi);
@@ -2047,6 +2051,29 @@
       state.publish.packageText = lines.join("\n");
       publishOutput.value = state.publish.packageText;
       saveState("Схема аккаунтов показана");
+    }
+
+    async function showReadinessReport() {
+      statusEl.textContent = "Проверяю готовность 1.0";
+      try {
+        const data = await fetchJson(productApi("preflight"));
+        state.publish.packageText = formatReadinessReport(data);
+        publishOutput.value = state.publish.packageText;
+        saveState(data.launchReady ? "1.0 gate готов" : "1.0 gate ещё заблокирован");
+      } catch (error) {
+        state.publish.packageText = [
+          "HERMEST BOARD 1.0 READINESS",
+          "",
+          "Preflight API недоступен.",
+          "",
+          `Ошибка: ${error.message || "unknown"}`,
+          "",
+          "Локально проверь: npm run check",
+          "На production проверь: /api/product?route=preflight"
+        ].join("\n");
+        publishOutput.value = state.publish.packageText;
+        saveState("1.0 preflight недоступен");
+      }
     }
 
     async function showStorageStatus() {
@@ -2771,6 +2798,43 @@
         "",
         "Warnings:",
         ...(data.warnings?.length ? data.warnings.map(item => `- ${item}`) : ["- none"])
+      ].join("\n");
+    }
+
+    function formatReadinessReport(data) {
+      const gates = Array.isArray(data.gates) ? data.gates : [];
+      const blockers = Array.isArray(data.blockers) ? data.blockers : [];
+      const nextWork = Array.isArray(data.nextRequiredWork) ? data.nextRequiredWork : [];
+      const connectors = Object.entries(data.connectors || {}).map(([key, value]) =>
+        `- ${key}: ${value?.configured ? "configured" : `missing ${Array.isArray(value?.missing) ? value.missing.join(", ") : "config"}`}`
+      );
+      return [
+        "HERMEST BOARD 1.0 READINESS",
+        "",
+        `Version: ${data.version || "unknown"}`,
+        `Status: ${data.status || "unknown"}`,
+        `Launch ready: ${data.launchReady ? "yes" : "no"}`,
+        `Private data safe: ${data.canAcceptPrivateData ? "yes" : "no"}`,
+        `Production writes: ${data.canWriteProductionProjects ? "enabled" : "blocked"}`,
+        `Agent jobs: ${data.canRunAgentJobs ? "enabled" : "blocked"}`,
+        `Autopublish: ${data.canAutopublish ? "enabled" : "blocked"}`,
+        "",
+        "Gates:",
+        ...(gates.length ? gates.map(gate => `- ${gate.ready ? "ready" : "blocked"}: ${gate.id} - ${gate.note}`) : ["- no gate data"]),
+        "",
+        "Connectors:",
+        ...(connectors.length ? connectors : ["- no connector data"]),
+        "",
+        "Blockers:",
+        ...(blockers.length ? blockers.map(item => `- ${item}`) : ["- none"]),
+        "",
+        "Next required work:",
+        ...(nextWork.length ? nextWork.map((item, index) => `${index + 1}. ${item}`) : ["1. No next work returned by API."]),
+        "",
+        "Decision:",
+        data.launchReady
+          ? "Можно начинать production launch checklist."
+          : "Оставить продукт в alpha/demo режиме до закрытия storage/auth/worker/OAuth gates."
       ].join("\n");
     }
 

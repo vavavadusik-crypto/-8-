@@ -49,6 +49,10 @@
   - OpenAI still uses the Responses API;
   - Groq, Mistral, OpenRouter, DeepSeek, and Together AI use chat-completions style BYOK requests;
   - smoke coverage checks both OpenAI Responses and Groq-compatible paths without real keys.
+- Added an in-board `1.0 статус` readiness report:
+  - fetches `/api/product?route=preflight`;
+  - formats gates, connector config, blockers, and next required work in the publish output area;
+  - keeps alpha/demo mode explicit until storage, auth, OAuth, jobs, and approval-gated workers are complete.
 - Expanded no-key public research:
   - added Wikidata, Wikimedia Commons, and Open Library search;
   - added per-provider timeout so slow public APIs do not block the whole research response.

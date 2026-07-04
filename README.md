@@ -47,6 +47,7 @@ npm run check
 - guarded Postgres JSONB adapter foundation for future durable storage;
 - signed-session verification and owner-token bootstrap issuer foundation;
 - backend production preflight route for readiness gates and blockers;
+- in-board `1.0 статус` report powered by backend preflight gates/blockers;
 - backend agent plan preview that shows blockers before autopublishing;
 - human approval record endpoint for publish jobs;
 - Settings button inside the board for user-owned OpenAI keys and future local parser/media/translation/workflow keys;
