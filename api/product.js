@@ -1,3 +1,4 @@
+import { createAccount, getAccountAuthStatus, verifyAccountCredentials } from "./_lib/accounts.js";
 import { getAuthStatus, getRequestActor, requireOwnerToken, requireReadAccess, requireWriteAccess } from "./_lib/auth.js";
 import { filterRecordsForActor, requireRecordAccess } from "./_lib/authorization.js";
 import { buildAgentPlan } from "./_lib/agent-plan.js";
@@ -52,20 +53,46 @@ export default async function handler(request, response) {
       if (!requireMethods(request, response, ["GET"])) return;
       const actor = getRequestActor(request);
       const auth = getAuthStatus();
+      const accountAuth = getAccountAuthStatus();
       sendJson(response, 200, {
         ok: true,
         auth,
         actor,
+        accountAuth,
         session: {
           signedSessionVerifierImplemented: auth.session.verifierImplemented,
           signedSessionIssuerImplemented: auth.session.issuerImplemented,
           ownerTokenBootstrapIssuerAvailable: auth.session.ownerTokenBootstrapIssuerAvailable,
-          realUserAuthImplemented: false,
+          realUserAuthImplemented: accountAuth.implemented,
+          realUserAuthEnabled: accountAuth.enabled,
+          realUserAuthReady: accountAuth.ready,
           authenticated: actor.authenticated,
           mode: actor.mode,
-          note: "Bootstrap actor only. Replace with signed per-user sessions before production writes."
+          note: accountAuth.ready
+            ? "Account auth can issue signed httpOnly cookie sessions. Production writes still require durable storage and live verification."
+            : "Bootstrap actor plus account-auth foundation. Enable account auth before public user sessions."
         }
       });
+      return;
+    }
+
+    if (path[0] === "auth" && path[1] === "status") {
+      await handleAuthStatus(request, response);
+      return;
+    }
+
+    if (path[0] === "auth" && path[1] === "signup") {
+      await handleAuthSignup(request, response);
+      return;
+    }
+
+    if (path[0] === "auth" && path[1] === "login") {
+      await handleAuthLogin(request, response);
+      return;
+    }
+
+    if (path[0] === "auth" && path[1] === "logout") {
+      await handleAuthLogout(request, response);
       return;
     }
 
@@ -139,6 +166,76 @@ export default async function handler(request, response) {
   }
 }
 
+async function handleAuthStatus(request, response) {
+  if (!requireMethods(request, response, ["GET"])) return;
+  sendJson(response, 200, {
+    ok: true,
+    auth: getAuthStatus(),
+    accountAuth: getAccountAuthStatus(),
+    actor: getRequestActor(request)
+  });
+}
+
+async function handleAuthSignup(request, response) {
+  if (!requireMethods(request, response, ["POST"])) return;
+  const body = await readJson(request);
+  const account = await createAccount(body);
+  const session = issueAccountSession(response, account, body.ttlSeconds);
+  await appendAudit("account.created", {
+    workspaceId: account.workspaceId,
+    ownerUserId: account.id,
+    email: account.email
+  }, session.actor);
+  sendJson(response, 201, {
+    ok: true,
+    account,
+    actor: session.actor,
+    expiresAt: session.expiresAt,
+    tokenReturned: false,
+    note: "Signed session was set as an httpOnly cookie."
+  });
+}
+
+async function handleAuthLogin(request, response) {
+  if (!requireMethods(request, response, ["POST"])) return;
+  const body = await readJson(request);
+  const account = await verifyAccountCredentials(body);
+  const session = issueAccountSession(response, account, body.ttlSeconds);
+  await appendAudit("account.login", {
+    workspaceId: account.workspaceId,
+    ownerUserId: account.id,
+    email: account.email
+  }, session.actor);
+  sendJson(response, 200, {
+    ok: true,
+    account,
+    actor: session.actor,
+    expiresAt: session.expiresAt,
+    tokenReturned: false,
+    note: "Signed session was set as an httpOnly cookie."
+  });
+}
+
+async function handleAuthLogout(request, response) {
+  if (!requireMethods(request, response, ["POST"])) return;
+  const actor = getRequestActor(request);
+  clearSessionCookie(response);
+  if (actor.authenticated) {
+    await appendAudit("account.logout", {
+      workspaceId: actor.workspaceId,
+      ownerUserId: actor.id
+    }, actor);
+  }
+  sendJson(response, 200, {
+    ok: true,
+    actor: {
+      authenticated: false,
+      id: "anonymous",
+      mode: "signed-out"
+    }
+  });
+}
+
 async function handleSessionBootstrap(request, response) {
   if (!requireMethods(request, response, ["POST"])) return;
 
@@ -181,6 +278,38 @@ async function handleSessionBootstrap(request, response) {
     expiresAt: new Date(exp * 1000).toISOString(),
     note: "Owner-token bootstrap token. Do not expose it in browser bundles or public logs."
   });
+}
+
+function issueAccountSession(response, account, ttlSecondsInput) {
+  const ttlSeconds = clampTtlSeconds(ttlSecondsInput || 86_400);
+  const now = Math.floor(Date.now() / 1000);
+  const exp = now + ttlSeconds;
+  const token = createSignedSessionToken({
+    sub: account.id,
+    workspaceId: account.workspaceId,
+    iat: now,
+    exp
+  });
+  setSessionCookie(response, token, ttlSeconds);
+  return {
+    actor: {
+      authenticated: true,
+      id: account.id,
+      workspaceId: account.workspaceId,
+      mode: "signed-session"
+    },
+    expiresAt: new Date(exp * 1000).toISOString()
+  };
+}
+
+function setSessionCookie(response, token, maxAge) {
+  const secure = process.env.VERCEL ? "; Secure" : "";
+  response.setHeader("Set-Cookie", `hermest_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure}`);
+}
+
+function clearSessionCookie(response) {
+  const secure = process.env.VERCEL ? "; Secure" : "";
+  response.setHeader("Set-Cookie", `hermest_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure}`);
 }
 
 async function handleProjectsIndex(request, response) {

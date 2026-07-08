@@ -41,6 +41,9 @@ It is not yet ready for:
 - production guard that blocks unsafe public Vercel writes without durable storage;
 - bootstrap owner-token write guard for temporary demo storage;
 - owner-token gated signed-session bootstrap issuer for controlled demos;
+- account-auth foundation with signup/login/logout routes, scrypt password
+  hashing, httpOnly signed session cookies, and in-board account status controls
+  when `HERMEST_ACCOUNT_AUTH=1` is enabled with writable storage;
 - owner-token read guard for temporary public Vercel demo storage;
 - signed OAuth state generation and callback validation guard;
 - encrypted connector token vault with redacted API responses;
@@ -55,7 +58,7 @@ It is not yet ready for:
 ## Required Before Beta
 
 - connect and enable durable project storage outside `localStorage`;
-- user accounts;
+- enable and verify account auth on durable storage;
 - OAuth connector token exchange and account lifecycle;
 - server-side secrets;
 - asset storage;

@@ -47,8 +47,12 @@ publishing approval are implemented.
 - `session/current` exposes only bootstrap actor metadata; it is not final
   per-user authentication.
 - Signed session token verification exists, and an owner-token gated bootstrap
-  issuer can mint short-lived demo/migration tokens. Public token issuance and
-  full per-user authorization are still intentionally blocked.
+  issuer can mint short-lived demo/migration tokens. The bootstrap issuer is
+  still owner-token only.
+- Account-auth foundation exists behind explicit env gating. Signup/login can
+  create redacted user records with scrypt password hashes and set signed
+  httpOnly session cookies when `HERMEST_ACCOUNT_AUTH=1`,
+  `HERMEST_SESSION_SECRET`, and writable storage are configured.
 - Project, asset, job, and audit routes enforce bootstrap `workspaceId` checks
   for signed-session actors; this does not yet cover the full future workspace
   membership model.
@@ -72,10 +76,13 @@ publishing approval are implemented.
 
 ### High
 
-- No real user authentication or session model exists yet.
+- Account-auth foundation exists, but final production identity is not complete
+  yet.
 - No durable production database is connected and enabled yet.
 - No final workspace membership or role model exists for user-owned projects.
   Current signed-session authorization is only a bootstrap `workspaceId` guard.
+- Account signup/login lacks password recovery, email verification, account
+  deletion, rate limiting, and CSRF hardening for cookie-auth state changes.
 - Encrypted OAuth token storage exists as a guarded backend vault, but real
   provider token exchange and connector lifecycle are not complete.
 - Autopublishing is intentionally not executable yet.
@@ -117,7 +124,9 @@ publishing approval are implemented.
 Do not enable public project writes until all of the following are complete:
 
 1. Durable database adapter is implemented and deployed.
-2. Authentication is implemented with a real provider or signed session system.
+2. Authentication is enabled and verified with a production identity provider or
+   the account-auth signed session system plus recovery, rate limiting, and CSRF
+   controls.
 3. Every project, asset, job, and audit record has owner/workspace ownership.
 4. Every read/write route enforces authorization.
 5. Secrets and OAuth tokens are encrypted server-side.

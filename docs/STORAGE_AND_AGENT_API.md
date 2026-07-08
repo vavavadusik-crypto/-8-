@@ -26,8 +26,11 @@ The response also includes `auth` status:
 - temporary demo-storage reads on public Vercel also require
   `HERMEST_OWNER_TOKEN` so saved demo projects, assets, jobs, and audit rows are
   not listed publicly;
-- real SaaS work must replace owner-token auth with per-user sessions and
-  project ownership.
+- account-auth can issue per-user signed cookie sessions when explicitly
+  enabled with `HERMEST_ACCOUNT_AUTH=1`, `HERMEST_SESSION_SECRET`, and writable
+  storage;
+- real SaaS work still needs a full workspace membership, recovery, abuse, and
+  verification layer around those sessions.
 
 ## Product Preflight
 
@@ -72,13 +75,50 @@ Expected alpha behavior:
 - `session.signedSessionVerifierImplemented` is `true`;
 - `session.signedSessionIssuerImplemented` is `true`, but only through an
   owner-token gated bootstrap endpoint;
-- `session.realUserAuthImplemented` remains `false`.
+- `session.realUserAuthImplemented` is `true` because the account-auth
+  foundation exists;
+- `session.realUserAuthReady` remains `false` unless account auth is enabled
+  with a session secret and writable storage.
 
 `POST /api/product?route=session/bootstrap` issues a short-lived signed session
 token only when both `HERMEST_OWNER_TOKEN` and `HERMEST_SESSION_SECRET` are
 configured and the request includes the owner token. This is for controlled demo
 or migration work only; it is not public registration, OAuth, or final SaaS auth.
 The route never writes the issued token to audit payloads.
+
+## Account Auth
+
+```text
+GET /api/product?route=auth/status
+POST /api/product?route=auth/signup
+POST /api/product?route=auth/login
+POST /api/product?route=auth/logout
+```
+
+Account auth is implemented but disabled by default. It becomes ready only when:
+
+- `HERMEST_ACCOUNT_AUTH=1`;
+- `HERMEST_SESSION_SECRET` is configured;
+- server storage is writable in the current environment.
+
+When ready, signup creates a `users` record with:
+
+- generated user id;
+- generated workspace id;
+- normalized email;
+- display name;
+- scrypt password hash;
+- timestamps.
+
+Signup and login return a redacted account object and set the signed
+`hermest_session` token as an httpOnly `SameSite=Lax` cookie. The signed token
+is not returned in JSON. Logout clears the cookie. The board Settings panel can
+show account-auth status and call signup/login/logout against these routes.
+
+This is still a foundation, not the final identity product. Before production,
+add password reset, email verification or external IdP, account deletion,
+workspace membership roles, rate limiting, CSRF review for state-changing
+cookie-auth routes, and live authorized/unauthorized browser tests.
 
 ## Projects
 

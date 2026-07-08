@@ -27,6 +27,10 @@ Hermest Board is a browser-first interactive product prototype:
 - `GET /api/product?route=storage/status` - reports storage durability and production blockers;
 - `GET /api/product?route=preflight` - reports production-readiness gates without exposing secret values;
 - `GET /api/product?route=session/current` - reports the current bootstrap actor/session contract;
+- `GET /api/product?route=auth/status` - reports account-auth readiness and current actor;
+- `POST /api/product?route=auth/signup` - creates a guarded account and sets an httpOnly signed session cookie when account auth is enabled;
+- `POST /api/product?route=auth/login` - verifies a guarded account and sets an httpOnly signed session cookie;
+- `POST /api/product?route=auth/logout` - clears the httpOnly session cookie;
 - `GET /api/product?route=projects` and `POST /api/product?route=projects` - project list/create contract;
 - `GET`, `PUT`, `PATCH`, `DELETE /api/product?route=projects/:id` - project detail/update/delete contract;
 - `GET`, `POST /api/product?route=assets` - asset metadata contract;
@@ -87,9 +91,15 @@ exist.
 
 The API can verify signed `hermest.v1` session tokens when
 `HERMEST_SESSION_SECRET` is configured. It also has an owner-token gated
-bootstrap issuer for controlled demo/migration sessions. Public user
-registration, user provisioning, OAuth session exchange, and full authorization
-are still deliberately unfinished.
+bootstrap issuer for controlled demo/migration sessions.
+
+The account-auth foundation can create local/durable user records with scrypt
+password hashes and issue httpOnly signed session cookies through
+`auth/signup`, `auth/login`, and `auth/logout`. It is disabled by default and
+requires `HERMEST_ACCOUNT_AUTH=1`, `HERMEST_SESSION_SECRET`, and writable
+storage. This is a production-auth building block, not a complete SaaS identity
+system: workspace membership, password reset, email verification, abuse
+controls, and live unauthorized-path verification still remain.
 
 ## Data Model Draft
 
@@ -102,6 +112,15 @@ Project
   roadmap
   script
   publishPack
+  createdAt
+  updatedAt
+
+User
+  id
+  workspaceId
+  email
+  displayName
+  passwordHash
   createdAt
   updatedAt
 

@@ -145,6 +145,7 @@ HERMEST_STORAGE_ADAPTER=postgres
 DATABASE_URL=postgres://...
 HERMEST_ENABLE_DURABLE_STORAGE=1
 HERMEST_SESSION_SECRET=<long random secret>
+HERMEST_ACCOUNT_AUTH=1
 ```
 
 Without `HERMEST_ENABLE_DURABLE_STORAGE=1`, Vercel keeps using the safe read-only
@@ -155,3 +156,11 @@ When both `HERMEST_OWNER_TOKEN` and `HERMEST_SESSION_SECRET` are configured,
 `POST /api/product?route=session/bootstrap` can issue a short-lived signed
 session token for controlled demos or migration testing. Keep this behind the
 owner token; it is not a public login system.
+
+The public account-auth routes stay blocked unless `HERMEST_ACCOUNT_AUTH=1`,
+`HERMEST_SESSION_SECRET`, and writable storage are all active. When enabled,
+signup/login set `hermest_session` as an httpOnly `SameSite=Lax` cookie and
+store only a scrypt password hash, never the plaintext password. Do not enable
+this for real customers until durable storage, rate limiting, CSRF review,
+password recovery, workspace membership, and live unauthorized-path tests are in
+place.

@@ -19,6 +19,7 @@ try {
   delete process.env.VERCEL;
   delete process.env.HERMEST_ENABLE_DEMO_STORAGE;
   delete process.env.HERMEST_OWNER_TOKEN;
+  delete process.env.HERMEST_ACCOUNT_AUTH;
   delete process.env.HERMEST_SESSION_SECRET;
   delete process.env.HERMEST_OAUTH_STATE_SECRET;
   delete process.env.HERMEST_TOKEN_ENCRYPTION_KEY;
@@ -34,7 +35,7 @@ try {
   if (preflight.storage.adapterInterfaceImplemented !== true || preflight.storage.durableAdapterImplemented !== true || preflight.storage.durableAdapterConfigured !== false) {
     throw new Error(`Expected adapter boundary with disabled durable adapter, got ${JSON.stringify(preflight.storage)}`);
   }
-  if (!preflight.blockers.includes("real_user_auth_not_implemented")) {
+  if (!preflight.blockers.includes("account_auth_not_enabled")) {
     throw new Error(`Expected real auth blocker, got ${JSON.stringify(preflight.blockers)}`);
   }
   await expect("agent-plan", "POST", "agent/plan", {
@@ -171,7 +172,7 @@ try {
   delete process.env.YOUTUBE_CLIENT_ID;
   delete process.env.YOUTUBE_REDIRECT_URI;
   const localSession = await expect("session-current-local", "GET", "session/current", null, 200);
-  if (localSession.actor.id !== "local-dev" || localSession.session.realUserAuthImplemented !== false || localSession.session.signedSessionIssuerImplemented !== true) {
+  if (localSession.actor.id !== "local-dev" || localSession.session.realUserAuthImplemented !== true || localSession.session.realUserAuthEnabled !== false || localSession.session.signedSessionIssuerImplemented !== true) {
     throw new Error(`Expected local bootstrap session, got ${JSON.stringify(localSession)}`);
   }
 
@@ -214,6 +215,63 @@ try {
   if (signedSession.actor.id !== "user_smoke" || signedSession.actor.workspaceId !== "workspace_smoke") {
     throw new Error(`Expected signed-session actor, got ${JSON.stringify(signedSession)}`);
   }
+  process.env.HERMEST_ACCOUNT_AUTH = "1";
+  const accountAuthStatus = await expect("account-auth-status", "GET", "auth/status", null, 200);
+  if (accountAuthStatus.accountAuth.ready !== true || accountAuthStatus.accountAuth.passwordHashing !== "scrypt") {
+    throw new Error(`Expected ready account auth status, got ${JSON.stringify(accountAuthStatus.accountAuth)}`);
+  }
+  const accountSignup = await expect("account-signup", "POST", "auth/signup", {
+    email: "smoke@example.com",
+    displayName: "Smoke User",
+    password: "smoke password value"
+  }, 201);
+  if (!accountSignup.account?.id?.startsWith("usr_") || accountSignup.account.passwordHash || accountSignup.tokenReturned !== false) {
+    throw new Error(`Expected redacted account signup, got ${JSON.stringify(accountSignup)}`);
+  }
+  if (JSON.stringify(accountSignup).includes("smoke password value")) {
+    throw new Error("Account signup response leaked the password.");
+  }
+  const signupCookie = accountSignup._headers?.["Set-Cookie"] || "";
+  if (!signupCookie.includes("hermest_session=") || !signupCookie.includes("HttpOnly")) {
+    throw new Error(`Expected httpOnly signup cookie, got ${signupCookie}`);
+  }
+  const accountSession = await expect("account-session-current", "GET", "session/current", null, 200, { cookie: signupCookie });
+  if (accountSession.actor.id !== accountSignup.account.id || accountSession.actor.workspaceId !== accountSignup.account.workspaceId) {
+    throw new Error(`Expected signup cookie to authenticate, got ${JSON.stringify(accountSession)}`);
+  }
+  const accountProject = await expect("account-project-create", "POST", "projects", {
+    project: { title: "account project", cards: [] }
+  }, 201, { cookie: signupCookie });
+  if (accountProject.project.ownerUserId !== accountSignup.account.id || accountProject.project.workspaceId !== accountSignup.account.workspaceId) {
+    throw new Error(`Expected account project ownership, got ${JSON.stringify(accountProject.project)}`);
+  }
+  const duplicateSignup = await expect("account-signup-duplicate", "POST", "auth/signup", {
+    email: "smoke@example.com",
+    password: "smoke password value"
+  }, 409);
+  if (duplicateSignup.error !== "account_email_already_exists") {
+    throw new Error(`Expected duplicate account email error, got ${duplicateSignup.error}`);
+  }
+  const badLogin = await expect("account-login-bad-password", "POST", "auth/login", {
+    email: "smoke@example.com",
+    password: "wrong password"
+  }, 401);
+  if (badLogin.error !== "invalid_account_credentials") {
+    throw new Error(`Expected invalid credentials, got ${badLogin.error}`);
+  }
+  const accountLogin = await expect("account-login", "POST", "auth/login", {
+    email: "SMOKE@example.com",
+    password: "smoke password value"
+  }, 200);
+  if (accountLogin.account.id !== accountSignup.account.id || !String(accountLogin._headers?.["Set-Cookie"] || "").includes("HttpOnly")) {
+    throw new Error(`Expected account login cookie, got ${JSON.stringify(accountLogin)}`);
+  }
+  const accountLogout = await expect("account-logout", "POST", "auth/logout", null, 200, { cookie: accountLogin._headers["Set-Cookie"] });
+  if (!String(accountLogout._headers?.["Set-Cookie"] || "").includes("Max-Age=0")) {
+    throw new Error(`Expected logout to clear cookie, got ${accountLogout._headers?.["Set-Cookie"]}`);
+  }
+  await expect("account-project-delete", "DELETE", `projects/${accountProject.project.id}`, null, 200, { cookie: signupCookie });
+  delete process.env.HERMEST_ACCOUNT_AUTH;
   const signedProject = await expect("project-create-signed-session", "POST", "projects", {
     project: { title: "signed session project", cards: [] }
   }, 201, { authorization: `Bearer ${signedToken}` });
@@ -543,7 +601,7 @@ try {
 
   process.env.HERMEST_OWNER_TOKEN = "local-owner-token";
   const ownerSession = await expect("session-current-owner", "GET", "session/current", null, 200, { authorization: "Bearer local-owner-token" });
-  if (ownerSession.actor.id !== "owner" || ownerSession.session.realUserAuthImplemented !== false) {
+  if (ownerSession.actor.id !== "owner" || ownerSession.session.realUserAuthImplemented !== true || ownerSession.session.realUserAuthEnabled !== false) {
     throw new Error(`Expected owner bootstrap session, got ${JSON.stringify(ownerSession)}`);
   }
   const readUnauthorized = await expect("demo-storage-read-token-required", "GET", "projects", null, 401);
@@ -580,6 +638,12 @@ async function expect(name, method, route, body, expectedStatus, headers = {}) {
   }
   if (response.payload?.ok === false && expectedStatus < 400) {
     throw new Error(`${name}: expected ok payload, got ${JSON.stringify(response.payload)}`);
+  }
+  if (response.payload && typeof response.payload === "object") {
+    Object.defineProperty(response.payload, "_headers", {
+      value: response.headers,
+      enumerable: false
+    });
   }
   return response.payload;
 }

@@ -1,3 +1,4 @@
+import { getAccountAuthStatus } from "./accounts.js";
 import { getAuthStatus } from "./auth.js";
 import { getOAuthStateStatus } from "./oauth-state.js";
 import { getStorageStatus } from "./storage.js";
@@ -6,6 +7,7 @@ import { getTokenVaultStatus } from "./token-vault.js";
 export function getProductReadiness() {
   const storage = getStorageStatus();
   const auth = getAuthStatus();
+  const accountAuth = getAccountAuthStatus();
   const durableDbConfigured = Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL);
   const objectStorageConfigured = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
   const tokenEncryptionConfigured = Boolean(process.env.HERMEST_TOKEN_ENCRYPTION_KEY);
@@ -20,8 +22,9 @@ export function getProductReadiness() {
     storage.durableAdapterConfigured && !storage.durableAdapterEnabled && "durable_storage_adapter_not_enabled",
     !objectStorageConfigured && "object_storage_not_configured",
     !sessionSecretConfigured && "session_secret_not_configured",
-    "real_user_auth_not_implemented",
-    "per_user_authorization_not_implemented",
+    !accountAuth.enabled && "account_auth_not_enabled",
+    accountAuth.enabled && !accountAuth.sessionSecretConfigured && "account_session_secret_not_configured",
+    accountAuth.enabled && !accountAuth.storageWriteEnabled && "account_storage_not_writable",
     !tokenEncryptionConfigured && "token_encryption_key_not_configured",
     !oauth.stateSecretConfigured && "oauth_state_secret_not_configured",
     !tokenVault.implemented && "encrypted_connector_token_storage_not_implemented",
@@ -57,8 +60,11 @@ export function getProductReadiness() {
       sessionSecretConfigured,
       signedSessionVerifierImplemented: auth.session.verifierImplemented,
       signedSessionIssuerImplemented: auth.session.issuerImplemented,
-      realUserAuthImplemented: false,
-      authorizationImplemented: false
+      realUserAuthImplemented: accountAuth.implemented,
+      realUserAuthEnabled: accountAuth.enabled,
+      realUserAuthReady: accountAuth.ready,
+      accountAuth,
+      authorizationImplemented: true
     },
     secrets: {
       tokenEncryptionConfigured,
@@ -74,7 +80,7 @@ export function getProductReadiness() {
     connectors,
     gates: [
       gate("public_alpha_demo", true, "Static board, read-only APIs, localStorage, export/import, and dry-run planning are available."),
-      gate("production_project_writes", false, "Needs durable database adapter, real auth, authorization, and live unauthorized-path tests."),
+      gate("production_project_writes", false, "Needs durable database adapter, account auth enabled, live unauthorized-path tests, and production env verification."),
       gate("private_media_storage", false, "Needs object storage, upload validation, rights metadata, and per-user access control."),
       gate("agent_job_execution", false, "Needs durable queue, workers, retries, cancellation, and audit records."),
       gate("autopublishing", false, "Needs OAuth token exchange, provider policy checks, approval-gated workers, and disconnect/revoke flows.")
@@ -82,8 +88,8 @@ export function getProductReadiness() {
     blockers,
     nextRequiredWork: [
       "Choose and connect durable database storage.",
-      "Implement user sessions and workspace ownership.",
-      "Enforce authorization on every product route.",
+      "Enable account auth with HERMEST_ACCOUNT_AUTH=1, HERMEST_SESSION_SECRET, and durable writable storage.",
+      "Verify user sessions and workspace ownership against live unauthorized-path tests.",
       "Encrypt connector tokens server-side.",
       "Implement OAuth token exchange and connector disconnect flows.",
       "Add durable job queue and approval-gated workers.",

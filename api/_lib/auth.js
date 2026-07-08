@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { getAccountAuthStatus } from "./accounts.js";
 import { getSessionStatus, readSignedSession } from "./session.js";
 
 export function getAuthStatus() {
@@ -7,6 +8,7 @@ export function getAuthStatus() {
   const durableStorageEnabled = isDurableStorageEnabled();
   const ownerTokenConfigured = Boolean(process.env.HERMEST_OWNER_TOKEN);
   const session = getSessionStatus();
+  const accountAuth = getAccountAuthStatus();
   const authenticatedGuardConfigured = ownerTokenConfigured || session.secretConfigured;
 
   return {
@@ -14,6 +16,9 @@ export function getAuthStatus() {
     mode: ownerTokenConfigured ? "owner-token" : session.secretConfigured ? "signed-session-or-readonly" : "development-or-readonly",
     ownerTokenConfigured,
     session,
+    accountAuth,
+    realUserAuthImplemented: accountAuth.implemented,
+    realUserAuthReady: accountAuth.ready,
     readAccess: inVercel && (demoStorageEnabled || durableStorageEnabled)
       ? authenticatedGuardConfigured
         ? "authenticated_request_required"

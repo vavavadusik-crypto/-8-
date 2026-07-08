@@ -24,7 +24,8 @@ export function handleApiError(response, error) {
     error: error?.code || error?.message || "internal_error",
     note: error?.note || undefined,
     auth: error?.auth || undefined,
-    storage: error?.storage || undefined
+    storage: error?.storage || undefined,
+    accountAuth: error?.accountAuth || undefined
   });
 }
 

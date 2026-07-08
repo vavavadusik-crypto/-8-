@@ -1,5 +1,16 @@
 # Worklog
 
+## 2026-07-08
+
+- Added an account-auth foundation:
+  - `auth/status`, `auth/signup`, `auth/login`, and `auth/logout` product routes;
+  - `users` storage collection;
+  - scrypt password hashing and redacted account responses;
+  - httpOnly signed `hermest_session` cookie issuance;
+  - in-board Settings controls for account status, signup, login, and logout;
+  - unit and smoke coverage for disabled auth, signup, login, duplicate email,
+    invalid credentials, session cookies, and account-owned project writes.
+
 ## 2026-07-03
 
 - Hardened temporary public demo storage:

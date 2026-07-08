@@ -46,6 +46,7 @@ npm run check
 - backend storage API contract: projects, assets, jobs, audit log, storage status;
 - guarded Postgres JSONB adapter foundation for future durable storage;
 - signed-session verification and owner-token bootstrap issuer foundation;
+- account-auth foundation with signup/login/logout routes, scrypt password hashing, and httpOnly signed session cookies when explicitly enabled by server env;
 - backend production preflight route for readiness gates and blockers;
 - in-board `1.0 статус` report powered by backend preflight gates/blockers;
 - backend agent plan preview that shows blockers before autopublishing;

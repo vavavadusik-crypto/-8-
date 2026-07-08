@@ -557,6 +557,18 @@
       font-weight: 800;
     }
 
+    .auth-status {
+      border: 1px solid rgba(94, 234, 212, .22);
+      border-radius: 8px;
+      padding: 9px;
+      min-height: 42px;
+      color: #a9c7d8;
+      background: rgba(3, 9, 18, .5);
+      font-size: 11px;
+      line-height: 1.42;
+      white-space: pre-wrap;
+    }
+
     .hint {
       color: #7894a9;
       font-size: 12px;
@@ -759,6 +771,31 @@
             <h2>Настройки</h2>
             <div class="mini-note">Пользовательские ключи живут только в этом браузере. Экспорт JSON и backend save их не забирают.</div>
             <div class="panel-section">
+              <h2>Аккаунт</h2>
+              <div class="auth-status" id="accountStatus">Проверка аккаунта ещё не запускалась.</div>
+              <div class="field">
+                <label><span>Email</span></label>
+                <input id="accountEmail" type="email" placeholder="you@example.com" autocomplete="email" spellcheck="false">
+              </div>
+              <div class="field">
+                <label><span>Имя</span></label>
+                <input id="accountDisplayName" type="text" placeholder="Имя для workspace" autocomplete="name">
+              </div>
+              <div class="field">
+                <label><span>Пароль</span></label>
+                <input id="accountPassword" type="password" placeholder="минимум 10 символов" autocomplete="current-password" spellcheck="false">
+              </div>
+              <div class="panel-row two">
+                <button id="checkAccountStatus" title="Проверить текущую сессию">Статус</button>
+                <button id="signupAccount" title="Создать аккаунт">Signup</button>
+              </div>
+              <div class="panel-row two">
+                <button id="loginAccount" title="Войти в аккаунт">Login</button>
+                <button id="logoutAccount" title="Выйти из аккаунта">Logout</button>
+              </div>
+              <div class="mini-note">Signup/Login включаются только при server env `HERMEST_ACCOUNT_AUTH=1`, `HERMEST_SESSION_SECRET` и writable storage.</div>
+            </div>
+            <div class="panel-section">
               <h2>AI</h2>
               <div class="field">
                 <label><span>Provider</span></label>
@@ -932,6 +969,10 @@
     const aiRememberInput = document.getElementById("aiRemember");
     const aiPromptInput = document.getElementById("aiPrompt");
     const aiResponseOutput = document.getElementById("aiResponseOutput");
+    const accountStatus = document.getElementById("accountStatus");
+    const accountEmailInput = document.getElementById("accountEmail");
+    const accountDisplayNameInput = document.getElementById("accountDisplayName");
+    const accountPasswordInput = document.getElementById("accountPassword");
     const userApiKeyList = document.getElementById("userApiKeyList");
     const apiCatalogCategory = document.getElementById("apiCatalogCategory");
     const userApiKeyProvider = document.getElementById("userApiKeyProvider");
@@ -1760,6 +1801,10 @@
     document.getElementById("saveProjectApi").addEventListener("click", saveProjectApi);
     document.getElementById("loadProjectApi").addEventListener("click", loadProjectApi);
     document.getElementById("runAgentPlan").addEventListener("click", runAgentPlan);
+    document.getElementById("checkAccountStatus").addEventListener("click", () => checkAccountStatus(true));
+    document.getElementById("signupAccount").addEventListener("click", signupAccount);
+    document.getElementById("loginAccount").addEventListener("click", loginAccount);
+    document.getElementById("logoutAccount").addEventListener("click", logoutAccount);
     document.getElementById("openSettings").addEventListener("click", () => {
       sidePanel.hidden = false;
       settingsPanel.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -2097,6 +2142,145 @@
         publishOutput.value = state.publish.packageText;
         saveState("Storage API недоступен");
       }
+    }
+
+    async function checkAccountStatus(showOutput = true) {
+      statusEl.textContent = "Проверяю аккаунт";
+      try {
+        const data = await fetchJson(productApi("auth/status"), {
+          credentials: "include"
+        });
+        renderAccountStatus(data);
+        if (showOutput) {
+          state.publish.packageText = formatAccountStatus(data);
+          publishOutput.value = state.publish.packageText;
+          saveState(data.actor?.authenticated ? "Аккаунт активен" : "Аккаунт не подключён");
+        }
+        return data;
+      } catch (error) {
+        accountStatus.textContent = `Account API недоступен: ${error.message || "unknown"}`;
+        if (showOutput) saveState("Account API недоступен");
+        return null;
+      }
+    }
+
+    async function signupAccount() {
+      await submitAccountAuth("auth/signup", "Signup");
+    }
+
+    async function loginAccount() {
+      await submitAccountAuth("auth/login", "Login");
+    }
+
+    async function logoutAccount() {
+      statusEl.textContent = "Выхожу из аккаунта";
+      try {
+        const data = await fetchJson(productApi("auth/logout"), {
+          method: "POST",
+          credentials: "include"
+        });
+        accountPasswordInput.value = "";
+        renderAccountStatus({ actor: data.actor, accountAuth: data.accountAuth });
+        state.publish.packageText = [
+          "ACCOUNT LOGOUT",
+          "",
+          "Сессия очищена в httpOnly cookie.",
+          "Локальный browser board остаётся на устройстве."
+        ].join("\n");
+        publishOutput.value = state.publish.packageText;
+        saveState("Выход выполнен");
+      } catch (error) {
+        accountStatus.textContent = `Logout недоступен: ${error.message || "unknown"}`;
+        saveState("Logout недоступен");
+      }
+    }
+
+    async function submitAccountAuth(route, label) {
+      const email = accountEmailInput.value.trim();
+      const password = accountPasswordInput.value;
+      const displayName = accountDisplayNameInput.value.trim();
+      if (!email || !password) {
+        flashStatus("Нужны email и пароль");
+        return;
+      }
+      statusEl.textContent = `${label}: отправляю запрос`;
+      try {
+        const data = await fetchJson(productApi(route), {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email, password, displayName })
+        });
+        accountPasswordInput.value = "";
+        renderAccountStatus({
+          actor: data.actor,
+          accountAuth: data.accountAuth || { ready: true },
+          account: data.account
+        });
+        state.publish.packageText = [
+          `ACCOUNT ${label.toUpperCase()} RESULT`,
+          "",
+          `User: ${data.account?.displayName || data.account?.email || "unknown"}`,
+          `Email: ${data.account?.email || "unknown"}`,
+          `Workspace: ${data.account?.workspaceId || data.actor?.workspaceId || "unknown"}`,
+          `Session cookie: ${data.tokenReturned === false ? "httpOnly only" : "unknown"}`,
+          `Expires: ${data.expiresAt || "unknown"}`,
+          "",
+          "API token/password values are not printed, exported, or stored in board JSON."
+        ].join("\n");
+        publishOutput.value = state.publish.packageText;
+        saveState(`${label} выполнен`);
+      } catch (error) {
+        accountStatus.textContent = `${label} заблокирован: ${error.message || "unknown"}`;
+        state.publish.packageText = [
+          `ACCOUNT ${label.toUpperCase()} BLOCKED`,
+          "",
+          `Ошибка: ${error.message || "unknown"}`,
+          error.payload?.note ? `Note: ${error.payload.note}` : "",
+          "",
+          "Для включения нужны server env:",
+          "- HERMEST_ACCOUNT_AUTH=1",
+          "- HERMEST_SESSION_SECRET",
+          "- writable storage: local dev, demo storage, or durable Postgres"
+        ].filter(Boolean).join("\n");
+        publishOutput.value = state.publish.packageText;
+        saveState(`${label} недоступен`);
+      }
+    }
+
+    function renderAccountStatus(data = {}) {
+      const actor = data.actor || {};
+      const accountAuth = data.accountAuth || data.auth?.accountAuth || {};
+      accountStatus.textContent = [
+        `Session: ${actor.authenticated ? "authenticated" : "anonymous"} (${actor.mode || "unknown"})`,
+        actor.workspaceId ? `Workspace: ${actor.workspaceId}` : "",
+        `Account auth: ${accountAuth.ready ? "ready" : accountAuth.enabled ? "enabled but blocked" : "disabled"}`,
+        accountAuth.blockers?.length ? `Blockers: ${accountAuth.blockers.join(", ")}` : "Blockers: none"
+      ].filter(Boolean).join("\n");
+    }
+
+    function formatAccountStatus(data = {}) {
+      const actor = data.actor || {};
+      const accountAuth = data.accountAuth || data.auth?.accountAuth || {};
+      return [
+        "ACCOUNT STATUS",
+        "",
+        `Authenticated: ${actor.authenticated ? "yes" : "no"}`,
+        `Actor: ${actor.id || "anonymous"}`,
+        `Mode: ${actor.mode || "unknown"}`,
+        `Workspace: ${actor.workspaceId || "none"}`,
+        "",
+        "Account auth:",
+        `Implemented: ${accountAuth.implemented ? "yes" : "no"}`,
+        `Enabled: ${accountAuth.enabled ? "yes" : "no"}`,
+        `Ready: ${accountAuth.ready ? "yes" : "no"}`,
+        `Password hashing: ${accountAuth.passwordHashing || "unknown"}`,
+        `Cookie session: ${accountAuth.cookieSession ? "yes" : "no"}`,
+        "",
+        accountAuth.blockers?.length
+          ? `Blockers: ${accountAuth.blockers.join(", ")}`
+          : "Blockers: none"
+      ].join("\n");
     }
 
     async function saveProjectApi() {
