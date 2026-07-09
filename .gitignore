@@ -2,6 +2,7 @@ node_modules/
 dist/
 tmp/
 .data/
+.codegraph/
 .env
 .env.*
 !.env.example
