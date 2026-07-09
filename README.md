@@ -77,3 +77,6 @@ npm run check
 - `docs/SECURITY_REVIEW.md` - текущий security baseline и блокеры до production writes/autopublishing;
 - `docs/FABLE_ULTRACODE_MAXIMUM_UPGRADE_MANDATE.md` - professional maximum-upgrade brief for Fable 5 Ultracode;
 - `docs/PRODUCT_READINESS.md` - что готово и что нужно до beta/launch.
+- `SECURITY.md` - политика секретов, OAuth/API-ключей и production safety;
+- `CHANGELOG.md` - история публичных изменений;
+- `LICENSE` - текущий статус лицензии: all rights reserved до отдельного решения владельца.

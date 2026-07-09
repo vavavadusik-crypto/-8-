@@ -1,0 +1,29 @@
+name: Bug report
+description: Report a board, API, connector, auth, or deployment problem.
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste API keys, OAuth secrets, owner tokens, database URLs, `.env`, or private user exports.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe expected behavior and actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, OS, local/Vercel, relevant env flags.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs
+      description: Paste only logs with secrets removed.
+      render: shell
