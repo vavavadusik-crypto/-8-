@@ -57,51 +57,108 @@ Not complete:
 
 Autopublishing must remain disabled.
 
-## Active next TDD slice: trusted local worker candidate evidence
+## Current verified checkpoint: trusted local candidate evidence + media hardening
 
-Do not call social APIs and do not implement token exchange in this slice.
+Current branch: `feat/board-connector-router`.
 
-Required behavior:
+Code checkpoints:
 
-1. Add a server-side integration port from the completed loopback render job into the existing `buildPublishCandidate` contract.
-2. Evidence can become `server_verified` only after the current worker's independent ffprobe/manifest/hash checks have completed successfully.
-3. Artifact names, byte counts and SHA-256 values must be derived from the worker's actual manifest/result, never copied from request metadata.
-4. Require a persisted product project with matching workspace/owner and matching normalized board snapshot before saving the candidate.
-5. Derive rights only from persisted project assets through `summarizeAssetRights`; never accept rights status from the browser or worker request.
-6. Fail closed on project snapshot mismatch, missing artifact, hash mismatch, unknown/restricted rights or missing storage authorization.
-7. Persist through a narrow server-only callback/port; do not expose an HTTP flag that lets a client claim `server_verified`.
-8. Return only candidate ID/digest/version/blockers in local job state. Never expose filesystem paths or full board content.
-9. Keep candidates immutable and idempotent. If a deterministic ID already exists with a different digest/state, reject it.
-10. Autopublishing remains disabled even when evidence and rights are valid.
+- `6e20fe9` — persisted trusted local render candidates, UI/API wiring, disk byte/SHA re-verification, QC fail-closed behavior, Unicode/Windows path redaction and storage-ID alignment.
+- `a4e6b33` — reject sensitive media command evidence before exact argv-schema parsing; restore exact repository `tmp` regression coverage.
 
-Start RED by extending the local job-manager/integration tests with real manifest-shaped evidence, request-spoofing counterexamples, rights-unknown failure and snapshot mismatch. Extend the real HTTP smoke only after the pure port is GREEN.
+Immutable review target:
 
-Run:
+- path: `/run/media/architect/KINGSTON/offload/agent-worktrees/hermest-board-review-a4e6b33`
+- commit: `a4e6b33e1876235f9e16d5a8b90c6109d1371df5`
+- tree: `8d12defb899d448b1176285d7bff8815ffc78a86`
 
-```bash
-node --test --test-reporter=spec test/unit/publish-candidate.test.mjs test/unit/local-media-job-manager.test.mjs
-npm run smoke:api
+Canonical combined gate on this code state:
+
+```text
 npm run check
+119/119 unit tests PASS
+smoke:api PASS
+2/2 real FFmpeg media integration renders PASS
+Vite production build PASS
+browser screenshot smoke PASS
 ```
 
-## Review gates still pending
+No push, deploy, social API call, OAuth exchange or external publication was performed.
 
-- Independent final re-review of manifest commit `11da264`.
-- Independent security/lifecycle review of UI worker commit `38fb89e`.
-- Independent connector capability review of `f4a9bfb` is currently running or awaiting verdict.
-- Independent immutable candidate review of `85709d9` is currently running.
-- Mandatory Claude Code Opus review: Claude CLI is installed but not logged in; run `claude auth login` when available.
-- Kimi Cloud smoke: Ollama is installed/running, but owner browser sign-in is still required via `ollama signin`.
+## Trusted-worker contract now implemented
 
-A killed, timed-out or verdict-less review is `INCOMPLETE`, never PASS.
+1. The loopback Vite worker invokes candidate persistence only through a narrow server-only callback.
+2. A persisted product project is required and its normalized snapshot must match the rendered board.
+3. Workspace/owner metadata and rights come only from persisted storage records; request-supplied rights/evidence/artifacts are ignored.
+4. Recipe/platform/version, manifest and video names/types/hashes are bound into the immutable candidate.
+5. Candidate persistence independently re-stats and re-hashes actual regular artifact files before calling the storage port.
+6. A render with explicit failed QC never becomes completed or downloadable.
+7. Persistence failure leaves completed media blocked instead of fabricating approval.
+8. Deterministic existing candidates are idempotent; conflicting state fails closed.
+9. Public job state exposes only candidate ID/digest/version/status/blockers, never paths or full board content.
+10. Autopublishing remains disabled.
 
-## Recovery
+## Kimi blocking review and closure status
+
+Ollama Cloud → OpenCode → Kimi K2.7 Code reviewed older frozen snapshot `3bd6a67` and returned `KIMI_TRUSTED_CANDIDATE_VERDICT=BLOCK`.
+
+Reproduced and fixed through RED→GREEN:
+
+- explicit `qc.passed=false` becoming completed/downloadable;
+- missing independent disk bytes/SHA verification before candidate persistence;
+- Unicode POSIX and Windows absolute path leakage in public job errors;
+- two-character project IDs drifting from the storage contract.
+
+Findings not accepted as current P0 after call-site/threat-model verification:
+
+- local actor authorization: this implementation is explicitly single-user/loopback and is not the public multi-user worker; real identity/tenant authorization remains a documented public-beta blocker;
+- arbitrary HTTP `server_verified`: public product API hardcodes `metadata_only`; the only current production `server_verified` caller is the narrow local persister;
+- `pg` missing: `pg` is present in both `package.json` and `package-lock.json`; the detached snapshot simply had no installed `node_modules`;
+- ownership/not-found error conflation: current code already emits distinct errors.
+
+These classifications still require independent targeted re-review of `a4e6b33`; do not treat the older Kimi verdict as closed by self-assertion.
+
+## Manifest security closure
+
+Sensitive argv are now rejected before command-schema parsing, including:
+
+- attached/separate header aliases (`-H`, `-headers`, `--header`, `--headers`);
+- Authorization, Proxy-Authorization, Cookie and Set-Cookie carriers;
+- leading whitespace and CRLF multi-header values;
+- username-only and username/password URL userinfo;
+- credential URLs embedded in assignment arguments;
+- mixed-case schemes and percent-encoded authority delimiters;
+- token/secret/password/credential assignments.
+
+The exact repository `tmp` output-root counterexample is again covered in `test/unit/render-preflight.test.mjs`.
+
+## Blocking review gates still pending
+
+- Kimi targeted re-review against exact `a4e6b33`.
+- Hermes trusted-candidate/UI-API/manifest reviews against the exact immutable target; any interrupted result is `INCOMPLETE`.
+- Cerebras UI/API verdict if it returns against the older snapshot must be reproduced and then refreshed against `a4e6b33` when relevant.
+- Mandatory Claude Code/Claude Desktop architecture-code-security review. CLI `2.1.203` is installed but not logged in; run `claude auth login` for unattended CLI use.
+
+Do not call this release-ready until every blocking finding is closed on the current SHA and the full gate is rerun if any code changes.
+
+## Recovery and next command
 
 ```bash
 cd /home/architect/ai-dev-station/workspace/hermest-board
 git status --short --branch
-git log -8 --oneline --decorate
+git log -6 --oneline --decorate
+git diff --check
 npm run check
 ```
 
-If an interrupted write exists, inspect every touched file before any further edit. Preserve a verified local commit before switching agents or branches.
+For read-only review, use only:
+
+```bash
+cd /run/media/architect/KINGSTON/offload/agent-worktrees/hermest-board-review-a4e6b33
+git rev-parse HEAD
+git status --short --branch
+```
+
+Expected review SHA: `a4e6b33e1876235f9e16d5a8b90c6109d1371df5`.
+
+If an interrupted write exists, inspect every touched file before further edits. Never reset/clean the canonical worktree to recover a reviewer process.
