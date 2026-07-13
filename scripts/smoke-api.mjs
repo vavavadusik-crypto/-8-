@@ -8,6 +8,7 @@ import aiRespond from "../api/ai/respond.js";
 import product from "../api/product.js";
 import userConfigSchema from "../api/user-config/schema.js";
 import { createSignedSessionToken } from "../api/_lib/session.js";
+import { buildPublishCandidate } from "../api/_lib/publish-candidates.js";
 import { getRecord, saveRecord } from "../api/_lib/storage.js";
 import { decryptSecret } from "../api/_lib/token-vault.js";
 
@@ -386,6 +387,36 @@ try {
   if (forbiddenAssetAttach.error !== "forbidden") {
     throw new Error(`Expected forbidden signed-session asset attach, got ${forbiddenAssetAttach.error}`);
   }
+  const signedCandidateRequest = {
+    projectId: signedProject.project.id,
+    platforms: ["youtube_video"],
+    recipe: { id: "youtube_video_v1", version: "1.0.0", platform: "youtube_video", width: 1920, height: 1080 },
+    artifacts: [
+      { name: "master.mp4", type: "video/mp4", bytes: 9000, sha256: "1".repeat(64) },
+      { name: "manifest.json", type: "application/json", bytes: 2000, sha256: "2".repeat(64) }
+    ],
+    manifestSha256: "2".repeat(64)
+  };
+  const signedCandidate = await expect("publish-candidate-create-signed-session", "POST", "publish-candidates", signedCandidateRequest, 201, bearerHeaders(signedToken));
+  if (signedCandidate.candidate.workspaceId !== "workspace_smoke" || signedCandidate.candidate.rights.status !== "owned") {
+    throw new Error(`Expected signed candidate ownership and derived rights, got ${JSON.stringify(signedCandidate.candidate)}`);
+  }
+  const signedCandidateList = await expect("publish-candidate-list-signed-session", "GET", "publish-candidates", null, 200, bearerHeaders(signedToken));
+  if (!signedCandidateList.candidates.some(candidate => candidate.id === signedCandidate.candidate.id)) {
+    throw new Error(`Expected signed candidate in workspace list, got ${JSON.stringify(signedCandidateList.candidates)}`);
+  }
+  const otherCandidateList = await expect("publish-candidate-list-other-session", "GET", "publish-candidates", null, 200, bearerHeaders(otherToken));
+  if (otherCandidateList.candidates.some(candidate => candidate.id === signedCandidate.candidate.id)) {
+    throw new Error(`Expected other workspace candidate list to exclude record, got ${JSON.stringify(otherCandidateList.candidates)}`);
+  }
+  const forbiddenCandidateRead = await expect("publish-candidate-read-other-session", "GET", `publish-candidates/${signedCandidate.candidate.id}`, null, 403, bearerHeaders(otherToken));
+  if (forbiddenCandidateRead.error !== "forbidden") {
+    throw new Error(`Expected forbidden candidate read, got ${forbiddenCandidateRead.error}`);
+  }
+  const forbiddenCandidateCreate = await expect("publish-candidate-create-other-project", "POST", "publish-candidates", signedCandidateRequest, 403, bearerHeaders(otherToken));
+  if (forbiddenCandidateCreate.error !== "forbidden") {
+    throw new Error(`Expected forbidden candidate create, got ${forbiddenCandidateCreate.error}`);
+  }
   const signedJob = await expect("job-create-signed-session", "POST", "jobs", {
     projectId: signedProject.project.id,
     publishPack: { platforms: ["youtube_video"], tools: ["parser"], languages: ["ru"] }
@@ -499,6 +530,45 @@ try {
   if (invalidAssetRights.error !== "invalid_asset_rights_status") {
     throw new Error(`Expected invalid_asset_rights_status, got ${invalidAssetRights.error}`);
   }
+  const candidateRequest = {
+    projectId: id,
+    platforms: ["youtube_video"],
+    recipe: {
+      id: "youtube_video_v1",
+      version: "1.0.0",
+      platform: "youtube_video",
+      width: 1920,
+      height: 1080
+    },
+    artifacts: [
+      { name: "master.mp4", type: "video/mp4", bytes: 9000, sha256: "a".repeat(64) },
+      { name: "manifest.json", type: "application/json", bytes: 2000, sha256: "b".repeat(64) }
+    ],
+    manifestSha256: "b".repeat(64),
+    evidence: { status: "server_verified", verifier: "request-must-be-ignored" },
+    rights: { status: "allowed" },
+    localPath: "/tmp/request-must-be-ignored",
+    token: "candidate-request-secret-must-not-survive"
+  };
+  const metadataCandidate = await expect("publish-candidate-create", "POST", "publish-candidates", candidateRequest, 201);
+  if (metadataCandidate.candidate.status !== "sealed" || metadataCandidate.candidate.evidence.status !== "metadata_only" || metadataCandidate.candidate.approvable !== false) {
+    throw new Error(`Expected sealed metadata-only candidate, got ${JSON.stringify(metadataCandidate.candidate)}`);
+  }
+  if (!metadataCandidate.candidate.approvalBlockers.includes("artifact_verification_required") || !metadataCandidate.candidate.approvalBlockers.includes("asset_rights_not_cleared")) {
+    throw new Error(`Expected verification and rights blockers, got ${JSON.stringify(metadataCandidate.candidate.approvalBlockers)}`);
+  }
+  const serializedCandidate = JSON.stringify(metadataCandidate);
+  if (serializedCandidate.includes("/tmp/") || serializedCandidate.includes("candidate-request-secret-must-not-survive")) {
+    throw new Error("Publish candidate response leaked ignored request metadata.");
+  }
+  const repeatedCandidate = await expect("publish-candidate-idempotent", "POST", "publish-candidates", candidateRequest, 200);
+  if (repeatedCandidate.created !== false || repeatedCandidate.candidate.id !== metadataCandidate.candidate.id) {
+    throw new Error(`Expected deterministic idempotent candidate, got ${JSON.stringify(repeatedCandidate)}`);
+  }
+  const fetchedCandidate = await expect("publish-candidate-read", "GET", `publish-candidates/${metadataCandidate.candidate.id}`, null, 200);
+  if (fetchedCandidate.candidate.digest !== metadataCandidate.candidate.digest) {
+    throw new Error(`Expected immutable candidate read, got ${JSON.stringify(fetchedCandidate.candidate)}`);
+  }
   const blockedJob = await expect("job-create", "POST", "jobs", {
     projectId: id,
     publishPack: { platforms: ["youtube_video"], tools: ["parser"], languages: ["ru"] }
@@ -520,10 +590,30 @@ try {
   if (configuredConnectorJob.job.status !== "blocked" || configuredConnectorJob.job.plan.connectors.youtube.configured !== true || configuredConnectorJob.job.plan.connectors.youtube.executable !== false) {
     throw new Error(`Expected configured OAuth slot to remain blocked, got ${JSON.stringify(configuredConnectorJob.job)}`);
   }
+  const verifiedCandidate = buildPublishCandidate({
+    projectRecord: created.project,
+    platforms: ["youtube_video"],
+    recipe: candidateRequest.recipe,
+    artifacts: candidateRequest.artifacts,
+    manifestSha256: candidateRequest.manifestSha256,
+    rights: { status: "allowed", assetIds: [createdAsset.asset.id] },
+    evidence: { status: "server_verified", verifier: "smoke-internal-worker-v1" },
+    createdAt: "2026-07-13T12:00:00.000Z"
+  });
+  await saveRecord("publishCandidates", verifiedCandidate);
+  const candidateBinding = {
+    id: verifiedCandidate.id,
+    digest: verifiedCandidate.digest,
+    version: verifiedCandidate.version,
+    status: verifiedCandidate.status,
+    evidenceStatus: verifiedCandidate.evidence.status,
+    approvable: verifiedCandidate.approvable
+  };
   const approvalJob = {
     ...configuredConnectorJob.job,
     id: "job_future_ready_approval_fixture",
     status: "waiting_for_approval",
+    candidate: candidateBinding,
     plan: {
       ...configuredConnectorJob.job.plan,
       status: "ready_for_human_approval",
@@ -531,26 +621,42 @@ try {
     },
     approval: {
       required: true,
-      status: "pending"
+      status: "pending",
+      candidate: candidateBinding
     }
   };
   await saveRecord("jobs", approvalJob);
   if (approvalJob.approval.status !== "pending") {
     throw new Error(`Expected pending synthetic approval fixture, got ${JSON.stringify(approvalJob.approval)}`);
   }
+  const staleApproval = await expect("job-approval-stale-candidate", "POST", `jobs/${approvalJob.id}/approval`, {
+    action: "approve",
+    candidateId: verifiedCandidate.id,
+    candidateDigest: "c".repeat(64),
+    candidateVersion: verifiedCandidate.version
+  }, 409);
+  if (staleApproval.error !== "job_candidate_binding_mismatch") {
+    throw new Error(`Expected stale candidate binding rejection, got ${JSON.stringify(staleApproval)}`);
+  }
   const approvedJob = await expect("job-approval-approve", "POST", `jobs/${approvalJob.id}/approval`, {
     action: "approve",
+    candidateId: verifiedCandidate.id,
+    candidateDigest: verifiedCandidate.digest,
+    candidateVersion: verifiedCandidate.version,
     note: "Smoke approval"
   }, 200);
-  if (approvedJob.job.approval.status !== "approved" || approvedJob.job.status !== "blocked" || approvedJob.job.execution.canAutopublish !== false) {
+  if (approvedJob.job.approval.status !== "approved" || approvedJob.job.approval.candidate?.digest !== verifiedCandidate.digest || approvedJob.job.status !== "blocked" || approvedJob.job.execution.canAutopublish !== false) {
     throw new Error(`Expected approved but execution-blocked job, got ${JSON.stringify(approvedJob.job)}`);
   }
   if (!approvedJob.job.execution.blockers.includes("durable_job_queue_not_implemented")) {
     throw new Error(`Expected durable queue execution blocker, got ${JSON.stringify(approvedJob.job.execution)}`);
   }
-  await expect("job-update-running", "PATCH", `jobs/${approvalJob.id}`, {
+  const blockedExecution = await expect("job-update-running-blocked", "PATCH", `jobs/${approvalJob.id}`, {
     status: "running"
-  }, 200);
+  }, 409);
+  if (blockedExecution.error !== "job_execution_blocked") {
+    throw new Error(`Expected job_execution_blocked, got ${JSON.stringify(blockedExecution)}`);
+  }
   const invalidJobStatus = await expect("job-invalid-status", "PATCH", `jobs/${approvalJob.id}`, {
     status: "ready_for_approval"
   }, 400);
@@ -707,6 +813,12 @@ async function expectAi(name, method, body, expectedStatus, headers = {}) {
     throw new Error(`${name}: expected ok payload, got ${JSON.stringify(response.payload)}`);
   }
   return response.payload;
+}
+
+function bearerHeaders(token) {
+  return {
+    authorization: ["Bearer", String(token || "")].join(" ")
+  };
 }
 
 function mockResponse() {

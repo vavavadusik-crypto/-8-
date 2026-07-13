@@ -9,14 +9,14 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 |---|---|---|
 | Interactive card board | VERIFIED | current frontend and browser smoke |
 | Card image XSS/CSP remediation | VERIFIED LOCALLY, CHECKPOINT PENDING | branch `fix/card-image-xss`; security tests included |
-| Full current project gate | VERIFIED LOCALLY, RE-REVIEW PENDING | `npm run check`: 102/102 unit, API smoke, four real render/repro runs with independent `/usr/bin/ffprobe`, Vite build and browser screenshot smoke on 2026-07-13 |
+| Full current project gate | VERIFIED LOCALLY, RE-REVIEW PENDING | `npm run check`: 107/107 unit, API smoke, four real render/repro runs with independent `/usr/bin/ffprobe`, Vite build and browser screenshot smoke on 2026-07-13 |
 | Public research endpoint | VERIFIED in prior audit/current code | response-to-production-card workflow remains MISSING |
 | BYOK AI proxy | PARTIAL | supported providers exist; structured pipeline and abuse controls incomplete |
 | Pure board→storyboard/script core | VERIFIED R1 | deterministic spatial order, lineage, resource/schema limits; frontend adoption remains pending |
 | Browser TTS | VERIFIED preview only | not used as exported artifact |
 | Offline narration adapter | VERIFIED R1 SMOKE | real WAV + metadata/hash/cancellation; Flite voice is English-only quality fallback |
 | Browser WebM recording | VERIFIED legacy recording only | explicitly not the deterministic renderer |
-| Publish pack | VERIFIED level 0 metadata | local R1 render artifacts are downloadable in Board UI but are not yet bound to immutable publish candidates |
+| Publish pack | PARTIAL/VERIFIED CANDIDATE CONTRACT | deterministic sealed candidate metadata, rights/artifact hashes and exact approval binding exist; local render worker is not yet persisted as trusted product evidence |
 | Real MP4 renderer | VERIFIED R1 | FFmpeg H.264/AAC, strict ffprobe, atomic artifacts, private run directory |
 | Local Board render worker | VERIFIED R2 LOCAL | loopback-only Vite worker, bounded queue, cancellation, allowlisted downloads and lifecycle cleanup; real HTTP→FFmpeg→download smoke passed |
 | Connector capability router | VERIFIED ALPHA CONTRACT | shared 44-provider catalog, runtime-aware Board adapters, secret-free status and agent-plan routing; external media/storage/publish adapters remain blocked targets |
@@ -64,8 +64,9 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 - [x] Structurally unsafe/oversized projects fail before queueing or rendering.
 - [x] Completed private outputs are removed when their job is evicted.
 - [x] Real HTTP → queue → FFmpeg/TTS → MP4 download smoke independently ffprobe-verified.
+- [x] Metadata-only sealed candidate API and exact candidate ID/digest/version approval binding.
+- [ ] Bind the real local worker's independently verified render evidence into product candidate storage.
 - [ ] Durable cloud queue/object storage; local worker is intentionally not the public Vercel worker.
-- [ ] Immutable candidate binding and approval transition.
 
 ### R3 connector capability contract
 
@@ -79,6 +80,17 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 - [ ] Quality multilingual TTS adapter + fixture/QC.
 - [ ] Durable object-storage adapter + restore/retention test.
 - [ ] OAuth exchange and publishing adapters after provider review and immutable approval binding.
+
+### R4 immutable publish candidate
+
+- [x] Canonical sealed digest binds project snapshot, recipe/platform, manifest and artifact hashes, rights and evidence status.
+- [x] Timestamps, local paths, arbitrary metadata and request secret fields do not enter candidate output/digest.
+- [x] Candidate create/list/read is workspace-authorized and create is deterministic/idempotent.
+- [x] Public requests are forced to `metadata_only`; request cannot claim worker verification or rights.
+- [x] Approval repeats exact candidate ID/digest/version and rejects stale/mismatched/unapprovable candidates.
+- [x] Approved-but-blocked jobs cannot be relabelled `running` or `completed` through PATCH.
+- [ ] Real local render worker must persist its independently verified evidence as a candidate.
+- [ ] Durable object storage/queue and provider execution remain missing.
 
 ### Public beta
 

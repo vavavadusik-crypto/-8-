@@ -25,6 +25,19 @@ Current executable routes are the no-key public research aggregate, Commons sear
 
 Autopublishing remains disabled.
 
+## Immutable Approval Candidate
+
+Before any social adapter may execute, approval must bind an exact sealed record:
+
+- deterministic project snapshot, recipe, platform, artifact and manifest hashes;
+- rights summary derived from stored project assets;
+- workspace/owner authorization;
+- exact candidate ID, digest and version repeated at approval time;
+- immutable API surface with no update/delete route;
+- approved jobs still blocked from `running` while queue/OAuth/provider-review blockers remain.
+
+Public API requests can create only `metadata_only` candidates. They cannot claim `server_verified`, even if that field is sent in the request. The real media worker must independently verify and persist evidence before a candidate can become approvable.
+
 ## TikTok
 
 Needed:

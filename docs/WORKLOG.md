@@ -35,6 +35,13 @@
   - fail-closed distinction between configured credentials, implemented adapter and executable route;
   - social publishing remains OAuth/immutable-approval blocked.
 - Verified the R3 combined `npm run check`: 102/102 unit tests, API smoke, four real FFmpeg/ffprobe renders, Vite build and browser screenshot smoke.
+- Added the R4 immutable publish candidate contract:
+  - deterministic project/recipe/artifact/manifest/rights/evidence digest and sealed ID;
+  - metadata-only public create/list/read routes with workspace isolation and idempotency;
+  - exact candidate ID/digest/version approval binding and stale digest rejection;
+  - approved-but-execution-blocked jobs cannot be relabelled running through PATCH;
+  - local worker persistence of server-verified evidence remains the next blocker.
+- Verified the R4 combined `npm run check`: 107/107 unit tests, API smoke, four real FFmpeg/ffprobe renders, Vite build and browser screenshot smoke.
 - Ollama `kimi-k2.7-code:cloud` + OpenCode launcher and handoff are committed; parallel Kimi execution is blocked only by pending owner `ollama signin`.
 - Verified a real local HTTP job produced and downloaded a 15.97-second 1920×1080 H.264/AAC MP4; public job state contained no `/tmp` path.
 - Verified the public CLI manually produced a 15.96-second 1920×1080 H.264/AAC file and valid manifest sidecar.

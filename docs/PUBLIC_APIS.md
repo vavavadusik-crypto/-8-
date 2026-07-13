@@ -17,6 +17,9 @@ GET /api/connectors/start?provider=tiktok
 GET /api/connectors/start?provider=instagram
 GET /api/connectors/callback
 GET /api/product?route=connectors/capabilities
+GET /api/product?route=publish-candidates
+POST /api/product?route=publish-candidates
+GET /api/product?route=publish-candidates/:id
 POST /api/product?route=agent/plan
 ```
 
@@ -52,6 +55,8 @@ signup URLs, not secret values. Users must bring their own keys or activate
 no-key sources.
 
 `GET /api/product?route=connectors/capabilities` reports Board capability routes, adapter implementation, configuration booleans, runtime compatibility, primary/fallback selection and blockers. It never returns env names or values. Provider credentials can produce `configured_but_adapter_missing`; they cannot promote an unimplemented adapter to executable.
+
+`GET/POST /api/product?route=publish-candidates` and the read-by-ID route expose immutable sealed candidate metadata. Creation derives rights from stored project assets, forces public evidence to `metadata_only`, strips arbitrary request metadata, uses deterministic IDs, and is workspace-authorized. Approval must repeat the exact candidate ID, digest and version; it still cannot execute publishing.
 
 `POST /api/ai/respond` supports BYOK AI requests for OpenAI and selected
 OpenAI-compatible providers. The key is passed per request and is not stored by

@@ -10,7 +10,8 @@
 - Added private per-run directories, atomic files, process cancellation/timeouts, scrubbed media subprocess environments and strict ffprobe QC.
 - Added deterministic manifests with recipe/tool/QC/lineage evidence, artifact hashes and a SHA-256 sidecar.
 - Added iterative structural preflight, fail-closed per-command FFmpeg argv schemas/redaction, physical `/tmp` output containment and direct independent ffprobe integration checks after external BLOCK reviews.
-- Added 102 unit tests and four real repeat media renders across both aspect ratios to the canonical `npm run check` gate.
+- Added 107 unit tests and four real repeat media renders across both aspect ratios to the canonical `npm run check` gate.
+- Added deterministic sealed publish candidates with project/render/rights digests, workspace authorization and exact stale-safe approval binding.
 - Added a runtime-aware connector capability router over the shared 44-provider catalog; secret-free status and agent plans distinguish configured slots from implemented/executable adapters.
 - Added a loopback-only Board render worker with bounded queueing, cancellation, allowlisted artifact downloads and lifecycle cleanup.
 - Connected truthful local render controls to the Board UI and verified a real HTTP → FFmpeg/TTS → downloaded MP4 path independently with ffprobe.

@@ -5,6 +5,7 @@ import { buildAgentPlan } from "./_lib/agent-plan.js";
 import { getConnectorCapabilityStatus } from "./_lib/connector-capabilities.js";
 import { handleApiError, readJson, requireMethods, sendJson } from "./_lib/http.js";
 import { createProjectRecord, summarizeProject, updateProjectRecord } from "./_lib/projects.js";
+import { assertCandidateApproval, buildPublishCandidate, summarizeAssetRights } from "./_lib/publish-candidates.js";
 import { getProductReadiness } from "./_lib/readiness.js";
 import { createSignedSessionToken } from "./_lib/session.js";
 import { encryptSecret, redactConnector, requireTokenVault, sanitizeConnectorMetadata } from "./_lib/token-vault.js";
@@ -114,6 +115,16 @@ export default async function handler(request, response) {
 
     if (path[0] === "assets" && !path[1]) {
       await handleAssetsIndex(request, response);
+      return;
+    }
+
+    if (path[0] === "publish-candidates" && !path[1]) {
+      await handlePublishCandidatesIndex(request, response);
+      return;
+    }
+
+    if (path[0] === "publish-candidates" && path[1]) {
+      await handlePublishCandidateById(request, response, path[1]);
       return;
     }
 
@@ -410,6 +421,104 @@ async function handleAssetsIndex(request, response) {
   sendJson(response, 201, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), asset });
 }
 
+async function handlePublishCandidatesIndex(request, response) {
+  if (!requireMethods(request, response, ["GET", "POST"])) return;
+
+  if (request.method === "GET") {
+    const actor = requireReadAccess(request);
+    const candidates = await listRecords("publishCandidates");
+    sendJson(response, 200, {
+      ok: true,
+      storage: getStorageStatus(),
+      auth: getAuthStatus(),
+      candidates: filterRecordsForActor(candidates, actor)
+    });
+    return;
+  }
+
+  const actor = requireWriteAccess(request);
+  const body = await readJson(request);
+  const projectId = safeText(body.projectId, 120);
+  const project = isStorageSafeId(projectId) ? await getRecord("projects", projectId) : null;
+  if (!project) {
+    const error = new Error("candidate_project_not_found");
+    error.status = 404;
+    error.code = "candidate_project_not_found";
+    throw error;
+  }
+  requireRecordAccess(project, actor, "create publish candidate for");
+  const visibleAssets = filterRecordsForActor(await listRecords("assets"), actor)
+    .filter(asset => asset.projectId === project.id);
+  const now = new Date().toISOString();
+  const candidate = buildPublishCandidate({
+    projectRecord: project,
+    recipe: body.recipe,
+    platforms: body.platforms || project.project?.publish?.platforms,
+    artifacts: body.artifacts,
+    manifestSha256: body.manifestSha256,
+    rights: summarizeAssetRights(visibleAssets),
+    evidence: {
+      status: "metadata_only",
+      verifier: "api-metadata-v1"
+    },
+    createdAt: now
+  });
+  const existing = await getRecord("publishCandidates", candidate.id);
+  if (existing) {
+    requireRecordAccess(existing, actor, "read publish candidate");
+    if (existing.digest !== candidate.digest || existing.status !== "sealed") {
+      throwProductError("publish_candidate_id_collision", 409);
+    }
+    sendJson(response, 200, {
+      ok: true,
+      created: false,
+      storage: getStorageStatus(),
+      auth: getAuthStatus(),
+      candidate: existing
+    });
+    return;
+  }
+  const record = {
+    ...candidate,
+    createdBy: actorSnapshot(actor),
+    updatedBy: actorSnapshot(actor)
+  };
+  await saveRecord("publishCandidates", record);
+  await appendAudit("publish_candidate.sealed", {
+    id: record.id,
+    projectId: record.projectId,
+    workspaceId: record.workspaceId,
+    ownerUserId: record.ownerUserId,
+    digest: record.digest,
+    evidenceStatus: record.evidence.status,
+    approvable: record.approvable
+  }, actor);
+  sendJson(response, 201, {
+    ok: true,
+    created: true,
+    storage: getStorageStatus(),
+    auth: getAuthStatus(),
+    candidate: record
+  });
+}
+
+async function handlePublishCandidateById(request, response, id) {
+  if (!requireMethods(request, response, ["GET"])) return;
+  const actor = requireReadAccess(request);
+  const candidate = await getRecord("publishCandidates", id);
+  if (!candidate) {
+    sendJson(response, 404, { ok: false, error: "publish_candidate_not_found", id });
+    return;
+  }
+  requireRecordAccess(candidate, actor, "read publish candidate");
+  sendJson(response, 200, {
+    ok: true,
+    storage: getStorageStatus(),
+    auth: getAuthStatus(),
+    candidate
+  });
+}
+
 async function handleJobsIndex(request, response) {
   if (!requireMethods(request, response, ["GET", "POST"])) return;
 
@@ -423,8 +532,18 @@ async function handleJobsIndex(request, response) {
   const actor = requireWriteAccess(request);
   const body = await readJson(request);
   const now = new Date().toISOString();
-  const plan = buildAgentPlan(body.publishPack || body.pack || {});
   const ownership = await childRecordOwnership(body.projectId, actor, "create job for");
+  const candidate = body.candidateId
+    ? await loadCandidateBinding(body, ownership.projectId, actor)
+    : null;
+  const plan = buildAgentPlan(body.publishPack || body.pack || {});
+  if (candidate) {
+    plan.blockers = unique([
+      ...plan.blockers,
+      ...(candidate.approvalBlockers || []).map(blocker => `candidate_${blocker}`)
+    ]);
+    plan.status = plan.blockers.length ? "blocked_until_connectors_and_storage" : "ready_for_human_approval";
+  }
   const job = {
     id: createId("job"),
     projectId: ownership.projectId,
@@ -433,6 +552,7 @@ async function handleJobsIndex(request, response) {
     type: String(body.type || "publish_plan"),
     status: jobStatusFromPlan(plan),
     plan,
+    candidate: candidate ? candidateReference(candidate) : null,
     approval: approvalStateFromPlan(plan),
     createdBy: ownership.actor,
     updatedBy: ownership.actor,
@@ -471,7 +591,7 @@ async function handleJobById(request, response, id) {
   const body = await readJson(request);
   const job = {
     ...existing,
-    status: normalizeJobStatus(body.status, existing.status),
+    status: normalizeJobTransition(body.status, existing),
     note: body.note ? String(body.note).slice(0, 4000) : existing.note,
     updatedBy: actorSnapshot(actor),
     updatedAt: new Date().toISOString()
@@ -492,27 +612,35 @@ async function handleJobApproval(request, response, id) {
   }
   requireRecordAccess(existing, actor, "approve");
 
-  if (existing.approval?.status === "blocked") {
+  const body = await readJson(request);
+  const action = normalizeApprovalAction(body.action || body.decision);
+  if (action === "approve" && existing.approval?.status === "blocked") {
     const error = new Error("job_approval_blocked");
     error.status = 409;
     error.code = "job_approval_blocked";
     error.note = "Resolve job plan blockers before approval.";
     throw error;
   }
-
-  const body = await readJson(request);
-  const action = normalizeApprovalAction(body.action || body.decision);
+  const candidate = action === "approve"
+    ? await loadApprovalCandidate(existing, body, actor)
+    : null;
   const now = new Date().toISOString();
   const actorRecord = actorSnapshot(actor);
   const approval = {
     required: true,
     status: action === "approve" ? "approved" : "rejected",
+    candidate: candidate ? candidateReference(candidate) : existing.candidate || null,
     decidedAt: now,
     decidedBy: actorRecord,
     note: safeText(body.note, 4000)
   };
   const executionBlockers = action === "approve"
-    ? ["durable_job_queue_not_implemented", "autopublishing_disabled"]
+    ? [
+        "durable_job_queue_not_implemented",
+        "oauth_token_exchange_not_implemented",
+        "provider_review_not_complete",
+        "autopublishing_disabled"
+      ]
     : [];
   const job = {
     ...existing,
@@ -533,6 +661,8 @@ async function handleJobApproval(request, response, id) {
     workspaceId: job.workspaceId,
     ownerUserId: job.ownerUserId,
     decision: approval.status,
+    candidateId: approval.candidate?.id || "",
+    candidateDigest: approval.candidate?.digest || "",
     executionBlockers
   }, actor);
   sendJson(response, 200, { ok: true, storage: getStorageStatus(), auth: getAuthStatus(), job });
@@ -687,6 +817,64 @@ async function childRecordOwnership(projectIdInput, actor, action) {
   };
 }
 
+async function loadCandidateBinding(body, projectId, actor) {
+  const candidateId = safeText(body.candidateId, 120);
+  const candidate = isStorageSafeId(candidateId)
+    ? await getRecord("publishCandidates", candidateId)
+    : null;
+  if (!candidate) throwProductError("publish_candidate_not_found", 404);
+  requireRecordAccess(candidate, actor, "bind publish candidate");
+  if (candidate.projectId !== projectId) throwProductError("candidate_project_mismatch", 409);
+  if (candidate.status !== "sealed") throwProductError("candidate_not_sealed", 409);
+  if (String(body.candidateDigest || "") !== candidate.digest) {
+    throwProductError("candidate_digest_mismatch", 409);
+  }
+  if (Number(body.candidateVersion) !== candidate.version) {
+    throwProductError("candidate_version_mismatch", 409);
+  }
+  return candidate;
+}
+
+async function loadApprovalCandidate(job, body, actor) {
+  const binding = job.candidate;
+  if (!binding?.id || !binding.digest || !binding.version) {
+    throwProductError("job_candidate_binding_required", 409);
+  }
+  if (body.candidateId !== binding.id || body.candidateDigest !== binding.digest || Number(body.candidateVersion) !== binding.version) {
+    throwProductError("job_candidate_binding_mismatch", 409);
+  }
+  const candidate = await getRecord("publishCandidates", binding.id);
+  if (!candidate) throwProductError("publish_candidate_not_found", 404);
+  requireRecordAccess(candidate, actor, "approve publish candidate");
+  if (candidate.projectId !== job.projectId || candidate.workspaceId !== job.workspaceId) {
+    throwProductError("candidate_job_ownership_mismatch", 409);
+  }
+  assertCandidateApproval(candidate, body);
+  return candidate;
+}
+
+function candidateReference(candidate) {
+  return {
+    id: candidate.id,
+    digest: candidate.digest,
+    version: candidate.version,
+    status: candidate.status,
+    evidenceStatus: candidate.evidence?.status || "unknown",
+    approvable: Boolean(candidate.approvable)
+  };
+}
+
+function throwProductError(code, status) {
+  const error = new Error(code);
+  error.code = code;
+  error.status = status;
+  throw error;
+}
+
+function unique(values) {
+  return [...new Set(values)];
+}
+
 function normalizeConnectorProvider(value) {
   const provider = String(value || "").trim().toLowerCase();
   if (CONNECTOR_PROVIDERS.has(provider)) return provider;
@@ -777,6 +965,16 @@ function normalizeApprovalAction(value) {
   error.code = "invalid_approval_action";
   error.note = "Approval action must be approve or reject.";
   throw error;
+}
+
+function normalizeJobTransition(value, existing) {
+  const status = normalizeJobStatus(value, existing.status);
+  if (status !== "running" && status !== "completed") return status;
+  const blocked = existing.approval?.status !== "approved"
+    || existing.execution?.canAutopublish === false
+    || (existing.plan?.blockers || []).length > 0;
+  if (blocked) throwProductError("job_execution_blocked", 409);
+  return status;
 }
 
 function normalizeJobStatus(value, fallback) {
