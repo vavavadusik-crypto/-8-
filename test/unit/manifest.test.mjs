@@ -30,6 +30,33 @@ const artifact = {
   }
 };
 
+const validTtsCommand = {
+  id: "tts",
+  tool: "ffmpeg",
+  argv: [
+    "-hide_banner", "-loglevel", "error", "-n", "-f", "lavfi",
+    "-i", "flite=textfile=/tmp/private-run/narration.txt:voice=slt",
+    "-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le",
+    "/tmp/private-run/narration.partial.wav"
+  ]
+};
+const validRenderCommand = {
+  id: "render",
+  tool: "ffmpeg",
+  argv: [
+    "-hide_banner", "-loglevel", "error", "-n", "-f", "lavfi",
+    "-i", "color=c=0x111827:s=1920x1080:r=30:d=3.200",
+    "-i", "/tmp/private-run/narration.wav",
+    "-map", "0:v:0", "-map", "1:a:0",
+    "-vf", "subtitles=filename=/tmp/private-run/narration.srt:force_style='FontName=DejaVu Sans,Alignment=2,MarginV=80'",
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+    "-pix_fmt", "yuv420p", "-r", "30", "-c:a", "aac",
+    "-b:a", "192k", "-ar", "48000", "-ac", "2",
+    "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-shortest",
+    "-movflags", "+faststart", "/tmp/private-run/youtube.partial.mp4"
+  ]
+};
+
 function build(overrides = {}) {
   return buildRenderManifest({
     project: { schemaVersion: 1, title: "Demo", cards: [{ id: "a" }] },
@@ -48,11 +75,7 @@ function build(overrides = {}) {
       },
       apiToken: "secret-value"
     },
-    commands: [{
-      id: "render",
-      tool: "ffmpeg",
-      argv: ["-i", "/tmp/private-run/narration.wav", "--api-key", "secret-value"]
-    }],
+    commands: [validTtsCommand, validRenderCommand],
     qc: { passed: true, checks: ["ffprobe_streams", "artifact_hashes"] },
     blockers: ["semantic_edit_not_implemented"],
     warnings: ["offline_flite_voice_is_english_only"],
@@ -83,8 +106,9 @@ test("render manifest is deterministic and records recipe, QC, commands and line
   assert.equal("path" in first.artifacts[0], false);
   assert.equal(first.qc.passed, true);
   assert.deepEqual(first.lineage.parents, ["project:demo"]);
-  assert.equal(first.commands[0].argv[1], "<run>/narration.wav");
-  assert.equal(first.commands[0].argv[3], "<redacted>");
+  assert.equal(first.commands[0].argv[7], "flite=textfile=<run>/narration.txt:voice=slt");
+  assert.equal(first.commands[1].argv[9], "<run>/narration.wav");
+  assert.equal(first.commands[1].argv.at(-1), "<run>/youtube.partial.mp4");
   assert.ok(first.blockers.includes("semantic_edit_not_implemented"));
 });
 
@@ -99,26 +123,23 @@ test("render manifest allowlists tool metadata and removes secret-shaped fields"
   assert.doesNotMatch(serialized, /secret-value|must-not-survive/);
 });
 
-test("render manifest redacts header carriers and credential-bearing URLs", () => {
-  const sentinel = "header-sentinel-must-not-survive";
-  const manifest = build({
-    commands: [{
-      id: "render",
-      tool: "ffmpeg",
-      argv: [
-        "--header",
-        `Authorization: Bearer ${sentinel}`,
-        "-i",
-        `https://user:${sentinel}@example.invalid/input.mp4`
-      ]
-    }]
-  });
-  const serialized = JSON.stringify(manifest);
-
-  assert.equal(manifest.commands[0].argv[1], "<redacted>");
-  assert.equal(manifest.commands[0].argv[3], "<redacted-url>");
-  assert.doesNotMatch(serialized, new RegExp(sentinel));
-  assert.doesNotMatch(serialized, /Authorization: Bearer|user:/i);
+test("render manifest rejects credential carriers outside the internal command schemas", () => {
+  const sentinel = "review-sentinel-73f2";
+  const authHeader = `${"Author" + "ization"}: ${"Bear" + "er"} ${sentinel}`;
+  const counterexamples = [
+    [`--header=${authHeader}`],
+    [`-H${authHeader}`],
+    [`https://${sentinel}@example.invalid/input`],
+    ["--cookie", sentinel],
+    ["--header", authHeader],
+    ["-H", authHeader]
+  ];
+  for (const argv of counterexamples) {
+    assert.throws(
+      () => build({ commands: [{ id: "render", tool: "ffmpeg", argv }] }),
+      /command argv schema/i
+    );
+  }
 });
 
 test("render manifest rejects unknown command evidence and unsafe argv shapes", () => {

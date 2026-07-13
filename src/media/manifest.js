@@ -121,6 +121,7 @@ function normalizeCommands(commands) {
       }
       return argument;
     });
+    validateCommandArgv(id, argv, commandIndex);
     let redactNext = false;
     const sanitized = argv.map(argument => {
       if (redactNext) {
@@ -138,6 +139,82 @@ function normalizeCommands(commands) {
     });
     return { id, tool, argv: sanitized };
   });
+}
+
+function validateCommandArgv(id, argv, commandIndex) {
+  try {
+    if (id === "tts") validateTtsArgv(argv);
+    else if (id === "render") validateRenderArgv(argv);
+    else throw new TypeError("unsupported schema");
+  } catch {
+    throw new TypeError(`Command argv schema mismatch at index ${commandIndex}`);
+  }
+}
+
+function validateTtsArgv(argv) {
+  const cursor = argvCursor(argv);
+  cursor.expect("-hide_banner", "-loglevel", "error", "-n", "-f", "lavfi", "-i");
+  const source = cursor.take();
+  const match = source.match(/^flite=textfile=(\/[A-Za-z0-9_./-]+):voice=(slt|awb|kal|kal16|rms)$/);
+  if (!match || !isSafeGeneratedPath(match[1])) throw new TypeError("invalid flite source");
+  cursor.expect("-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le");
+  if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid TTS output");
+  cursor.finish();
+}
+
+function validateRenderArgv(argv) {
+  const cursor = argvCursor(argv);
+  cursor.expect("-hide_banner", "-loglevel", "error", "-n", "-f", "lavfi", "-i");
+  if (!/^color=c=0x[0-9a-f]{6}:s=\d+x\d+:r=\d+:d=\d+\.\d{3}$/i.test(cursor.take())) {
+    throw new TypeError("invalid color source");
+  }
+  cursor.expect("-i");
+  if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid narration input");
+  cursor.expect("-map", "0:v:0", "-map", "1:a:0", "-vf");
+  const videoFilter = cursor.take();
+  if (
+    !/^(?:drawtext=|subtitles=)/.test(videoFilter) ||
+    !/subtitles=filename=\/[A-Za-z0-9_./-]+:force_style=/.test(videoFilter) ||
+    /(?:[a-z][a-z0-9+.-]*:\/\/|authorization|cookie|--header)/i.test(videoFilter)
+  ) {
+    throw new TypeError("invalid video filter");
+  }
+  cursor.expect(
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+    "-pix_fmt", "yuv420p", "-r", "30", "-c:a", "aac",
+    "-b:a", "192k", "-ar", "48000", "-ac", "2", "-af"
+  );
+  if (!/^loudnorm=I=-?\d+(?:\.\d+)?:TP=-1\.5:LRA=11$/.test(cursor.take())) {
+    throw new TypeError("invalid audio filter");
+  }
+  cursor.expect("-shortest", "-movflags", "+faststart");
+  if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid render output");
+  cursor.finish();
+}
+
+function argvCursor(argv) {
+  let index = 0;
+  return {
+    expect(...expected) {
+      for (const value of expected) {
+        if (argv[index] !== value) throw new TypeError("unexpected argument");
+        index += 1;
+      }
+    },
+    take() {
+      if (index >= argv.length) throw new TypeError("missing argument");
+      const value = argv[index];
+      index += 1;
+      return value;
+    },
+    finish() {
+      if (index !== argv.length) throw new TypeError("unexpected trailing argument");
+    }
+  };
+}
+
+function isSafeGeneratedPath(value) {
+  return /^\/[A-Za-z0-9_./-]+$/.test(value) && path.posix.normalize(value) === value;
 }
 
 function redactRunPath(argument) {
