@@ -1,0 +1,107 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  getConnectorCapabilityStatus,
+  planConnectorCapability
+} from "../../api/_lib/connector-capabilities.js";
+import { buildAgentPlan } from "../../api/_lib/agent-plan.js";
+
+const SECRET = "connector-secret-sentinel-73f2";
+
+function capability(status, id) {
+  const result = status.capabilities.find(item => item.id === id);
+  assert.ok(result, `Missing capability ${id}`);
+  return result;
+}
+
+test("capability status is secret-free and never equates configured slots with implemented adapters", () => {
+  const env = {
+    FAL_KEY: SECRET,
+    ELEVENLABS_API_KEY: SECRET,
+    YOUTUBE_CLIENT_ID: `client-${SECRET}`,
+    YOUTUBE_CLIENT_SECRET: `secret-${SECRET}`,
+    OPENAI_API_KEY: SECRET,
+    BLOB_READ_WRITE_TOKEN: SECRET
+  };
+  const status = getConnectorCapabilityStatus({ env, runtime: "server" });
+  const serialized = JSON.stringify(status);
+
+  assert.equal(serialized.includes(SECRET), false);
+  assert.equal(status.schema, "hermest.connector-capabilities.v1");
+  assert.equal(status.runtime, "server");
+
+  const research = capability(status, "research.search");
+  assert.equal(research.executable, true);
+  assert.equal(research.state, "working_adapter");
+  assert.equal(research.primary.adapterId, "public-research-v1");
+
+  const image = capability(status, "image.generate");
+  assert.equal(image.executable, false);
+  assert.equal(image.state, "configured_but_adapter_missing");
+  assert.equal(image.providers.find(provider => provider.id === "fal")?.configured, true);
+  assert.ok(image.blockers.includes("adapter_not_implemented"));
+
+  const speech = capability(status, "speech.synthesize");
+  assert.equal(speech.executable, false);
+  assert.equal(speech.state, "configured_but_adapter_missing");
+  assert.equal(speech.providers.find(provider => provider.id === "elevenlabs")?.configured, true);
+
+  const publish = capability(status, "publish.draft");
+  assert.equal(publish.executable, false);
+  assert.equal(publish.state, "approval_required");
+  assert.equal(publish.approvalRequired, true);
+  assert.ok(publish.blockers.includes("oauth_token_exchange_not_implemented"));
+  assert.ok(publish.blockers.includes("immutable_publish_candidate_required"));
+  assert.equal(publish.providers.find(provider => provider.id === "youtube")?.state, "oauth_skeleton");
+});
+
+test("local Flite is selected only for the local media runtime", () => {
+  const local = planConnectorCapability("speech.synthesize", {
+    env: {},
+    runtime: "local_media"
+  });
+  assert.equal(local.executable, true);
+  assert.equal(local.state, "working_adapter");
+  assert.equal(local.primary.adapterId, "local-flite-v1");
+
+  const server = planConnectorCapability("speech.synthesize", {
+    env: {},
+    runtime: "server"
+  });
+  assert.equal(server.executable, false);
+  assert.equal(server.primary.adapterId, "elevenlabs-tts-v1");
+  assert.ok(server.blockers.includes("adapter_not_implemented"));
+});
+
+test("agent plan consumes capability routes without enabling publishing or leaking env values", () => {
+  const env = {
+    FAL_KEY: SECRET,
+    YOUTUBE_CLIENT_ID: `client-${SECRET}`,
+    YOUTUBE_CLIENT_SECRET: `secret-${SECRET}`,
+    DATABASE_URL: `postgres://user:${SECRET}@localhost/db`
+  };
+  const plan = buildAgentPlan({
+    platforms: ["youtube_video"],
+    tools: ["parser", "generated_media"],
+    languages: ["ru"]
+  }, { env, runtime: "server" });
+  const serialized = JSON.stringify(plan);
+
+  assert.equal(serialized.includes(SECRET), false);
+  assert.equal(plan.canAutopublish, false);
+  assert.ok(Array.isArray(plan.connectorRoutes));
+  assert.equal(plan.connectorRoutes.find(route => route.id === "research.search")?.executable, true);
+  assert.equal(plan.connectorRoutes.find(route => route.id === "image.generate")?.executable, false);
+  assert.equal(plan.connectorRoutes.find(route => route.id === "publish.draft")?.executable, false);
+  assert.ok(plan.blockers.includes("image_generate_adapter_not_implemented"));
+  assert.ok(plan.blockers.includes("youtube_oauth_token_exchange_not_implemented"));
+  assert.equal(plan.steps.find(step => step.id === "publish_drafts")?.status, "blocked");
+});
+
+test("unknown capabilities fail closed", () => {
+  assert.throws(
+    () => planConnectorCapability("shell.execute", { env: {}, runtime: "server" }),
+    /unknown_connector_capability/
+  );
+});

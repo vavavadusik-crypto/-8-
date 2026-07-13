@@ -9,7 +9,7 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 |---|---|---|
 | Interactive card board | VERIFIED | current frontend and browser smoke |
 | Card image XSS/CSP remediation | VERIFIED LOCALLY, CHECKPOINT PENDING | branch `fix/card-image-xss`; security tests included |
-| Full current project gate | VERIFIED LOCALLY, RE-REVIEW PENDING | `npm run check`: 98/98 unit, API smoke, four real render/repro runs with independent `/usr/bin/ffprobe`, Vite build and browser screenshot smoke on 2026-07-13 |
+| Full current project gate | VERIFIED LOCALLY, RE-REVIEW PENDING | `npm run check`: 102/102 unit, API smoke, four real render/repro runs with independent `/usr/bin/ffprobe`, Vite build and browser screenshot smoke on 2026-07-13 |
 | Public research endpoint | VERIFIED in prior audit/current code | response-to-production-card workflow remains MISSING |
 | BYOK AI proxy | PARTIAL | supported providers exist; structured pipeline and abuse controls incomplete |
 | Pure board→storyboard/script core | VERIFIED R1 | deterministic spatial order, lineage, resource/schema limits; frontend adoption remains pending |
@@ -19,6 +19,7 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 | Publish pack | VERIFIED level 0 metadata | local R1 render artifacts are downloadable in Board UI but are not yet bound to immutable publish candidates |
 | Real MP4 renderer | VERIFIED R1 | FFmpeg H.264/AAC, strict ffprobe, atomic artifacts, private run directory |
 | Local Board render worker | VERIFIED R2 LOCAL | loopback-only Vite worker, bounded queue, cancellation, allowlisted downloads and lifecycle cleanup; real HTTP→FFmpeg→download smoke passed |
+| Connector capability router | VERIFIED ALPHA CONTRACT | shared 44-provider catalog, runtime-aware Board adapters, secret-free status and agent-plan routing; external media/storage/publish adapters remain blocked targets |
 | Platform variants | PARTIAL/VERIFIED R1 | real 16:9 and 9:16 files; vertical is honestly `aspect_only_r1`, semantic edit pending |
 | Render manifest | VERIFIED R1 | deterministic recipe/tool/QC/lineage manifest, hashes and SHA-256 sidecar |
 | Durable worker/queue | MISSING | jobs/approval records only |
@@ -31,6 +32,7 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 - FFmpeg/ffprobe `8.0.1` available.
 - FFmpeg has `flite` filter: usable as deterministic no-key audio smoke fallback, not release-quality Russian voice.
 - Claude Code `2.1.203` installed but not logged in; mandatory Claude gate pending operator login.
+- Ollama `0.31.1` and OpenCode `1.17.15` installed; `kimi-k2.7-code:cloud` is selected but Ollama Cloud sign-in is still required. Exact K2.7 local weights are not viable on this 14 GiB, no-NVIDIA-GPU host.
 - Local OmniCoder excluded.
 
 ## Release gates
@@ -65,6 +67,19 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 - [ ] Durable cloud queue/object storage; local worker is intentionally not the public Vercel worker.
 - [ ] Immutable candidate binding and approval transition.
 
+### R3 connector capability contract
+
+- [x] One shared descriptive provider catalog; no duplicate provider inventory.
+- [x] Runtime-aware adapter registry for research, media, text, image, speech, video, storage, publishing and analytics.
+- [x] Secret-free read-only status endpoint reports configured/implemented/executable separately.
+- [x] FAL/ElevenLabs/OAuth/storage credential sentinels cannot promote missing adapters or appear in serialized status/plan.
+- [x] Agent plan consumes primary/fallback routes and keeps social publish blocked.
+- [x] Public research/Commons and local-only Flite are the only currently executable connector/media routes.
+- [ ] Real image generation adapter + fixture/QC.
+- [ ] Quality multilingual TTS adapter + fixture/QC.
+- [ ] Durable object-storage adapter + restore/retention test.
+- [ ] OAuth exchange and publishing adapters after provider review and immutable approval binding.
+
 ### Public beta
 
 - [ ] Real identity/tenant authorization.
@@ -84,4 +99,4 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 
 ## Non-claims
 
-Current alpha is not a complete content factory, private multi-user SaaS or autopublisher. R1 proves real local media generation and R2 proves a loopback Board-to-worker flow; neither proves cloud durability, semantic short editing or public connector readiness.
+Current alpha is not a complete content factory, private multi-user SaaS or autopublisher. R1 proves real local media generation, R2 proves a loopback Board-to-worker flow, and R3 proves only a truthful capability-routing contract; none proves cloud durability, semantic short editing or public connector readiness.

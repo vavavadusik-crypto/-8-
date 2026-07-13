@@ -27,7 +27,15 @@
   - one-at-a-time bounded render queue, cancellation and private path redaction;
   - allowlisted artifact downloads and cleanup when completed jobs are evicted;
   - Board controls for recipe selection, status, cancellation and artifact links.
-- Verified the R2 branch `npm run check`: 98/98 unit tests, API smoke, four real repeat renders, build and browser smoke.
+- Verified the R2 merged branch `npm run check`: 98/98 unit tests, API smoke, four real repeat renders, build and browser smoke.
+- Added the R3 connector capability contract:
+  - shared normalization of the existing 44-provider catalog;
+  - Board-owned runtime adapter routes with primary/fallback/blockers;
+  - secret-free capability status API and agent-plan integration;
+  - fail-closed distinction between configured credentials, implemented adapter and executable route;
+  - social publishing remains OAuth/immutable-approval blocked.
+- Verified the R3 combined `npm run check`: 102/102 unit tests, API smoke, four real FFmpeg/ffprobe renders, Vite build and browser screenshot smoke.
+- Ollama `kimi-k2.7-code:cloud` + OpenCode launcher and handoff are committed; parallel Kimi execution is blocked only by pending owner `ollama signin`.
 - Verified a real local HTTP job produced and downloaded a 15.97-second 1920×1080 H.264/AAC MP4; public job state contained no `/tmp` path.
 - Verified the public CLI manually produced a 15.96-second 1920×1080 H.264/AAC file and valid manifest sidecar.
 - Claude Code remains installed but unauthenticated; mandatory Claude Opus review is a documented pending gate rather than a claimed pass.

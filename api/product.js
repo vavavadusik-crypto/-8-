@@ -2,6 +2,7 @@ import { createAccount, getAccountAuthStatus, verifyAccountCredentials } from ".
 import { getAuthStatus, getRequestActor, requireOwnerToken, requireReadAccess, requireWriteAccess } from "./_lib/auth.js";
 import { filterRecordsForActor, requireRecordAccess } from "./_lib/authorization.js";
 import { buildAgentPlan } from "./_lib/agent-plan.js";
+import { getConnectorCapabilityStatus } from "./_lib/connector-capabilities.js";
 import { handleApiError, readJson, requireMethods, sendJson } from "./_lib/http.js";
 import { createProjectRecord, summarizeProject, updateProjectRecord } from "./_lib/projects.js";
 import { getProductReadiness } from "./_lib/readiness.js";
@@ -128,6 +129,12 @@ export default async function handler(request, response) {
 
     if (path[0] === "jobs" && path[1]) {
       await handleJobById(request, response, path[1]);
+      return;
+    }
+
+    if (path[0] === "connectors" && path[1] === "capabilities" && !path[2]) {
+      if (!requireMethods(request, response, ["GET"])) return;
+      sendJson(response, 200, getConnectorCapabilityStatus({ env: process.env, runtime: "server" }));
       return;
     }
 

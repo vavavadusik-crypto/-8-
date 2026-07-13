@@ -1,6 +1,29 @@
 # Connectors
 
-This document describes what must be connected before Hermest Board can publish automatically.
+This document describes the Board-owned connector capability layer and what must still be connected before Hermest Board can publish.
+
+## Capability Router
+
+The descriptive provider source remains `public/api-provider-catalog.json`. The runtime planner in `api/_lib/connector-capabilities.js` maps Board capabilities to versioned adapters without copying provider metadata or exposing credential values.
+
+Safe status endpoint:
+
+```text
+GET /api/product?route=connectors/capabilities
+```
+
+States are deliberately stricter than configuration:
+
+- `working_adapter` — implemented for the reported runtime and needs no credential;
+- `configured_adapter` — implemented and a non-secret configuration signal is present;
+- `configured_but_adapter_missing` — credentials exist but no executable adapter exists;
+- `oauth_skeleton` — signed state foundation exists, token exchange does not;
+- `approval_required` — publish capability also needs an immutable candidate and exact human approval;
+- `blocked` — no executable route.
+
+Current executable routes are the no-key public research aggregate, Commons search and local Flite only in `local_media`. FAL, Replicate, Stability, ElevenLabs, Deepgram, AssemblyAI, object storage and social provider entries remain adapter targets. A key or OAuth app pair never makes those routes executable by itself.
+
+Autopublishing remains disabled.
 
 ## TikTok
 
@@ -67,15 +90,19 @@ Current frontend behavior:
 
 - prepares Reels-ready title, description, hashtags, and asset requirements.
 
-## Parser
+## Parser / Research
 
-Future backend job:
+Current backend capability:
 
-1. Receive board topic and media brief.
-2. Search approved sources.
-3. Extract links, facts, media candidates, and citations.
-4. Store source metadata in the project.
-5. Mark every asset as usable, restricted, or unknown.
+1. Receive a bounded research query.
+2. Search the implemented no-key public adapters with per-source timeouts.
+3. Return links, facts, media candidates and citations from successful sources.
+
+Still missing:
+
+1. Bind selected results to project/source records.
+2. Run rights and quality review before using media or quotes.
+3. Mark every asset as usable, restricted or unknown.
 
 ## Translator
 

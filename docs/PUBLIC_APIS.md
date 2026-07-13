@@ -16,6 +16,7 @@ GET /api/connectors/start?provider=youtube
 GET /api/connectors/start?provider=tiktok
 GET /api/connectors/start?provider=instagram
 GET /api/connectors/callback
+GET /api/product?route=connectors/capabilities
 POST /api/product?route=agent/plan
 ```
 
@@ -50,6 +51,8 @@ automation, email, payments, and storage. The catalog stores official docs and
 signup URLs, not secret values. Users must bring their own keys or activate
 no-key sources.
 
+`GET /api/product?route=connectors/capabilities` reports Board capability routes, adapter implementation, configuration booleans, runtime compatibility, primary/fallback selection and blockers. It never returns env names or values. Provider credentials can produce `configured_but_adapter_missing`; they cannot promote an unimplemented adapter to executable.
+
 `POST /api/ai/respond` supports BYOK AI requests for OpenAI and selected
 OpenAI-compatible providers. The key is passed per request and is not stored by
 the endpoint.
@@ -74,11 +77,10 @@ the endpoint.
 
 ## What Still Needs Backend Work
 
-- database-backed users;
-- OAuth token exchange after signed-state callback validation;
-- encrypted token storage;
-- parser worker;
-- translation worker;
-- media generation worker;
-- publishing worker;
-- publish approval screen.
+- enable durable account/user storage and production auth;
+- OAuth token exchange, refresh/revoke and disconnect after signed-state validation;
+- real image/video/quality-TTS/object-storage adapters with fixtures and QC;
+- source selection, rights review and project lineage persistence;
+- durable job queue and retry/reconciliation workers;
+- immutable publish-candidate binding and approval UI;
+- reviewed publishing adapters and analytics ingestion.

@@ -8,7 +8,7 @@ import aiRespond from "../api/ai/respond.js";
 import product from "../api/product.js";
 import userConfigSchema from "../api/user-config/schema.js";
 import { createSignedSessionToken } from "../api/_lib/session.js";
-import { getRecord } from "../api/_lib/storage.js";
+import { getRecord, saveRecord } from "../api/_lib/storage.js";
 import { decryptSecret } from "../api/_lib/token-vault.js";
 
 const originalEnv = { ...process.env };
@@ -38,11 +38,24 @@ try {
   if (!preflight.blockers.includes("account_auth_not_enabled")) {
     throw new Error(`Expected real auth blocker, got ${JSON.stringify(preflight.blockers)}`);
   }
-  await expect("agent-plan", "POST", "agent/plan", {
+  const agentPlan = await expect("agent-plan", "POST", "agent/plan", {
     platforms: ["youtube_video"],
     tools: ["parser", "translator"],
     languages: ["ru", "en"]
   }, 200);
+  if (agentPlan.canAutopublish !== false || agentPlan.steps.find(step => step.id === "publish_drafts")?.status !== "blocked") {
+    throw new Error(`Expected capability-routed blocked publish plan, got ${JSON.stringify(agentPlan)}`);
+  }
+  process.env.FAL_KEY = "smoke-capability-secret-sentinel";
+  const capabilityStatus = await expect("connector-capabilities", "GET", "connectors/capabilities", null, 200);
+  const imageCapability = capabilityStatus.capabilities?.find(capability => capability.id === "image.generate");
+  if (imageCapability?.state !== "configured_but_adapter_missing" || imageCapability.executable !== false) {
+    throw new Error(`Expected configured but unimplemented image adapter, got ${JSON.stringify(imageCapability)}`);
+  }
+  if (JSON.stringify(capabilityStatus).includes(process.env.FAL_KEY)) {
+    throw new Error("Connector capability status leaked a configured secret value.");
+  }
+  delete process.env.FAL_KEY;
   const missingAiKey = await expectAi("ai-respond-missing-key", "POST", {
     prompt: "hello"
   }, 401);
@@ -500,20 +513,32 @@ try {
   process.env.DATABASE_URL = "postgres://smoke.invalid/hermest";
   process.env.YOUTUBE_CLIENT_ID = "smoke-client-id";
   process.env.YOUTUBE_CLIENT_SECRET = "smoke-client-secret";
-  const approvalJob = await expect("job-waiting-for-approval", "POST", "jobs", {
+  const configuredConnectorJob = await expect("job-configured-connector-still-blocked", "POST", "jobs", {
     projectId: id,
     publishPack: { platforms: ["youtube_video"], tools: ["parser"], languages: ["ru"] }
   }, 201);
-  if (approvalJob.job.status !== "waiting_for_approval") {
-    throw new Error(`Expected waiting_for_approval job, got ${approvalJob.job.status}`);
+  if (configuredConnectorJob.job.status !== "blocked" || configuredConnectorJob.job.plan.connectors.youtube.configured !== true || configuredConnectorJob.job.plan.connectors.youtube.executable !== false) {
+    throw new Error(`Expected configured OAuth slot to remain blocked, got ${JSON.stringify(configuredConnectorJob.job)}`);
   }
-  if (approvalJob.job.approval.status !== "pending") {
-    throw new Error(`Expected pending approval state, got ${JSON.stringify(approvalJob.job.approval)}`);
+  const approvalJob = {
+    ...configuredConnectorJob.job,
+    id: "job_future_ready_approval_fixture",
+    status: "waiting_for_approval",
+    plan: {
+      ...configuredConnectorJob.job.plan,
+      status: "ready_for_human_approval",
+      blockers: []
+    },
+    approval: {
+      required: true,
+      status: "pending"
+    }
+  };
+  await saveRecord("jobs", approvalJob);
+  if (approvalJob.approval.status !== "pending") {
+    throw new Error(`Expected pending synthetic approval fixture, got ${JSON.stringify(approvalJob.approval)}`);
   }
-  if (approvalJob.job.plan.status !== "ready_for_human_approval" || approvalJob.job.plan.canAutopublish !== false) {
-    throw new Error(`Expected approval-only agent plan, got ${JSON.stringify(approvalJob.job.plan)}`);
-  }
-  const approvedJob = await expect("job-approval-approve", "POST", `jobs/${approvalJob.job.id}/approval`, {
+  const approvedJob = await expect("job-approval-approve", "POST", `jobs/${approvalJob.id}/approval`, {
     action: "approve",
     note: "Smoke approval"
   }, 200);
@@ -523,10 +548,10 @@ try {
   if (!approvedJob.job.execution.blockers.includes("durable_job_queue_not_implemented")) {
     throw new Error(`Expected durable queue execution blocker, got ${JSON.stringify(approvedJob.job.execution)}`);
   }
-  await expect("job-update-running", "PATCH", `jobs/${approvalJob.job.id}`, {
+  await expect("job-update-running", "PATCH", `jobs/${approvalJob.id}`, {
     status: "running"
   }, 200);
-  const invalidJobStatus = await expect("job-invalid-status", "PATCH", `jobs/${approvalJob.job.id}`, {
+  const invalidJobStatus = await expect("job-invalid-status", "PATCH", `jobs/${approvalJob.id}`, {
     status: "ready_for_approval"
   }, 400);
   if (invalidJobStatus.error !== "invalid_job_status") {
