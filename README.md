@@ -35,7 +35,9 @@ npm run render:project -- \
   --platform youtube_shorts
 ```
 
-Каждый запуск создаёт приватный уникальный каталог под физическим системным `/tmp` и возвращает MP4 H.264/AAC, `narration.wav`, SRT, `storyboard.json`, детерминированный manifest и SHA-256 sidecar. `--output` принимается только для уже существующего физического каталога внутри `/tmp`; repository `tmp` и symlink roots намеренно не считаются доверенными. Встроенный Flite — только no-key/offline smoke voice; для качественной русской озвучки нужен следующий provider adapter.
+Каждый CLI-запуск создаёт приватный уникальный каталог под физическим системным `/tmp` и возвращает MP4 H.264/AAC, `narration.wav`, SRT, `storyboard.json`, детерминированный manifest и SHA-256 sidecar. `--output` принимается только для уже существующего физического каталога внутри `/tmp`; repository `tmp` и symlink roots намеренно не считаются доверенными. Встроенный Flite — только no-key/offline smoke voice; для качественной русской озвучки нужен следующий provider adapter.
+
+При `npm run dev` тот же renderer доступен прямо в панели «План / Roadmap / Видео»: выбери platform recipe и нажми «Создать настоящий MP4». Board отправляет текущий snapshot loopback-only worker, показывает queue/running/completed и даёт ссылки на MP4/WAV/SRT/storyboard/manifest. Кнопка отмены передаёт AbortSignal в media subprocess. Этот worker намеренно отсутствует на публичном Vercel и ничего не публикует.
 
 Возможности:
 
@@ -94,6 +96,8 @@ npm run render:project -- \
 - `docs/MODEL_ROUTING.md` - role-based модели, fallback, quota и eval policy;
 - `docs/TECHNOLOGY_RADAR.md` - adopt/adapter/study/reject решения по open-source компонентам;
 - `docs/RELEASE_READINESS.md` - текущий доказательный release ledger;
+- `docs/NEXT_AGENT_HANDOFF.md` - точный текущий checkpoint, следующий TDD-срез и recovery-команды;
+- `docs/KIMI_OLLAMA_HANDOFF.md` - запуск Kimi K2.7 Code через Ollama Cloud + OpenCode;
 - `docs/DEPLOYMENT.md` - Vercel, Netlify, Docker, static hosting;
 - `docs/ARCHITECTURE.md` - текущая архитектура и backend boundary;
 - `docs/CONNECTORS.md` - что нужно для TikTok, YouTube, Shorts, Instagram;
