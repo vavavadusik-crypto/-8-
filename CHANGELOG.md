@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — R1 local media tracer
+
+- Locked Hermest Board's product North Star around the full topic-to-video-to-publishing conveyor.
+- Moved inline application JavaScript into CSP-compatible modules and hardened imported card-image rendering.
+- Added a pure board-to-storyboard/script domain core with schema/resource limits, stable order and source lineage.
+- Added a provider-neutral narration port with a real no-key FFmpeg/Flite WAV smoke adapter.
+- Added deterministic 16:9 and 9:16 FFmpeg rendering to H.264/AAC MP4, SRT and storyboard artifacts.
+- Added private per-run directories, atomic files, process cancellation/timeouts, scrubbed media subprocess environments and strict ffprobe QC.
+- Added deterministic manifests with recipe/tool/QC/lineage evidence, artifact hashes and a SHA-256 sidecar.
+- Added 79 unit tests and real repeated media integration to the canonical `npm run check` gate.
+- Kept vertical variants explicitly `aspect_only_r1`; semantic shorts, quality multilingual TTS and UI/worker integration remain tracked blockers.
+
 ## 0.2.0
 
 - Interactive Hermest Board with draggable/resizable cards.

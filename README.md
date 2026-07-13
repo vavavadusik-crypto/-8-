@@ -1,6 +1,8 @@
 # Hermest Board
 
-Локальный интерактивный борд для записи обучающих видео про Hermest.
+AI-конвейер контента: исследование и карточки → сценарий/раскадровка → озвучка → настоящее видео → варианты платформ → approval/publishing.
+
+Локальный browser board остаётся творческим control plane; R1 media worker уже умеет детерминированно собирать реальные MP4 через FFmpeg.
 
 Открытие:
 
@@ -15,11 +17,25 @@ npm install
 npm run dev
 ```
 
-Проверка перед деплоем:
+Проверка перед checkpoint/deploy (включает реальный FFmpeg render integration):
 
 ```bash
 npm run check
 ```
+
+Локальная сборка настоящего видео из board JSON:
+
+```bash
+npm run render:project -- \
+  --input test/fixtures/minimal-board.json \
+  --platform youtube_video
+
+npm run render:project -- \
+  --input test/fixtures/minimal-board.json \
+  --platform youtube_shorts
+```
+
+Каждый запуск создаёт приватный уникальный каталог под `tmp/` и возвращает MP4 H.264/AAC, `narration.wav`, SRT, `storyboard.json`, детерминированный manifest и SHA-256 sidecar. Встроенный Flite — только no-key/offline smoke voice; для качественной русской озвучки нужен следующий provider adapter.
 
 Возможности:
 
@@ -35,9 +51,12 @@ npm run check
 - прикрепление плана проекта и roadmap;
 - загрузка плана и roadmap из `.md`, `.txt` или `.json`;
 - сборка сценария из борда, плана и roadmap;
-- озвучка сценария голосом браузера;
+- preview-озвучка сценария голосом браузера;
+- детерминированная локальная R1-озвучка в WAV через TTS adapter (Flite offline smoke fallback);
+- настоящий FFmpeg render в H.264/AAC MP4 с SRT, storyboard, manifest и SHA-256;
+- реальные 16:9 и 9:16 output recipes; semantic short editing честно остаётся blocker следующего среза;
 - авто-тур по карточкам;
-- запись WebM через выбор окна в Chrome;
+- legacy browser screen recording WebM для демонстраций, не считающееся media renderer;
 - подготовка publish pack для TikTok, YouTube, YouTube Shorts и Instagram Reels;
 - очередь агента после генерации видео: парсер, переводчик, медиа-поиск, медиа-генерация, проверка прав, публикация и отчёт;
 - экспорт публикационного пакета в JSON;

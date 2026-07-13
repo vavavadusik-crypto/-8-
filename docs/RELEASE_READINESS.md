@@ -8,17 +8,18 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 | Capability | Status | Evidence / caveat |
 |---|---|---|
 | Interactive card board | VERIFIED | current frontend and browser smoke |
-| Card image XSS/CSP remediation | VERIFIED LOCALLY, UNCOMMITTED | branch `fix/card-image-xss`; security tests included |
-| Full current project gate | VERIFIED | `npm run check`: 46/46 unit, API smoke, Vite build, browser screenshot smoke on 2026-07-13 |
+| Card image XSS/CSP remediation | VERIFIED LOCALLY, CHECKPOINT PENDING | branch `fix/card-image-xss`; security tests included |
+| Full current project gate | VERIFIED | `npm run check`: 79/79 unit, API smoke, media integration, Vite build and browser screenshot smoke on 2026-07-13 |
 | Public research endpoint | VERIFIED in prior audit/current code | response-to-production-card workflow remains MISSING |
 | BYOK AI proxy | PARTIAL | supported providers exist; structured pipeline and abuse controls incomplete |
-| Script builder | MOCKED/PARTIAL | current function contains hardcoded Hermest-specific prose |
-| Browser TTS | VERIFIED preview only | no exportable narration artifact |
-| Browser WebM recording | VERIFIED recording only | not deterministic render pipeline |
-| Publish pack | VERIFIED level 0 metadata | final render assets/subtitles not yet produced |
-| Real narration artifact | MISSING | first R1 target |
-| Real MP4 renderer | MISSING | FFmpeg 8.0.1 and ffprobe are available locally |
-| Platform variants | MOCKED specs | no actual 16:9/9:16 render outputs |
+| Pure board→storyboard/script core | VERIFIED R1 | deterministic spatial order, lineage, resource/schema limits; frontend adoption remains pending |
+| Browser TTS | VERIFIED preview only | not used as exported artifact |
+| Offline narration adapter | VERIFIED R1 SMOKE | real WAV + metadata/hash/cancellation; Flite voice is English-only quality fallback |
+| Browser WebM recording | VERIFIED legacy recording only | explicitly not the deterministic renderer |
+| Publish pack | VERIFIED level 0 metadata | R1 render artifacts are not connected to publish UI yet |
+| Real MP4 renderer | VERIFIED R1 | FFmpeg H.264/AAC, strict ffprobe, atomic artifacts, private run directory |
+| Platform variants | PARTIAL/VERIFIED R1 | real 16:9 and 9:16 files; vertical is honestly `aspect_only_r1`, semantic edit pending |
+| Render manifest | VERIFIED R1 | deterministic recipe/tool/QC/lineage manifest, hashes and SHA-256 sidecar |
 | Durable worker/queue | MISSING | jobs/approval records only |
 | OAuth token exchange/publish | BLOCKED/MISSING | skeleton only; platform review required |
 | Analytics feedback loop | MISSING | target R7 |
@@ -35,16 +36,18 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 
 ### R1 local media tracer
 
-- [ ] Pure storyboard tests observed RED then GREEN.
-- [ ] Platform recipe tests.
-- [ ] Narration audio file exists and ffprobe-valid.
-- [ ] SRT exists and timeline-valid.
-- [ ] 16:9 MP4 has video+audio.
-- [ ] 9:16 MP4 has video+audio.
-- [ ] Manifest contains hashes/probe metadata and no secrets.
-- [ ] Existing `npm run check` stays green.
-- [ ] Independent code/security review.
-- [ ] Claude Code review after login.
+- [x] Pure storyboard tests observed RED then GREEN.
+- [x] Versioned platform recipe tests.
+- [x] Narration audio file exists and is independently ffprobe-valid.
+- [x] SRT exists and its end time fits the rendered timeline.
+- [x] 16:9 MP4 has H.264 video + AAC audio.
+- [x] 9:16 MP4 has H.264 video + AAC audio.
+- [x] Deterministic manifest contains allowlisted tools, redacted argv, QC, lineage, hashes and no secret-shaped metadata.
+- [x] Input/resource/run/process boundary tests and cleanup checks.
+- [x] Repeated real render produces the same manifest/artifact hashes.
+- [x] Existing `npm run check` stays green and now includes `test:media`.
+- [ ] Follow-up independent code/security review (running against hardened snapshot).
+- [ ] Claude Code Opus review after CLI login; current auth blocker is documented.
 
 ### Public beta
 

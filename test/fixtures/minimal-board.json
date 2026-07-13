@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "title": "A short history of artificial intelligence",
+  "brief": {
+    "topic": "History of artificial intelligence",
+    "audience": "general audience",
+    "language": "en",
+    "tone": "documentary",
+    "platforms": ["youtube_video", "youtube_shorts"]
+  },
+  "cards": [
+    {
+      "id": "opening",
+      "x": 80,
+      "y": 80,
+      "title": "The first question",
+      "text": "Could a machine imitate human reasoning?",
+      "sourceRefs": ["source-turing"]
+    },
+    {
+      "id": "learning",
+      "x": 500,
+      "y": 80,
+      "title": "Learning from data",
+      "text": "Machine learning shifted the focus from fixed rules to patterns found in examples.",
+      "sourceRefs": ["source-ml"]
+    },
+    {
+      "id": "today",
+      "x": 920,
+      "y": 80,
+      "title": "The current chapter",
+      "text": "Modern systems can work with language, images, audio, and video.",
+      "sourceRefs": ["source-modern"]
+    }
+  ],
+  "sources": [
+    { "id": "source-turing", "title": "Computing Machinery and Intelligence" },
+    { "id": "source-ml", "title": "Machine learning reference fixture" },
+    { "id": "source-modern", "title": "Multimodal systems reference fixture" }
+  ]
+}

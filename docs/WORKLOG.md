@@ -1,5 +1,23 @@
 # Worklog
 
+## 2026-07-13
+
+- Locked the Board-only North Star, content pipeline, media architecture, delivery plan, agent orchestration and readiness ledger.
+- Completed GitHub/open-source and model-routing research; adopted raw FFmpeg first and kept renderer/model providers behind Board-owned contracts.
+- Added CSP/card-image XSS hardening and browser regression coverage.
+- Built the R1 real-media vertical:
+  - validated board JSON → deterministic storyboard/script;
+  - provider-neutral TTS adapter with real offline WAV smoke output;
+  - SRT generation and measured timeline reconciliation;
+  - real 1920×1080 and 1080×1920 H.264/AAC MP4 rendering;
+  - strict ffprobe/codec/duration/size QC;
+  - deterministic manifest, hashes, redacted argv and SHA-256 sidecar.
+- Hardened imported-input resource limits, normalized ID collisions, private output roots, atomic artifacts, plaintext cleanup, scrubbed media subprocess env, cancellation and timeout escalation.
+- Added repeat-render reproducibility checks and made `test:media` part of `npm run check`.
+- Verified `npm run check`: 79/79 unit tests, API smoke, three real FFmpeg renders inside media integration, Vite build and browser screenshot smoke.
+- Verified the public CLI manually produced a 15.96-second 1920×1080 H.264/AAC file and valid manifest sidecar.
+- Claude Code remains installed but unauthenticated; mandatory Claude Opus review is a documented pending gate rather than a claimed pass.
+
 ## 2026-07-08
 
 - Added an account-auth foundation:
