@@ -120,9 +120,9 @@ test("render output realpath cannot escape through a symlink", async () => {
   );
 });
 
-test("repository tmp is not an implicit trusted render root", async () => {
+test("filesystem roots outside system temp are not trusted render roots", async () => {
   await assert.rejects(
-    () => resolveOutputRoot(path.resolve("tmp")),
+    () => resolveOutputRoot("/home"),
     /outside allowed render roots/
   );
   assert.equal(await resolveOutputRoot("/tmp"), "/tmp");
