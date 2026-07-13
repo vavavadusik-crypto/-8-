@@ -24,8 +24,9 @@ Do not use local OmniCoder. Do not push, deploy, publish, access secrets or alte
 - `38fb89e` — Board UI → loopback Vite worker → bounded queue/cancel → allowlisted artifact downloads.
 - `fa5b71d` — merged permanent checkpoint with R1 security, R2 UI worker and Kimi/OpenCode handoff.
 - `f4a9bfb` — shared connector capability router, secret-free status route and capability-routed agent plan.
+- `85709d9` — deterministic sealed publish candidates, workspace-isolated metadata API and exact stale-safe approval binding.
 
-The current branch passed canonical `npm run check` after `f4a9bfb`: 102/102 unit tests, API smoke, four real render/repro runs, Vite build and browser smoke.
+The current branch passed canonical `npm run check` after `85709d9`: 107/107 unit tests, API smoke, four real render/repro runs, Vite build and browser smoke.
 
 No push, deploy or public publication was performed.
 
@@ -40,7 +41,9 @@ Implemented and real:
 - loopback-only Board render UI/worker with queue, cancel and downloads;
 - one 44-provider catalog plus Board-owned capability routing;
 - implemented no-key research/Commons routes and local-only Flite selection;
-- secret-free configured/implemented/executable status and blocked social plans.
+- secret-free configured/implemented/executable status and blocked social plans;
+- deterministic immutable publish candidates with exact ID/digest/version approval binding;
+- approved jobs remain execution-blocked and cannot be relabelled `running` through PATCH.
 
 Not complete:
 
@@ -48,40 +51,35 @@ Not complete:
 - quality Russian/multilingual TTS adapter;
 - durable cloud queue/object storage;
 - generated-image/video provider adapters;
-- immutable approval candidate binding;
+- trusted persistence of real local worker evidence into product publish candidates;
 - OAuth token exchange and real publishing;
 - analytics feedback loop.
 
 Autopublishing must remain disabled.
 
-## Active next TDD slice: immutable publish candidate
+## Active next TDD slice: trusted local worker candidate evidence
 
 Do not call social APIs and do not implement token exchange in this slice.
 
 Required behavior:
 
-1. Add a pure canonical candidate builder that binds:
-   - project/workspace identity;
-   - normalized board snapshot hash;
-   - exact platform recipe/version;
-   - allowlisted render artifact names, sizes and SHA-256 hashes;
-   - render manifest hash;
-   - rights summary and selected platforms.
-2. Candidate IDs/digests must be deterministic for the same sealed input; timestamps and filesystem paths must not enter the digest.
-3. Add a dedicated storage collection and workspace authorization for publish candidates.
-4. Create/list/read candidate API routes; never return local paths, tokens, env values or arbitrary metadata.
-5. Candidate becomes immutable once sealed. Any project/render/rights change creates a new candidate.
-6. Bind approval to exact `candidateId`, `candidateDigest` and version. Reject stale/mismatched/unsealed/rights-unknown candidates before approval.
-7. Approval remains non-executing: even an approved candidate must return `canAutopublish: false` with durable worker/OAuth/provider-review blockers.
-8. Add audit records for candidate creation/sealing and approval decision without embedding the full board or secrets.
-9. Keep current job APIs backward-compatible or migrate them with explicit fixture updates; do not silently accept an unbound approval.
+1. Add a server-side integration port from the completed loopback render job into the existing `buildPublishCandidate` contract.
+2. Evidence can become `server_verified` only after the current worker's independent ffprobe/manifest/hash checks have completed successfully.
+3. Artifact names, byte counts and SHA-256 values must be derived from the worker's actual manifest/result, never copied from request metadata.
+4. Require a persisted product project with matching workspace/owner and matching normalized board snapshot before saving the candidate.
+5. Derive rights only from persisted project assets through `summarizeAssetRights`; never accept rights status from the browser or worker request.
+6. Fail closed on project snapshot mismatch, missing artifact, hash mismatch, unknown/restricted rights or missing storage authorization.
+7. Persist through a narrow server-only callback/port; do not expose an HTTP flag that lets a client claim `server_verified`.
+8. Return only candidate ID/digest/version/blockers in local job state. Never expose filesystem paths or full board content.
+9. Keep candidates immutable and idempotent. If a deterministic ID already exists with a different digest/state, reject it.
+10. Autopublishing remains disabled even when evidence and rights are valid.
 
-Start RED in `test/unit/publish-candidate.test.mjs`. Include mutation-after-seal, hash/order determinism, path/secret stripping, cross-workspace denial and stale digest counterexamples. Extend API smoke only after the pure contract is GREEN.
+Start RED by extending the local job-manager/integration tests with real manifest-shaped evidence, request-spoofing counterexamples, rights-unknown failure and snapshot mismatch. Extend the real HTTP smoke only after the pure port is GREEN.
 
 Run:
 
 ```bash
-node --test --test-reporter=spec test/unit/publish-candidate.test.mjs
+node --test --test-reporter=spec test/unit/publish-candidate.test.mjs test/unit/local-media-job-manager.test.mjs
 npm run smoke:api
 npm run check
 ```
@@ -90,7 +88,8 @@ npm run check
 
 - Independent final re-review of manifest commit `11da264`.
 - Independent security/lifecycle review of UI worker commit `38fb89e`.
-- Independent connector capability review of `f4a9bfb` is currently running.
+- Independent connector capability review of `f4a9bfb` is currently running or awaiting verdict.
+- Independent immutable candidate review of `85709d9` is currently running.
 - Mandatory Claude Code Opus review: Claude CLI is installed but not logged in; run `claude auth login` when available.
 - Kimi Cloud smoke: Ollama is installed/running, but owner browser sign-in is still required via `ollama signin`.
 
