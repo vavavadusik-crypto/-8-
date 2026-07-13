@@ -9,15 +9,16 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 |---|---|---|
 | Interactive card board | VERIFIED | current frontend and browser smoke |
 | Card image XSS/CSP remediation | VERIFIED LOCALLY, CHECKPOINT PENDING | branch `fix/card-image-xss`; security tests included |
-| Full current project gate | VERIFIED LOCALLY, RE-REVIEW PENDING | `npm run check`: 88/88 unit, API smoke, four real render/repro runs with independent `/usr/bin/ffprobe`, Vite build and browser screenshot smoke on 2026-07-13 |
+| Full current project gate | VERIFIED LOCALLY, RE-REVIEW PENDING | `npm run check`: 98/98 unit, API smoke, four real render/repro runs with independent `/usr/bin/ffprobe`, Vite build and browser screenshot smoke on 2026-07-13 |
 | Public research endpoint | VERIFIED in prior audit/current code | response-to-production-card workflow remains MISSING |
 | BYOK AI proxy | PARTIAL | supported providers exist; structured pipeline and abuse controls incomplete |
 | Pure board→storyboard/script core | VERIFIED R1 | deterministic spatial order, lineage, resource/schema limits; frontend adoption remains pending |
 | Browser TTS | VERIFIED preview only | not used as exported artifact |
 | Offline narration adapter | VERIFIED R1 SMOKE | real WAV + metadata/hash/cancellation; Flite voice is English-only quality fallback |
 | Browser WebM recording | VERIFIED legacy recording only | explicitly not the deterministic renderer |
-| Publish pack | VERIFIED level 0 metadata | R1 render artifacts are not connected to publish UI yet |
+| Publish pack | VERIFIED level 0 metadata | local R1 render artifacts are downloadable in Board UI but are not yet bound to immutable publish candidates |
 | Real MP4 renderer | VERIFIED R1 | FFmpeg H.264/AAC, strict ffprobe, atomic artifacts, private run directory |
+| Local Board render worker | VERIFIED R2 LOCAL | loopback-only Vite worker, bounded queue, cancellation, allowlisted downloads and lifecycle cleanup; real HTTP→FFmpeg→download smoke passed |
 | Platform variants | PARTIAL/VERIFIED R1 | real 16:9 and 9:16 files; vertical is honestly `aspect_only_r1`, semantic edit pending |
 | Render manifest | VERIFIED R1 | deterministic recipe/tool/QC/lineage manifest, hashes and SHA-256 sidecar |
 | Durable worker/queue | MISSING | jobs/approval records only |
@@ -51,6 +52,18 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 - [ ] Independent read-only re-review of the post-BLOCK fix commit.
 - [ ] Claude Code Opus review after CLI login; current auth blocker is documented.
 
+### R2 local Board worker
+
+- [x] Board UI can submit the exact current project snapshot to a same-origin local worker.
+- [x] Worker is bound to loopback and rejects foreign origins/mutations without the custom header.
+- [x] Queue is bounded, runs one media job at a time and supports cancellation.
+- [x] Public job state contains no filesystem paths; artifact downloads are allowlisted.
+- [x] Structurally unsafe/oversized projects fail before queueing or rendering.
+- [x] Completed private outputs are removed when their job is evicted.
+- [x] Real HTTP → queue → FFmpeg/TTS → MP4 download smoke independently ffprobe-verified.
+- [ ] Durable cloud queue/object storage; local worker is intentionally not the public Vercel worker.
+- [ ] Immutable candidate binding and approval transition.
+
 ### Public beta
 
 - [ ] Real identity/tenant authorization.
@@ -70,4 +83,4 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 
 ## Non-claims
 
-Current alpha is not a complete content factory, private multi-user SaaS or autopublisher. R1 will prove real local media generation but will not by itself prove cloud durability or public connector readiness.
+Current alpha is not a complete content factory, private multi-user SaaS or autopublisher. R1 proves real local media generation and R2 proves a loopback Board-to-worker flow; neither proves cloud durability, semantic short editing or public connector readiness.

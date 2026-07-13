@@ -63,6 +63,11 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     const languageInput = document.getElementById("languageInput");
     const mediaBriefInput = document.getElementById("mediaBriefInput");
     const publishOutput = document.getElementById("publishOutput");
+    const localRenderPlatform = document.getElementById("localRenderPlatform");
+    const localRenderStatus = document.getElementById("localRenderStatus");
+    const localRenderArtifacts = document.getElementById("localRenderArtifacts");
+    const renderLocalVideoButton = document.getElementById("renderLocalVideo");
+    const cancelLocalRenderButton = document.getElementById("cancelLocalRender");
     const researchQueryInput = document.getElementById("researchQueryInput");
     const settingsPanel = document.getElementById("settingsPanel");
     const aiProviderInput = document.getElementById("aiProvider");
@@ -95,6 +100,8 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     let tourAbort = false;
     let activeRecorder = null;
     let activeStream = null;
+    let activeLocalRenderJobId = null;
+    let localRenderPollToken = 0;
     let drag = null;
     let raf = null;
 
@@ -887,6 +894,8 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
 
     document.getElementById("stopPlayback").addEventListener("click", stopPlayback);
     document.getElementById("recordVideo").addEventListener("click", recordVideo);
+    renderLocalVideoButton.addEventListener("click", renderLocalVideo);
+    cancelLocalRenderButton.addEventListener("click", cancelLocalRender);
     document.getElementById("buildMediaBrief").addEventListener("click", () => {
       state.publish.packageText = buildMediaBrief();
       publishOutput.value = state.publish.packageText;
@@ -2168,6 +2177,119 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       return lines.join("\n");
     }
 
+    async function renderLocalVideo() {
+      if (activeLocalRenderJobId) {
+        flashStatus("Локальный render уже выполняется");
+        return;
+      }
+      const platform = localRenderPlatform.value || "youtube_video";
+      const pollToken = ++localRenderPollToken;
+      renderLocalVideoButton.disabled = true;
+      localRenderPlatform.disabled = true;
+      cancelLocalRenderButton.disabled = true;
+      localRenderArtifacts.replaceChildren();
+      localRenderStatus.textContent = "Проверяю board и ставлю локальный render в очередь…";
+      try {
+        const data = await fetchJson("/api/local-media/render", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-hermest-local-media": "1"
+          },
+          body: JSON.stringify({ project: buildProjectDocument(), platform })
+        });
+        activeLocalRenderJobId = data.job.id;
+        cancelLocalRenderButton.disabled = false;
+        renderLocalJobStatus(data.job);
+        const completed = await pollLocalRenderJob(data.job.id, pollToken);
+        if (completed?.status === "completed") renderLocalArtifactLinks(completed);
+      } catch (error) {
+        localRenderStatus.textContent = [
+          "Локальный worker недоступен или render отклонён.",
+          `Ошибка: ${error.message || "unknown"}`,
+          "Запусти `npm run dev` локально либо используй `npm run render:project -- --input board.json --platform youtube_video`."
+        ].join("\n");
+      } finally {
+        if (pollToken === localRenderPollToken) {
+          activeLocalRenderJobId = null;
+          renderLocalVideoButton.disabled = false;
+          localRenderPlatform.disabled = false;
+          cancelLocalRenderButton.disabled = true;
+        }
+      }
+    }
+
+    async function pollLocalRenderJob(jobId, pollToken) {
+      const deadline = Date.now() + 10 * 60 * 1000;
+      while (Date.now() < deadline && pollToken === localRenderPollToken) {
+        const data = await fetchJson(`/api/local-media/jobs/${encodeURIComponent(jobId)}`);
+        renderLocalJobStatus(data.job);
+        if (["completed", "failed", "cancelled"].includes(data.job.status)) return data.job;
+        await wait(750);
+      }
+      throw new Error("local_render_poll_timeout");
+    }
+
+    async function cancelLocalRender() {
+      const jobId = activeLocalRenderJobId;
+      if (!jobId) return;
+      cancelLocalRenderButton.disabled = true;
+      localRenderStatus.textContent = `Отменяю job ${jobId}…`;
+      try {
+        const data = await fetchJson(`/api/local-media/jobs/${encodeURIComponent(jobId)}`, {
+          method: "DELETE",
+          headers: {
+            "content-type": "application/json",
+            "x-hermest-local-media": "1"
+          },
+          body: "{}"
+        });
+        renderLocalJobStatus(data.job);
+      } catch (error) {
+        localRenderStatus.textContent = `Отмена не выполнена: ${error.message || "unknown"}`;
+      }
+    }
+
+    function renderLocalJobStatus(job = {}) {
+      localRenderStatus.textContent = [
+        `Job: ${job.id || "unknown"}`,
+        `Status: ${job.status || "unknown"}`,
+        `Recipe: ${job.recipeId || "unknown"}`,
+        job.blockers?.length ? `Blockers: ${job.blockers.join(", ")}` : "",
+        job.warnings?.length ? `Warnings: ${job.warnings.join(", ")}` : "",
+        job.error ? `Error: ${job.error}` : ""
+      ].filter(Boolean).join("\n");
+    }
+
+    function renderLocalArtifactLinks(job) {
+      localRenderArtifacts.replaceChildren();
+      for (const artifact of job.artifacts || []) {
+        if (!artifact.url) continue;
+        const link = document.createElement("a");
+        link.href = artifact.url;
+        link.download = artifact.name;
+        link.textContent = artifact.name;
+        link.rel = "noopener";
+        const meta = document.createElement("span");
+        meta.textContent = artifact.bytes ? `${artifact.type} · ${artifact.bytes} bytes` : artifact.type;
+        const row = document.createElement("div");
+        row.className = "artifact-row";
+        row.append(link, meta);
+        localRenderArtifacts.append(row);
+      }
+    }
+
+    async function checkLocalMediaStatus() {
+      try {
+        const data = await fetchJson("/api/local-media/status");
+        localRenderStatus.textContent = data.mode === "local_only"
+          ? "Local media worker готов. Публикация отключена; создаются только локальные артефакты."
+          : "Local media worker вернул неизвестный режим.";
+      } catch {
+        localRenderStatus.textContent = "Local media worker не запущен. Для настоящего MP4 открой Board через `npm run dev`.";
+      }
+    }
+
     async function fetchJson(url, options = {}) {
       const headers = {
         "accept": "application/json",
@@ -2658,4 +2780,5 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     renderApiProviderControls();
     syncAiSettingsForm();
     loadApiProviderCatalog();
+    checkLocalMediaStatus();
     setTimeout(fitView, 80);

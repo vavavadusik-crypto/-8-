@@ -20,6 +20,13 @@
   - direct independent `/usr/bin/ffprobe` checks of MP4 and WAV;
   - four reproducibility renders across both aspect ratios and removal of repository `tmp` from trusted roots.
 - Verified the post-review `npm run check`: 88/88 unit tests, API smoke, four real FFmpeg/ffprobe renders, Vite build and browser screenshot smoke.
+- Added the R2 local Board worker and UI:
+  - loopback/same-origin HTTP boundary with a required mutation header and bounded JSON bodies;
+  - one-at-a-time bounded render queue, cancellation and private path redaction;
+  - allowlisted artifact downloads and cleanup when completed jobs are evicted;
+  - Board controls for recipe selection, status, cancellation and artifact links.
+- Verified the R2 branch `npm run check`: 98/98 unit tests, API smoke, four real repeat renders, build and browser smoke.
+- Verified a real local HTTP job produced and downloaded a 15.97-second 1920×1080 H.264/AAC MP4; public job state contained no `/tmp` path.
 - Verified the public CLI manually produced a 15.96-second 1920×1080 H.264/AAC file and valid manifest sidecar.
 - Claude Code remains installed but unauthenticated; mandatory Claude Opus review is a documented pending gate rather than a claimed pass.
 
