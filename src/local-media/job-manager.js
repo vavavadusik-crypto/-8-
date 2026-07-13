@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { lstat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open } from "node:fs/promises";
 import path from "node:path";
 
 import { getPlatformRecipe } from "../domain/platform-recipes.js";
@@ -223,7 +223,7 @@ export function createLocalMediaJobManager({
 }
 
 function requirePassedRenderQc(result) {
-  if (result?.manifest?.qc?.passed === false) {
+  if (result?.manifest?.qc?.passed !== true) {
     throw new TypeError("Render result failed quality control");
   }
 }
@@ -288,24 +288,40 @@ async function verifyArtifactEvidenceOnDisk({ artifactPaths, artifacts }) {
   for (const artifact of artifacts) {
     const filePath = artifactPaths.get(artifact.name);
     if (!filePath) throw new TypeError("Render artifact evidence is missing a file");
-    const info = await lstat(filePath);
-    if (!info.isFile() || info.size !== artifact.bytes) {
-      throw new TypeError("Render artifact evidence byte count mismatch");
-    }
-    const actualSha256 = await sha256File(filePath);
-    if (actualSha256 !== artifact.sha256) {
-      throw new TypeError("Render artifact evidence hash mismatch");
-    }
+    await verifyArtifactFileOnDisk(filePath, artifact);
   }
 }
 
-function sha256File(filePath) {
+// Verify stat and hash from a single O_NOFOLLOW handle so a symlink swap between
+// the stat and the read (TOCTOU) cannot substitute out-of-tree bytes.
+async function verifyArtifactFileOnDisk(filePath, artifact) {
+  let handle;
+  try {
+    handle = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch {
+    throw new TypeError("Render artifact evidence is missing a file");
+  }
+  try {
+    const info = await handle.stat();
+    if (!info.isFile() || info.size !== artifact.bytes) {
+      throw new TypeError("Render artifact evidence byte count mismatch");
+    }
+    const actualSha256 = await sha256Handle(handle);
+    if (actualSha256 !== artifact.sha256) {
+      throw new TypeError("Render artifact evidence hash mismatch");
+    }
+  } finally {
+    await handle.close();
+  }
+}
+
+function sha256Handle(handle) {
   return new Promise((resolve, reject) => {
     const hash = createHash("sha256");
-    const input = createReadStream(filePath);
-    input.on("error", reject);
-    input.on("data", chunk => hash.update(chunk));
-    input.on("end", () => resolve(hash.digest("hex")));
+    const stream = handle.createReadStream({ start: 0, autoClose: false });
+    stream.on("error", reject);
+    stream.on("data", chunk => hash.update(chunk));
+    stream.on("end", () => resolve(hash.digest("hex")));
   });
 }
 

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -41,6 +42,7 @@ test("local media jobs run one-at-a-time and expose no filesystem paths", async 
     manifestHashPath: "/tmp/private-run-one/master.manifest.json.sha256",
     manifest: {
       recipe: { id: "youtube-16x9-1080p" },
+      qc: { passed: true },
       blockers: [],
       warnings: [],
       artifacts: [{ name: "master.mp4", type: "video/mp4", bytes: 10, sha256: "a".repeat(64) }]
@@ -64,7 +66,7 @@ test("local media jobs run one-at-a-time and expose no filesystem paths", async 
     outputDir: "/tmp/private-run-two",
     manifestPath: "/tmp/private-run-two/short.manifest.json",
     manifestHashPath: "/tmp/private-run-two/short.manifest.json.sha256",
-    manifest: { recipe: { id: "shorts-9x16-1080p" }, blockers: [], warnings: [], artifacts: [] }
+    manifest: { recipe: { id: "shorts-9x16-1080p" }, qc: { passed: true }, blockers: [], warnings: [], artifacts: [] }
   });
   await manager.waitFor(second.id);
   assert.equal(manager.get(second.id).status, "completed");
@@ -198,6 +200,60 @@ test("candidate persistence re-verifies artifact hashes against files on disk", 
   }
 });
 
+test("candidate persistence rejects a symlinked artifact path and fails closed", async () => {
+  const outputDir = await mkdtemp(path.join(os.tmpdir(), "hermest-candidate-symlink-"));
+  const videoName = "youtube-16x9-1080p.mp4";
+  const manifestName = "youtube-16x9-1080p.manifest.json";
+  const realVideo = path.join(outputDir, "real-video.bin");
+  const videoLink = path.join(outputDir, videoName);
+  const manifestPath = path.join(outputDir, manifestName);
+  const manifestHashPath = `${manifestPath}.sha256`;
+  const videoBytes = "video";
+  const manifestBytes = "{}\n";
+  await writeFile(realVideo, videoBytes, { mode: 0o600 });
+  await symlink(realVideo, videoLink);
+  await writeFile(manifestPath, manifestBytes, { mode: 0o600 });
+  await writeFile(manifestHashPath, `hash  ${manifestName}\n`, { mode: 0o600 });
+  const videoSha = createHash("sha256").update(videoBytes).digest("hex");
+  const manifestSha = createHash("sha256").update(manifestBytes).digest("hex");
+  let persistenceCalls = 0;
+
+  try {
+    const manager = createLocalMediaJobManager({
+      persistVerifiedCandidate: async () => {
+        persistenceCalls += 1;
+        return { id: "cand_symlink", digest: "d".repeat(64), version: 1, status: "sealed", approvable: true, approvalBlockers: [] };
+      },
+      executeRender: async () => ({
+        outputDir,
+        manifestPath,
+        manifestHashPath,
+        manifestArtifact: { name: manifestName, type: "application/json", bytes: manifestBytes.length, sha256: manifestSha },
+        manifest: {
+          recipe: { id: "youtube-16x9-1080p" },
+          qc: { passed: true },
+          blockers: [],
+          warnings: [],
+          artifacts: [{ name: videoName, type: "video/mp4", bytes: videoBytes.length, sha256: videoSha }]
+        }
+      })
+    });
+    const job = manager.submit({
+      projectId: "project_saved_1",
+      project: { title: "Symlink artifact", cards: [{ id: "scene", text: "Renderable scene" }] },
+      platform: "youtube_video"
+    });
+    const completed = await manager.waitFor(job.id);
+
+    assert.equal(completed.status, "completed");
+    assert.equal(persistenceCalls, 0);
+    assert.equal(completed.candidate.status, "blocked");
+    assert.ok(completed.candidate.blockers.includes("publish_candidate_persistence_failed"));
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
 test("candidate persistence failure leaves completed media blocked instead of fabricating approval", async () => {
   const manager = createLocalMediaJobManager({
     verifyArtifactEvidence: async () => {},
@@ -272,6 +328,33 @@ test("render results that fail QC never become completed or downloadable", async
   assert.throws(() => manager.resolveArtifact(job.id, "youtube-16x9-1080p.mp4"), /not available/);
 });
 
+test("render results with a missing QC block never become completed or downloadable", async () => {
+  const manager = createLocalMediaJobManager({
+    executeRender: async () => ({
+      outputDir: "/tmp/private-qc-missing",
+      manifestPath: "/tmp/private-qc-missing/youtube-16x9-1080p.manifest.json",
+      manifestHashPath: "/tmp/private-qc-missing/youtube-16x9-1080p.manifest.json.sha256",
+      manifest: {
+        recipe: { id: "youtube-16x9-1080p" },
+        blockers: [],
+        warnings: [],
+        artifacts: [
+          { name: "youtube-16x9-1080p.mp4", type: "video/mp4", bytes: 9000, sha256: "a".repeat(64) }
+        ]
+      }
+    })
+  });
+  const job = manager.submit({
+    project: { title: "Missing QC", cards: [{ id: "scene", text: "Renderable scene" }] },
+    platform: "youtube_video"
+  });
+  const failed = await manager.waitFor(job.id);
+
+  assert.equal(failed.status, "failed");
+  assert.deepEqual(failed.artifacts, []);
+  assert.throws(() => manager.resolveArtifact(job.id, "youtube-16x9-1080p.mp4"), /not available/);
+});
+
 test("local media job cancellation aborts execution and settles as cancelled", async () => {
   const started = deferred();
   const manager = createLocalMediaJobManager({
@@ -319,7 +402,7 @@ test("render adapter paths cannot escape the private local run directory", async
       outputDir: "/tmp/private-run",
       manifestPath: "/etc/passwd",
       manifestHashPath: "/tmp/private-run/master.manifest.json.sha256",
-      manifest: { recipe: { id: "youtube-16x9-1080p" }, artifacts: [] }
+      manifest: { recipe: { id: "youtube-16x9-1080p" }, qc: { passed: true }, artifacts: [] }
     })
   });
   const job = manager.submit({
@@ -360,6 +443,7 @@ test("evicting a completed job invokes private artifact cleanup", async () => {
       manifestHashPath: `/tmp/${jobId}/master.manifest.json.sha256`,
       manifest: {
         recipe: { id: "youtube-16x9-1080p" },
+        qc: { passed: true },
         blockers: [],
         warnings: [],
         artifacts: []
@@ -390,6 +474,7 @@ test("artifact resolution is allowlisted to completed job outputs", async () => 
       manifestHashPath: "/tmp/private-run/master.manifest.json.sha256",
       manifest: {
         recipe: { id: "youtube-16x9-1080p" },
+        qc: { passed: true },
         blockers: [],
         warnings: [],
         artifacts: [{ name: "master.mp4", type: "video/mp4", bytes: 10, sha256: "a".repeat(64) }]
