@@ -67,6 +67,14 @@ npm run check
 
 Документы:
 
+- `docs/PRODUCT_NORTH_STAR.md` - каноническое определение продукта и минимальный доказательный релиз;
+- `docs/DELIVERY_MASTER_PLAN.md` - текущий порядок вертикальных релизов и Definition of Done;
+- `docs/CONTENT_PIPELINE_SPEC.md` - pipeline, cards, storyboard, assets и quality gates;
+- `docs/MEDIA_RENDERING_ARCHITECTURE.md` - реальная TTS/FFmpeg/worker граница;
+- `docs/AGENT_ORCHESTRATION.md` - scopes, checkpoints, Claude Code и review policy;
+- `docs/MODEL_ROUTING.md` - role-based модели, fallback, quota и eval policy;
+- `docs/TECHNOLOGY_RADAR.md` - adopt/adapter/study/reject решения по open-source компонентам;
+- `docs/RELEASE_READINESS.md` - текущий доказательный release ledger;
 - `docs/DEPLOYMENT.md` - Vercel, Netlify, Docker, static hosting;
 - `docs/ARCHITECTURE.md` - текущая архитектура и backend boundary;
 - `docs/CONNECTORS.md` - что нужно для TikTok, YouTube, Shorts, Instagram;

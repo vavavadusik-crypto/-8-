@@ -1,5 +1,10 @@
 # Fable Handoff And Roadmap
 
+> Historical handoff, superseded on 2026-07-13 by `PRODUCT_NORTH_STAR.md`,
+> `DELIVERY_MASTER_PLAN.md`, `CONTENT_PIPELINE_SPEC.md` and
+> `RELEASE_READINESS.md`. Keep this file for provenance; do not use it to
+> redefine current scope or release order.
+
 This file is the handoff document for the next model/agent that continues
 Hermest Board.
 
