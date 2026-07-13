@@ -99,6 +99,39 @@ test("render manifest allowlists tool metadata and removes secret-shaped fields"
   assert.doesNotMatch(serialized, /secret-value|must-not-survive/);
 });
 
+test("render manifest redacts header carriers and credential-bearing URLs", () => {
+  const sentinel = "header-sentinel-must-not-survive";
+  const manifest = build({
+    commands: [{
+      id: "render",
+      tool: "ffmpeg",
+      argv: [
+        "--header",
+        `Authorization: Bearer ${sentinel}`,
+        "-i",
+        `https://user:${sentinel}@example.invalid/input.mp4`
+      ]
+    }]
+  });
+  const serialized = JSON.stringify(manifest);
+
+  assert.equal(manifest.commands[0].argv[1], "<redacted>");
+  assert.equal(manifest.commands[0].argv[3], "<redacted-url>");
+  assert.doesNotMatch(serialized, new RegExp(sentinel));
+  assert.doesNotMatch(serialized, /Authorization: Bearer|user:/i);
+});
+
+test("render manifest rejects unknown command evidence and unsafe argv shapes", () => {
+  assert.throws(
+    () => build({ commands: [{ id: "upload", tool: "curl", argv: ["https://example.invalid"] }] }),
+    /unsupported command evidence/i
+  );
+  assert.throws(
+    () => build({ commands: [{ id: "render", tool: "ffmpeg", argv: ["-i", "bad\u0000arg"] }] }),
+    /unsafe command argument/i
+  );
+});
+
 test("render manifest rejects unverifiable artifacts", () => {
   assert.throws(
     () => build({ artifacts: [{ name: "empty.mp4", bytes: 0, sha256: "" }] }),

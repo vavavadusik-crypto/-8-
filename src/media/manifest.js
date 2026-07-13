@@ -16,6 +16,13 @@ const TTS_KEYS = [
 ];
 const SENSITIVE_FLAG = /^(?:--?(?:api[-_]?key|token|secret|password|authorization)|authorization)$/i;
 const SENSITIVE_ASSIGNMENT = /^(.*(?:api[-_]?key|token|secret|password|authorization)[^=]*=).*/i;
+const HEADER_FLAG = /^(?:--header|-H)$/i;
+const AUTHORIZATION_CARRIER = /^(?:authorization|proxy-authorization)\s*:/i;
+const CREDENTIAL_URL = /^[a-z][a-z0-9+.-]*:\/\/[^/@\s:]+:[^/@\s]+@/i;
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
+const ALLOWED_COMMAND_TOOLS = Object.freeze({ tts: "ffmpeg", render: "ffmpeg" });
+const MAX_COMMAND_ARGUMENTS = 512;
+const MAX_COMMAND_ARGUMENT_BYTES = 16384;
 
 export function hashJson(value) {
   return createHash("sha256").update(stableStringify(value)).digest("hex");
@@ -93,25 +100,43 @@ function normalizeCommands(commands) {
     if (!command || typeof command !== "object" || Array.isArray(command)) {
       throw new TypeError(`Invalid command evidence at index ${commandIndex}`);
     }
-    const argv = Array.isArray(command.argv) ? command.argv.map(String) : [];
+    const id = safeText(command.id);
+    const tool = safeText(command.tool);
+    if (!id || ALLOWED_COMMAND_TOOLS[id] !== tool) {
+      throw new TypeError(`Unsupported command evidence at index ${commandIndex}`);
+    }
+    if (!Array.isArray(command.argv) || command.argv.length === 0 || command.argv.length > MAX_COMMAND_ARGUMENTS) {
+      throw new TypeError(`Unsafe command argument list at index ${commandIndex}`);
+    }
+    const argv = command.argv.map((value, argumentIndex) => {
+      if (typeof value !== "string" && typeof value !== "number") {
+        throw new TypeError(`Unsafe command argument at ${commandIndex}:${argumentIndex}`);
+      }
+      const argument = String(value);
+      if (
+        CONTROL_CHARACTER.test(argument) ||
+        Buffer.byteLength(argument, "utf8") > MAX_COMMAND_ARGUMENT_BYTES
+      ) {
+        throw new TypeError(`Unsafe command argument at ${commandIndex}:${argumentIndex}`);
+      }
+      return argument;
+    });
     let redactNext = false;
     const sanitized = argv.map(argument => {
       if (redactNext) {
         redactNext = false;
         return "<redacted>";
       }
-      if (SENSITIVE_FLAG.test(argument)) {
+      if (HEADER_FLAG.test(argument) || SENSITIVE_FLAG.test(argument)) {
         redactNext = true;
         return argument;
       }
+      if (AUTHORIZATION_CARRIER.test(argument)) return "<redacted>";
+      if (CREDENTIAL_URL.test(argument)) return "<redacted-url>";
       if (SENSITIVE_ASSIGNMENT.test(argument)) return argument.replace(SENSITIVE_ASSIGNMENT, "$1<redacted>");
       return redactRunPath(argument);
     });
-    return {
-      id: safeText(command.id) || `command-${commandIndex + 1}`,
-      tool: safeText(command.tool),
-      argv: sanitized
-    };
+    return { id, tool, argv: sanitized };
   });
 }
 

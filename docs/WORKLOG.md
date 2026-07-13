@@ -14,7 +14,12 @@
   - deterministic manifest, hashes, redacted argv and SHA-256 sidecar.
 - Hardened imported-input resource limits, normalized ID collisions, private output roots, atomic artifacts, plaintext cleanup, scrubbed media subprocess env, cancellation and timeout escalation.
 - Added repeat-render reproducibility checks and made `test:media` part of `npm run check`.
-- Verified `npm run check`: 79/79 unit tests, API smoke, three real FFmpeg renders inside media integration, Vite build and browser screenshot smoke.
+- Independent follow-up review blocked snapshot `32f8813` on four residual counterexamples; all four now have regressions and fixes:
+  - iterative depth/node/array/string/cycle preflight before any CLI/render side effect;
+  - fail-closed command evidence plus Authorization/header/credential-URL redaction;
+  - direct independent `/usr/bin/ffprobe` checks of MP4 and WAV;
+  - four reproducibility renders across both aspect ratios and removal of repository `tmp` from trusted roots.
+- Verified the post-review `npm run check`: 88/88 unit tests, API smoke, four real FFmpeg/ffprobe renders, Vite build and browser screenshot smoke.
 - Verified the public CLI manually produced a 15.96-second 1920×1080 H.264/AAC file and valid manifest sidecar.
 - Claude Code remains installed but unauthenticated; mandatory Claude Opus review is a documented pending gate rather than a claimed pass.
 

@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import { renderProject } from "../../src/media/render-project.js";
+
+const execFileAsync = promisify(execFile);
 
 const fixture = path.resolve("test/fixtures/minimal-board.json");
 
@@ -22,7 +26,7 @@ for (const expected of [
     recipeId: "shorts-9x16-1080p",
     width: 1080,
     height: 1920,
-    repeat: false
+    repeat: true
   }
 ]) {
   test(`renderProject creates verified ${expected.platform} MP4 with real audio`, {
@@ -35,6 +39,7 @@ for (const expected of [
       outputDir: outputRoot,
       platform: expected.platform
     });
+    const independent = await independentlyProbeArtifacts(result, expected);
     const diskManifest = JSON.parse(await readFile(result.manifestPath, "utf8"));
     const video = diskManifest.artifacts.find(artifact => artifact.type === "video/mp4");
     const audio = diskManifest.artifacts.find(artifact => artifact.type === "audio/wav");
@@ -75,7 +80,7 @@ for (const expected of [
     assert.equal(sidecar, `${manifestSha256}  ${path.basename(result.manifestPath)}\n`);
 
     const srt = await readFile(result.subtitleFile, "utf8");
-    assert.ok(lastSrtEndSeconds(srt) <= video.probe.durationSeconds + 0.25);
+    assert.ok(lastSrtEndSeconds(srt) <= independent.videoDurationSeconds + 0.25);
 
     if (expected.platform === "youtube_shorts") {
       assert.ok(diskManifest.blockers.includes("semantic_edit_not_implemented"));
@@ -90,9 +95,54 @@ for (const expected of [
         outputDir: secondRoot,
         platform: expected.platform
       });
+      await independentlyProbeArtifacts(repeated, expected);
       assert.deepEqual(repeated.manifest, result.manifest);
     }
   });
+}
+
+async function independentlyProbeArtifacts(result, expected) {
+  const videoProbe = await independentFfprobe(result.videoFile);
+  const narrationProbe = await independentFfprobe(result.narrationAudioFile);
+  const videoStream = videoProbe.streams.find(stream => stream.codec_type === "video");
+  const renderedAudioStream = videoProbe.streams.find(stream => stream.codec_type === "audio");
+  const narrationStream = narrationProbe.streams.find(stream => stream.codec_type === "audio");
+
+  assert.ok(videoStream, "independent ffprobe must find a video stream");
+  assert.ok(renderedAudioStream, "independent ffprobe must find an audio stream in MP4");
+  assert.ok(narrationStream, "independent ffprobe must find narration audio");
+  assert.equal(videoStream.codec_name, "h264");
+  assert.equal(Number(videoStream.width), expected.width);
+  assert.equal(Number(videoStream.height), expected.height);
+  assert.equal(renderedAudioStream.codec_name, "aac");
+  assert.equal(Number(renderedAudioStream.sample_rate), 48000);
+  assert.equal(Number(renderedAudioStream.channels), 2);
+  assert.equal(narrationStream.codec_name, "pcm_s16le");
+  assert.equal(Number(narrationStream.sample_rate), 48000);
+  assert.equal(Number(narrationStream.channels), 1);
+
+  const videoDurationSeconds = Number(videoProbe.format.duration);
+  const narrationDurationSeconds = Number(narrationProbe.format.duration);
+  assert.ok(Number(videoProbe.format.size) > 0);
+  assert.ok(Number(narrationProbe.format.size) > 0);
+  assert.ok(videoDurationSeconds > 0);
+  assert.ok(narrationDurationSeconds > 0);
+  assert.ok(Math.abs(videoDurationSeconds - narrationDurationSeconds) <= 0.25);
+  return { videoDurationSeconds, narrationDurationSeconds };
+}
+
+async function independentFfprobe(filePath) {
+  const { stdout } = await execFileAsync("/usr/bin/ffprobe", [
+    "-v", "error",
+    "-show_entries", "format=duration,size:stream=codec_type,codec_name,width,height,sample_rate,channels",
+    "-of", "json",
+    filePath
+  ], {
+    timeout: 30000,
+    maxBuffer: 1024 * 1024,
+    env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" }
+  });
+  return JSON.parse(stdout);
 }
 
 function lastSrtEndSeconds(srt) {

@@ -1,4 +1,3 @@
-import os from "node:os";
 import path from "node:path";
 import {
   chmod,
@@ -29,6 +28,7 @@ import {
 } from "./process-runner.js";
 import { buildSubtitleCues, formatSrt } from "./subtitles.js";
 import { createFliteNarrationAdapter } from "./tts.js";
+import { validateJsonStructure } from "./structural-preflight.js";
 
 const MAX_BOARD_INPUT_BYTES = 2 * 1024 * 1024;
 const PRIVATE_FILE_MODE = 0o600;
@@ -36,13 +36,16 @@ const PRIVATE_DIRECTORY_MODE = 0o700;
 
 export async function renderProject({
   inputPath,
+  project: projectInput,
   outputDir,
   platform = "youtube_video",
   ttsAdapter = createFliteNarrationAdapter(),
   signal
 }) {
   signal?.throwIfAborted();
-  const project = await preflightBoardInput(inputPath);
+  const project = projectInput === undefined
+    ? await preflightBoardInput(inputPath)
+    : validateBoardProject(projectInput);
   const estimatedStoryboard = buildStoryboard(project);
   const narration = buildNarrationScript(estimatedStoryboard);
   const recipe = getPlatformRecipe(platform);
@@ -217,14 +220,23 @@ export async function preflightBoardInput(inputPath) {
     throw new RangeError(`Board input file exceeds the ${MAX_BOARD_INPUT_BYTES} byte limit`);
   }
   const raw = await readFile(resolvedInput, "utf8");
+  let project;
   try {
-    return JSON.parse(raw);
+    project = JSON.parse(raw);
   } catch {
     throw new TypeError("Board input must contain valid JSON");
   }
+  return validateBoardProject(project);
 }
 
-async function resolveOutputRoot(outputDir) {
+export function validateBoardProject(project) {
+  validateJsonStructure(project);
+  buildStoryboard(project);
+  hashJson(project);
+  return project;
+}
+
+export async function resolveOutputRoot(outputDir) {
   const requested = path.resolve(outputDir);
   const resolved = assertSafeGeneratedPath(await realpath(requested));
   const info = await stat(resolved);
@@ -234,16 +246,7 @@ async function resolveOutputRoot(outputDir) {
 }
 
 async function resolveAllowedRoots() {
-  const candidates = [os.tmpdir(), path.resolve("tmp")];
-  const roots = [];
-  for (const candidate of candidates) {
-    try {
-      roots.push(await realpath(candidate));
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
-  }
-  return roots;
+  return [await realpath("/tmp")];
 }
 
 async function atomicWriteFile(filePath, content) {

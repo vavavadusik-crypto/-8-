@@ -9,7 +9,8 @@
 - Added deterministic 16:9 and 9:16 FFmpeg rendering to H.264/AAC MP4, SRT and storyboard artifacts.
 - Added private per-run directories, atomic files, process cancellation/timeouts, scrubbed media subprocess environments and strict ffprobe QC.
 - Added deterministic manifests with recipe/tool/QC/lineage evidence, artifact hashes and a SHA-256 sidecar.
-- Added 79 unit tests and real repeated media integration to the canonical `npm run check` gate.
+- Added iterative structural preflight, fail-closed command evidence/redaction, physical `/tmp` output containment and direct independent ffprobe integration checks after an external BLOCK review.
+- Added 88 unit tests and four real repeat media renders across both aspect ratios to the canonical `npm run check` gate.
 - Kept vertical variants explicitly `aspect_only_r1`; semantic shorts, quality multilingual TTS and UI/worker integration remain tracked blockers.
 
 ## 0.2.0

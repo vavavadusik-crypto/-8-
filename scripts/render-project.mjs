@@ -1,24 +1,19 @@
 #!/usr/bin/env node
-import { mkdir } from "node:fs/promises";
-import path from "node:path";
 
 import { preflightBoardInput, renderProject } from "../src/media/render-project.js";
 
 const options = parseArgs(process.argv.slice(2));
 if (!options.input) {
   process.stderr.write(
-    "Usage: npm run render:project -- --input /safe/project.json [--output /safe/output] [--platform youtube_video]\n"
+    "Usage: npm run render:project -- --input /safe/project.json [--output /tmp/existing-output] [--platform youtube_video]\n"
   );
   process.exitCode = 2;
 } else {
   try {
-    const output = options.output || path.resolve("tmp");
-    if (!options.output) {
-      await preflightBoardInput(options.input);
-      await mkdir(output, { recursive: true, mode: 0o700 });
-    }
+    const project = await preflightBoardInput(options.input);
+    const output = options.output || "/tmp";
     const result = await renderProject({
-      inputPath: options.input,
+      project,
       outputDir: output,
       platform: options.platform || "youtube_video"
     });

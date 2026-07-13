@@ -9,7 +9,7 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 |---|---|---|
 | Interactive card board | VERIFIED | current frontend and browser smoke |
 | Card image XSS/CSP remediation | VERIFIED LOCALLY, CHECKPOINT PENDING | branch `fix/card-image-xss`; security tests included |
-| Full current project gate | VERIFIED | `npm run check`: 79/79 unit, API smoke, media integration, Vite build and browser screenshot smoke on 2026-07-13 |
+| Full current project gate | VERIFIED LOCALLY, RE-REVIEW PENDING | `npm run check`: 88/88 unit, API smoke, four real render/repro runs with independent `/usr/bin/ffprobe`, Vite build and browser screenshot smoke on 2026-07-13 |
 | Public research endpoint | VERIFIED in prior audit/current code | response-to-production-card workflow remains MISSING |
 | BYOK AI proxy | PARTIAL | supported providers exist; structured pipeline and abuse controls incomplete |
 | Pure board→storyboard/script core | VERIFIED R1 | deterministic spatial order, lineage, resource/schema limits; frontend adoption remains pending |
@@ -46,7 +46,9 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 - [x] Input/resource/run/process boundary tests and cleanup checks.
 - [x] Repeated real render produces the same manifest/artifact hashes.
 - [x] Existing `npm run check` stays green and now includes `test:media`.
-- [ ] Follow-up independent code/security review (running against hardened snapshot).
+- [x] Follow-up independent review of snapshot `32f8813` completed with BLOCK and four exact counterexamples.
+- [x] All four review counterexamples now have local regression coverage and pass the full gate.
+- [ ] Independent read-only re-review of the post-BLOCK fix commit.
 - [ ] Claude Code Opus review after CLI login; current auth blocker is documented.
 
 ### Public beta
