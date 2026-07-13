@@ -37,7 +37,7 @@ function input(overrides = {}) {
       }
     },
     recipe: {
-      id: "youtube_video_v1",
+      id: "youtube-16x9-1080p",
       version: "1.0.0",
       platform: "youtube_video",
       width: 1920,
@@ -45,8 +45,8 @@ function input(overrides = {}) {
     },
     platforms: ["youtube_video"],
     artifacts: [
-      { name: "manifest.json", type: "application/json", bytes: 2048, sha256: SHA_B, path: "/tmp/private/manifest.json", token: SECRET },
-      { name: "master.mp4", type: "video/mp4", bytes: 9000, sha256: SHA_A }
+      { name: "youtube-16x9-1080p.manifest.json", type: "application/json", bytes: 2048, sha256: SHA_B, path: "/tmp/private/youtube-16x9-1080p.manifest.json", token: SECRET },
+      { name: "youtube-16x9-1080p.mp4", type: "video/mp4", bytes: 9000, sha256: SHA_A }
     ],
     manifestSha256: SHA_B,
     rights: { status: "allowed", assetIds: ["asset_b", "asset_a"] },
@@ -69,7 +69,7 @@ test("sealed candidate digest is canonical, deterministic and excludes paths, se
   assert.equal(first.project.snapshotSha256, second.project.snapshotSha256);
   assert.equal(first.status, "sealed");
   assert.equal(first.approvable, true);
-  assert.deepEqual(first.artifacts.map(item => item.name), ["manifest.json", "master.mp4"]);
+  assert.deepEqual(first.artifacts.map(item => item.name), ["youtube-16x9-1080p.manifest.json", "youtube-16x9-1080p.mp4"]);
   assert.deepEqual(first.rights.assetIds, ["asset_a", "asset_b"]);
   const serialized = JSON.stringify(first);
   assert.equal(serialized.includes(SECRET), false);

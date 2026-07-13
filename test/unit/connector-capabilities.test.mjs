@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -97,6 +98,12 @@ test("agent plan consumes capability routes without enabling publishing or leaki
   assert.ok(plan.blockers.includes("image_generate_adapter_not_implemented"));
   assert.ok(plan.blockers.includes("youtube_oauth_token_exchange_not_implemented"));
   assert.equal(plan.steps.find(step => step.id === "publish_drafts")?.status, "blocked");
+});
+
+test("Board agent formatter reads explicit connector state instead of object truthiness", async () => {
+  const source = await readFile(new URL("../../src/app.js", import.meta.url), "utf8");
+  assert.match(source, /Boolean\(value\?\.configured\)/);
+  assert.doesNotMatch(source, /\$\{value \? "configured" : "missing"\}/);
 });
 
 test("unknown capabilities fail closed", () => {

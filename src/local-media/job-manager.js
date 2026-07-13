@@ -1,4 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { lstat } from "node:fs/promises";
 import path from "node:path";
 
 import { getPlatformRecipe } from "../domain/platform-recipes.js";
@@ -10,12 +12,20 @@ const DEFAULT_MAX_JOBS = 20;
 export function createLocalMediaJobManager({
   executeRender,
   cleanupRender = async () => {},
+  persistVerifiedCandidate = null,
+  verifyArtifactEvidence = verifyArtifactEvidenceOnDisk,
   maxConcurrent = 1,
   maxJobs = DEFAULT_MAX_JOBS,
   now = () => new Date().toISOString()
 } = {}) {
   if (typeof executeRender !== "function") throw new TypeError("executeRender is required");
   if (typeof cleanupRender !== "function") throw new TypeError("cleanupRender must be a function");
+  if (persistVerifiedCandidate !== null && typeof persistVerifiedCandidate !== "function") {
+    throw new TypeError("persistVerifiedCandidate must be a function or null");
+  }
+  if (typeof verifyArtifactEvidence !== "function") {
+    throw new TypeError("verifyArtifactEvidence must be a function");
+  }
   if (!Number.isSafeInteger(maxConcurrent) || maxConcurrent < 1 || maxConcurrent > 4) {
     throw new RangeError("maxConcurrent must be within 1..4");
   }
@@ -27,8 +37,9 @@ export function createLocalMediaJobManager({
   const queue = [];
   let active = 0;
 
-  function submit({ project, platform = "youtube_video" } = {}) {
+  function submit({ project, projectId, platform = "youtube_video" } = {}) {
     validateProject(project);
+    const persistedProjectId = normalizeProjectId(projectId);
     const recipe = getPlatformRecipe(platform);
     evictFinishedJobs();
     if (jobs.size >= maxJobs) throw new Error("Local media job capacity reached");
@@ -39,6 +50,7 @@ export function createLocalMediaJobManager({
       status: "queued",
       platform: recipe.platformId,
       recipeId: recipe.id,
+      projectId: persistedProjectId,
       createdAt: now(),
       startedAt: null,
       completedAt: null,
@@ -49,6 +61,7 @@ export function createLocalMediaJobManager({
       outputDir: null,
       artifactPaths: new Map(),
       artifacts: [],
+      candidate: null,
       blockers: [],
       warnings: [],
       error: null
@@ -114,7 +127,9 @@ export function createLocalMediaJobManager({
         jobId: record.id
       });
       if (record.controller.signal.aborted) throw record.controller.signal.reason;
+      requirePassedRenderQc(result);
       applyResult(record, result);
+      await persistCandidate(record, result);
       record.status = "completed";
     } catch (error) {
       if (record.controller.signal.aborted || record.status === "cancelling") {
@@ -129,6 +144,32 @@ export function createLocalMediaJobManager({
       active -= 1;
       record.completion.resolve(publicJob(record));
       pump();
+    }
+  }
+
+  async function persistCandidate(record, result) {
+    if (!record.projectId) {
+      record.candidate = blockedCandidate("persisted_project_required");
+      return;
+    }
+    if (!persistVerifiedCandidate) {
+      record.candidate = blockedCandidate("publish_candidate_persistence_not_configured");
+      return;
+    }
+    try {
+      const verifiedRender = buildVerifiedRenderEvidence(record, result);
+      await verifyArtifactEvidence({
+        artifactPaths: new Map(record.artifactPaths),
+        artifacts: verifiedRender.artifacts
+      });
+      const candidate = await persistVerifiedCandidate({
+        projectId: record.projectId,
+        project: structuredClone(record.project),
+        verifiedRender
+      });
+      record.candidate = publicCandidateReference(candidate);
+    } catch {
+      record.candidate = blockedCandidate("publish_candidate_persistence_failed");
     }
   }
 
@@ -147,14 +188,17 @@ export function createLocalMediaJobManager({
         sha256: String(artifact?.sha256 || "")
       });
     }
-    for (const [filePath, type] of [
-      [result?.manifestPath, "application/json"],
-      [result?.manifestHashPath, "text/plain"]
+    for (const [filePath, type, suppliedArtifact] of [
+      [result?.manifestPath, "application/json", result?.manifestArtifact],
+      [result?.manifestHashPath, "text/plain", null]
     ]) {
       const resolvedFile = requireDirectChild(outputDir, filePath);
       const name = safeArtifactName(path.basename(resolvedFile));
       record.artifactPaths.set(name, resolvedFile);
-      publicArtifacts.push({ name, type, bytes: null, sha256: null });
+      const described = suppliedArtifact?.name === name
+        ? normalizeEvidenceArtifact(suppliedArtifact)
+        : null;
+      publicArtifacts.push(described || { name, type, bytes: null, sha256: null });
     }
     record.result = { recipeId: String(manifest?.recipe?.id || record.recipeId) };
     record.outputDir = outputDir;
@@ -178,6 +222,128 @@ export function createLocalMediaJobManager({
   return Object.freeze({ submit, get, cancel, waitFor, resolveArtifact });
 }
 
+function requirePassedRenderQc(result) {
+  if (result?.manifest?.qc?.passed === false) {
+    throw new TypeError("Render result failed quality control");
+  }
+}
+
+function buildVerifiedRenderEvidence(record, result) {
+  const manifest = result?.manifest;
+  if (!manifest || manifest.qc?.passed !== true) {
+    throw new TypeError("Render result is not independently verified");
+  }
+  const recipe = getPlatformRecipe(record.platform);
+  if (manifest.recipe?.id !== recipe.id || record.recipeId !== recipe.id) {
+    throw new TypeError("Render recipe evidence mismatch");
+  }
+  const artifacts = (Array.isArray(manifest.artifacts) ? manifest.artifacts : [])
+    .map(normalizeEvidenceArtifact);
+  const manifestArtifact = normalizeEvidenceArtifact(result?.manifestArtifact);
+  const expectedManifestName = `${recipe.id}.manifest.json`;
+  const expectedVideoName = `${recipe.id}.mp4`;
+  if (manifestArtifact.name !== expectedManifestName || manifestArtifact.type !== "application/json") {
+    throw new TypeError("Render manifest evidence mismatch");
+  }
+  const videoArtifact = artifacts.find(artifact => artifact.name === expectedVideoName);
+  if (!videoArtifact || videoArtifact.type !== "video/mp4") {
+    throw new TypeError("Verified render video evidence is missing");
+  }
+  return {
+    recipe: {
+      id: recipe.id,
+      version: recipe.version,
+      platform: recipe.platformId,
+      width: recipe.width,
+      height: recipe.height
+    },
+    platforms: [recipe.platformId],
+    artifacts: [...artifacts, manifestArtifact].sort((left, right) => left.name.localeCompare(right.name)),
+    manifestSha256: manifestArtifact.sha256,
+    verifier: "local-media-worker-r1"
+  };
+}
+
+function normalizeEvidenceArtifact(value) {
+  const name = safeArtifactName(value?.name);
+  const type = String(value?.type || "").trim().toLowerCase();
+  const bytes = Number(value?.bytes);
+  const sha256 = String(value?.sha256 || "").trim().toLowerCase();
+  if (!/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(type)) {
+    throw new TypeError("Render evidence contains an invalid artifact type");
+  }
+  if (!Number.isSafeInteger(bytes) || bytes <= 0 || bytes > 20 * 1024 * 1024 * 1024) {
+    throw new TypeError("Render evidence contains an invalid artifact size");
+  }
+  if (!/^[a-f0-9]{64}$/.test(sha256)) {
+    throw new TypeError("Render evidence contains an invalid artifact hash");
+  }
+  return { name, type, bytes, sha256 };
+}
+
+async function verifyArtifactEvidenceOnDisk({ artifactPaths, artifacts }) {
+  if (!(artifactPaths instanceof Map) || !Array.isArray(artifacts)) {
+    throw new TypeError("Render artifact verification input is invalid");
+  }
+  for (const artifact of artifacts) {
+    const filePath = artifactPaths.get(artifact.name);
+    if (!filePath) throw new TypeError("Render artifact evidence is missing a file");
+    const info = await lstat(filePath);
+    if (!info.isFile() || info.size !== artifact.bytes) {
+      throw new TypeError("Render artifact evidence byte count mismatch");
+    }
+    const actualSha256 = await sha256File(filePath);
+    if (actualSha256 !== artifact.sha256) {
+      throw new TypeError("Render artifact evidence hash mismatch");
+    }
+  }
+}
+
+function sha256File(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = createHash("sha256");
+    const input = createReadStream(filePath);
+    input.on("error", reject);
+    input.on("data", chunk => hash.update(chunk));
+    input.on("end", () => resolve(hash.digest("hex")));
+  });
+}
+
+function publicCandidateReference(candidate) {
+  const id = String(candidate?.id || "");
+  const digest = String(candidate?.digest || "");
+  const version = Number(candidate?.version);
+  if (!/^cand_[A-Za-z0-9_-]{2,120}$/.test(id) || !/^[a-f0-9]{64}$/.test(digest)) {
+    throw new TypeError("Candidate persistence returned an invalid identity");
+  }
+  if (!Number.isSafeInteger(version) || version < 1 || candidate?.status !== "sealed") {
+    throw new TypeError("Candidate persistence returned an invalid sealed record");
+  }
+  return {
+    id,
+    digest,
+    version,
+    status: "sealed",
+    approvable: Boolean(candidate.approvable),
+    blockers: stringList(candidate.approvalBlockers)
+  };
+}
+
+function blockedCandidate(blocker) {
+  return {
+    status: "blocked",
+    approvable: false,
+    blockers: [blocker]
+  };
+}
+
+function normalizeProjectId(value) {
+  const id = String(value || "").trim();
+  if (!id) return null;
+  if (!/^[A-Za-z0-9_-]{2,120}$/.test(id)) throw new TypeError("Invalid persisted project id");
+  return id;
+}
+
 function validateProject(project) {
   if (!project || typeof project !== "object" || Array.isArray(project)) {
     throw new TypeError("Local render project must be an object");
@@ -199,6 +365,7 @@ function publicJob(record) {
     startedAt: record.startedAt,
     completedAt: record.completedAt,
     artifacts: record.artifacts,
+    candidate: record.candidate,
     blockers: record.blockers,
     warnings: record.warnings,
     error: record.error
@@ -246,7 +413,9 @@ function stringList(values) {
 
 function sanitizeErrorMessage(error) {
   const message = String(error?.message || "render_failed").slice(0, 500);
-  return message.replace(/\/[A-Za-z0-9_./-]+/g, "<path>");
+  return message
+    .replace(/[A-Za-z]:\\[^\s"'<>]+/gu, "<path>")
+    .replace(/\/[^\s"'<>]+/gu, "<path>");
 }
 
 function deferred() {

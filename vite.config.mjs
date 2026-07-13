@@ -1,10 +1,13 @@
 import { defineConfig } from "vite";
 
+import { createLocalVerifiedCandidatePersister } from "./src/local-media/candidate-persistence.js";
 import { createLocalMediaVitePlugin } from "./src/local-media/vite-plugin.js";
 
 export default defineConfig({
   appType: "spa",
-  plugins: [createLocalMediaVitePlugin()],
+  plugins: [createLocalMediaVitePlugin({
+    persistVerifiedCandidate: createLocalVerifiedCandidatePersister()
+  })],
   build: {
     outDir: "dist",
     emptyOutDir: true

@@ -17,11 +17,14 @@ export function buildPublishCandidate(input = {}) {
   if (!platforms.includes(recipe.platform)) fail("candidate_recipe_platform_mismatch");
   const artifacts = normalizeArtifacts(input.artifacts);
   const manifestSha256 = normalizeSha256(input.manifestSha256, "invalid_manifest_sha256");
-  const manifestArtifact = artifacts.find(item => item.name === "manifest.json");
-  if (!manifestArtifact || manifestArtifact.sha256 !== manifestSha256) {
+  const expectedManifestName = `${recipe.id}.manifest.json`;
+  const expectedVideoName = `${recipe.id}.mp4`;
+  const manifestArtifact = artifacts.find(item => item.name === expectedManifestName);
+  if (!manifestArtifact || manifestArtifact.type !== "application/json" || manifestArtifact.sha256 !== manifestSha256) {
     fail("candidate_manifest_artifact_mismatch");
   }
-  if (!artifacts.some(item => item.name === "master.mp4")) fail("candidate_master_artifact_missing");
+  const videoArtifact = artifacts.find(item => item.name === expectedVideoName);
+  if (!videoArtifact || videoArtifact.type !== "video/mp4") fail("candidate_master_artifact_missing");
   const rights = normalizeRights(input.rights);
   const evidence = normalizeEvidence(input.evidence);
   const projectSnapshotSha256 = hashCanonical(projectSnapshot);
@@ -79,6 +82,10 @@ export function assertCandidateApproval(candidate, expected = {}) {
   if (Number(expected.candidateVersion) !== candidate.version) fail("candidate_version_mismatch", 409);
   if (!candidate.approvable || candidate.approvalBlockers?.length) fail("candidate_not_approvable", 409);
   return candidate;
+}
+
+export function getPublishProjectSnapshotSha256(projectRecord) {
+  return hashCanonical(normalizeProjectSnapshot(projectRecord?.project || projectRecord));
 }
 
 export function summarizeAssetRights(assets) {

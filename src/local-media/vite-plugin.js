@@ -9,7 +9,7 @@ const DEFAULT_MAX_BODY_BYTES = 2 * 1024 * 1024;
 const MUTATION_HEADER = "x-hermest-local-media";
 const API_PREFIX = "/api/local-media";
 
-export function createLocalMediaVitePlugin({ manager, maxBodyBytes } = {}) {
+export function createLocalMediaVitePlugin({ manager, maxBodyBytes, persistVerifiedCandidate = null } = {}) {
   const activeManager = manager || createLocalMediaJobManager({
     executeRender: ({ project, platform, signal }) => renderProject({
       project,
@@ -17,6 +17,7 @@ export function createLocalMediaVitePlugin({ manager, maxBodyBytes } = {}) {
       signal,
       outputDir: "/tmp"
     }),
+    persistVerifiedCandidate,
     cleanupRender: ({ outputDir }) => rm(outputDir, { recursive: true, force: true })
   });
   const handler = createLocalMediaRequestHandler({ manager: activeManager, maxBodyBytes });
@@ -86,7 +87,7 @@ async function routeRequest(request, response, manager, maxBodyBytes, next) {
   if (request.method === "POST" && pathname === `${API_PREFIX}/render`) {
     requireMutationRequest(request);
     const body = await readJsonBody(request, maxBodyBytes);
-    const job = manager.submit({ project: body.project, platform: body.platform });
+    const job = manager.submit({ project: body.project, projectId: body.projectId, platform: body.platform });
     sendJson(response, 202, { ok: true, job: decorateJob(job) });
     return;
   }

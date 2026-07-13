@@ -201,6 +201,7 @@ export async function renderProject({
       recipeId: recipe.id,
       manifestPath,
       manifestHashPath,
+      manifestArtifact,
       videoFile,
       subtitleFile,
       narrationAudioFile,

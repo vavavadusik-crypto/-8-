@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import { createLocalMediaJobManager } from "../../src/local-media/job-manager.js";
@@ -67,6 +70,208 @@ test("local media jobs run one-at-a-time and expose no filesystem paths", async 
   assert.equal(manager.get(second.id).status, "completed");
 });
 
+test("completed verified render is passed through a server-only candidate persistence port", async () => {
+  let captured;
+  const manager = createLocalMediaJobManager({
+    verifyArtifactEvidence: async () => {},
+    persistVerifiedCandidate: async input => {
+      captured = input;
+      return {
+        id: "cand_verified_worker",
+        digest: "d".repeat(64),
+        version: 1,
+        status: "sealed",
+        approvable: true,
+        approvalBlockers: []
+      };
+    },
+    executeRender: async () => ({
+      outputDir: "/tmp/private-verified-run",
+      manifestPath: "/tmp/private-verified-run/youtube-16x9-1080p.manifest.json",
+      manifestHashPath: "/tmp/private-verified-run/youtube-16x9-1080p.manifest.json.sha256",
+      manifestArtifact: {
+        name: "youtube-16x9-1080p.manifest.json",
+        type: "application/json",
+        bytes: 2000,
+        sha256: "b".repeat(64)
+      },
+      manifest: {
+        recipe: { id: "youtube-16x9-1080p" },
+        qc: { passed: true },
+        blockers: [],
+        warnings: [],
+        artifacts: [
+          { name: "youtube-16x9-1080p.mp4", type: "video/mp4", bytes: 9000, sha256: "a".repeat(64) }
+        ]
+      }
+    })
+  });
+
+  const job = manager.submit({
+    projectId: "project_saved_1",
+    project: { id: "browser-id", title: "Verified", cards: [{ id: "scene", text: "Renderable scene" }] },
+    platform: "youtube_video",
+    evidence: { status: "server_verified" },
+    rights: { status: "allowed" },
+    artifacts: [{ name: "spoofed.mp4" }]
+  });
+  const completed = await manager.waitFor(job.id);
+
+  assert.equal(completed.status, "completed");
+  assert.deepEqual(completed.candidate, {
+    id: "cand_verified_worker",
+    digest: "d".repeat(64),
+    version: 1,
+    status: "sealed",
+    approvable: true,
+    blockers: []
+  });
+  assert.equal(captured.projectId, "project_saved_1");
+  assert.equal(captured.verifiedRender.manifestSha256, "b".repeat(64));
+  assert.deepEqual(captured.verifiedRender.artifacts.map(item => item.name), [
+    "youtube-16x9-1080p.manifest.json",
+    "youtube-16x9-1080p.mp4"
+  ]);
+  assert.equal(JSON.stringify(captured.verifiedRender).includes("spoofed"), false);
+  assert.equal(JSON.stringify(completed).includes("/tmp/"), false);
+});
+
+test("candidate persistence re-verifies artifact hashes against files on disk", async () => {
+  const outputDir = await mkdtemp(path.join(os.tmpdir(), "hermest-candidate-hash-"));
+  const videoName = "youtube-16x9-1080p.mp4";
+  const manifestName = "youtube-16x9-1080p.manifest.json";
+  const videoPath = path.join(outputDir, videoName);
+  const manifestPath = path.join(outputDir, manifestName);
+  const manifestHashPath = `${manifestPath}.sha256`;
+  await writeFile(videoPath, "video", { mode: 0o600 });
+  await writeFile(manifestPath, "{}\n", { mode: 0o600 });
+  await writeFile(manifestHashPath, `${"b".repeat(64)}  ${manifestName}\n`, { mode: 0o600 });
+  let persistenceCalls = 0;
+
+  try {
+    const manager = createLocalMediaJobManager({
+      persistVerifiedCandidate: async () => {
+        persistenceCalls += 1;
+        return {
+          id: "cand_must_not_be_created",
+          digest: "d".repeat(64),
+          version: 1,
+          status: "sealed",
+          approvable: true,
+          approvalBlockers: []
+        };
+      },
+      executeRender: async () => ({
+        outputDir,
+        manifestPath,
+        manifestHashPath,
+        manifestArtifact: {
+          name: manifestName,
+          type: "application/json",
+          bytes: 3,
+          sha256: "b".repeat(64)
+        },
+        manifest: {
+          recipe: { id: "youtube-16x9-1080p" },
+          qc: { passed: true },
+          blockers: [],
+          warnings: [],
+          artifacts: [
+            { name: videoName, type: "video/mp4", bytes: 5, sha256: "a".repeat(64) }
+          ]
+        }
+      })
+    });
+    const job = manager.submit({
+      projectId: "project_saved_1",
+      project: { title: "Hash mismatch", cards: [{ id: "scene", text: "Renderable scene" }] },
+      platform: "youtube_video"
+    });
+    const completed = await manager.waitFor(job.id);
+
+    assert.equal(completed.status, "completed");
+    assert.equal(persistenceCalls, 0);
+    assert.equal(completed.candidate.status, "blocked");
+    assert.ok(completed.candidate.blockers.includes("publish_candidate_persistence_failed"));
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("candidate persistence failure leaves completed media blocked instead of fabricating approval", async () => {
+  const manager = createLocalMediaJobManager({
+    verifyArtifactEvidence: async () => {},
+    persistVerifiedCandidate: async () => {
+      throw new Error("cannot persist /tmp/private-secret");
+    },
+    executeRender: async () => ({
+      outputDir: "/tmp/private-persistence-failure",
+      manifestPath: "/tmp/private-persistence-failure/youtube-16x9-1080p.manifest.json",
+      manifestHashPath: "/tmp/private-persistence-failure/youtube-16x9-1080p.manifest.json.sha256",
+      manifestArtifact: {
+        name: "youtube-16x9-1080p.manifest.json",
+        type: "application/json",
+        bytes: 2000,
+        sha256: "b".repeat(64)
+      },
+      manifest: {
+        recipe: { id: "youtube-16x9-1080p" },
+        qc: { passed: true },
+        blockers: [],
+        warnings: [],
+        artifacts: [
+          { name: "youtube-16x9-1080p.mp4", type: "video/mp4", bytes: 9000, sha256: "a".repeat(64) }
+        ]
+      }
+    })
+  });
+  const job = manager.submit({
+    projectId: "project_saved_1",
+    project: { title: "Blocked candidate", cards: [{ id: "scene", text: "Renderable scene" }] },
+    platform: "youtube_video"
+  });
+  const completed = await manager.waitFor(job.id);
+
+  assert.equal(completed.status, "completed");
+  assert.equal(completed.candidate.status, "blocked");
+  assert.ok(completed.candidate.blockers.includes("publish_candidate_persistence_failed"));
+  assert.equal(JSON.stringify(completed).includes("/tmp/"), false);
+});
+
+test("render results that fail QC never become completed or downloadable", async () => {
+  const manager = createLocalMediaJobManager({
+    executeRender: async () => ({
+      outputDir: "/tmp/private-qc-failure",
+      manifestPath: "/tmp/private-qc-failure/youtube-16x9-1080p.manifest.json",
+      manifestHashPath: "/tmp/private-qc-failure/youtube-16x9-1080p.manifest.json.sha256",
+      manifestArtifact: {
+        name: "youtube-16x9-1080p.manifest.json",
+        type: "application/json",
+        bytes: 2000,
+        sha256: "b".repeat(64)
+      },
+      manifest: {
+        recipe: { id: "youtube-16x9-1080p" },
+        qc: { passed: false },
+        blockers: ["ffprobe_failed"],
+        warnings: [],
+        artifacts: [
+          { name: "youtube-16x9-1080p.mp4", type: "video/mp4", bytes: 9000, sha256: "a".repeat(64) }
+        ]
+      }
+    })
+  });
+  const job = manager.submit({
+    project: { title: "Failed QC", cards: [{ id: "scene", text: "Renderable scene" }] },
+    platform: "youtube_video"
+  });
+  const failed = await manager.waitFor(job.id);
+
+  assert.equal(failed.status, "failed");
+  assert.deepEqual(failed.artifacts, []);
+  assert.throws(() => manager.resolveArtifact(job.id, "youtube-16x9-1080p.mp4"), /not available/);
+});
+
 test("local media job cancellation aborts execution and settles as cancelled", async () => {
   const started = deferred();
   const manager = createLocalMediaJobManager({
@@ -126,6 +331,22 @@ test("render adapter paths cannot escape the private local run directory", async
   const failed = manager.get(job.id);
   assert.equal(failed.status, "failed");
   assert.equal(JSON.stringify(failed).includes("/etc/passwd"), false);
+});
+
+test("public job errors redact Unicode POSIX and Windows absolute paths", async () => {
+  const manager = createLocalMediaJobManager({
+    executeRender: async () => {
+      throw new Error("cannot read /tmp/секрет.mp4 or C:\\private\\secret.mp4");
+    }
+  });
+  const job = manager.submit({
+    project: { schemaVersion: 1, title: "Private error", cards: [{ id: "one", text: "Scene" }] },
+    platform: "youtube_video"
+  });
+  const failed = await manager.waitFor(job.id);
+
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.error, "cannot read <path> or <path>");
 });
 
 test("evicting a completed job invokes private artifact cleanup", async () => {

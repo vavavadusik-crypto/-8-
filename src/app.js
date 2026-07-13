@@ -2142,7 +2142,11 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         `Autopublish: ${data.canAutopublish ? "enabled" : "disabled"}`,
         "",
         "Connectors:",
-        ...Object.entries(data.connectors || {}).map(([key, value]) => `- ${key}: ${value ? "configured" : "missing"}`),
+        ...Object.entries(data.connectors || {}).map(([key, value]) => {
+          const configured = typeof value === "object" ? Boolean(value?.configured) : Boolean(value);
+          const status = typeof value === "object" && value?.status ? ` (${value.status})` : "";
+          return `- ${key}: ${configured ? "configured" : "missing"}${status}`;
+        }),
         "",
         "Steps:",
         ...(data.steps || []).map((step, index) => `${index + 1}. ${step.status} - ${step.description}`),
@@ -2196,7 +2200,11 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
             "content-type": "application/json",
             "x-hermest-local-media": "1"
           },
-          body: JSON.stringify({ project: buildProjectDocument(), platform })
+          body: JSON.stringify({
+            project: buildProjectDocument(),
+            projectId: state.server?.projectId || "",
+            platform
+          })
         });
         activeLocalRenderJobId = data.job.id;
         cancelLocalRenderButton.disabled = false;
@@ -2255,6 +2263,9 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         `Job: ${job.id || "unknown"}`,
         `Status: ${job.status || "unknown"}`,
         `Recipe: ${job.recipeId || "unknown"}`,
+        job.candidate ? `Candidate: ${job.candidate.status || "unknown"}${job.candidate.approvable ? " (approvable)" : " (blocked)"}` : "",
+        job.candidate?.id ? `Candidate ID: ${job.candidate.id}` : "",
+        job.candidate?.blockers?.length ? `Candidate blockers: ${job.candidate.blockers.join(", ")}` : "",
         job.blockers?.length ? `Blockers: ${job.blockers.join(", ")}` : "",
         job.warnings?.length ? `Warnings: ${job.warnings.join(", ")}` : "",
         job.error ? `Error: ${job.error}` : ""

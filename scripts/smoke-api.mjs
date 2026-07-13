@@ -390,10 +390,10 @@ try {
   const signedCandidateRequest = {
     projectId: signedProject.project.id,
     platforms: ["youtube_video"],
-    recipe: { id: "youtube_video_v1", version: "1.0.0", platform: "youtube_video", width: 1920, height: 1080 },
+    recipe: { id: "youtube-16x9-1080p", version: "1.0.0", platform: "youtube_video", width: 1920, height: 1080 },
     artifacts: [
-      { name: "master.mp4", type: "video/mp4", bytes: 9000, sha256: "1".repeat(64) },
-      { name: "manifest.json", type: "application/json", bytes: 2000, sha256: "2".repeat(64) }
+      { name: "youtube-16x9-1080p.mp4", type: "video/mp4", bytes: 9000, sha256: "1".repeat(64) },
+      { name: "youtube-16x9-1080p.manifest.json", type: "application/json", bytes: 2000, sha256: "2".repeat(64) }
     ],
     manifestSha256: "2".repeat(64)
   };
@@ -534,15 +534,15 @@ try {
     projectId: id,
     platforms: ["youtube_video"],
     recipe: {
-      id: "youtube_video_v1",
+      id: "youtube-16x9-1080p",
       version: "1.0.0",
       platform: "youtube_video",
       width: 1920,
       height: 1080
     },
     artifacts: [
-      { name: "master.mp4", type: "video/mp4", bytes: 9000, sha256: "a".repeat(64) },
-      { name: "manifest.json", type: "application/json", bytes: 2000, sha256: "b".repeat(64) }
+      { name: "youtube-16x9-1080p.mp4", type: "video/mp4", bytes: 9000, sha256: "a".repeat(64) },
+      { name: "youtube-16x9-1080p.manifest.json", type: "application/json", bytes: 2000, sha256: "b".repeat(64) }
     ],
     manifestSha256: "b".repeat(64),
     evidence: { status: "server_verified", verifier: "request-must-be-ignored" },
