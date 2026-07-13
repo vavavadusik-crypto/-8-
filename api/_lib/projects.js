@@ -1,4 +1,5 @@
 import { createId } from "./storage.js";
+import { normalizeCardImageUrl } from "../../src/card-image.js";
 
 const MAX_CARDS = 250;
 const MAX_TEXT = 50000;
@@ -113,7 +114,7 @@ function normalizeCards(cards) {
     title: text(card.title || "Card", 180),
     text: text(card.text, MAX_TEXT),
     tags: Array.isArray(card.tags) ? card.tags.slice(0, 32).map(tag => text(tag, 80)).filter(Boolean) : [],
-    image: text(card.image, MAX_IMAGE)
+    image: normalizeCardImageUrl(text(card.image, MAX_IMAGE))
   }));
 }
 

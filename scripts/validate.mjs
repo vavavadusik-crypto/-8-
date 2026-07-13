@@ -1,11 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 
 const html = readFileSync("index.html", "utf8");
 const providerCatalog = JSON.parse(readFileSync("public/api-provider-catalog.json", "utf8"));
-const scriptMatch = html.match(/<script>([\s\S]*)<\/script>\s*<\/body>/);
+const appEntrypoint = '<script type="module" src="/src/app.js"></script>';
 
 if (!html.includes("<!doctype html>")) {
   throw new Error("index.html is missing a doctype");
@@ -15,8 +13,8 @@ if (!html.includes("Hermest Board")) {
   throw new Error("index.html is missing the product name");
 }
 
-if (!scriptMatch) {
-  throw new Error("Could not extract inline script for syntax validation");
+if (!html.includes(appEntrypoint)) {
+  throw new Error("index.html is missing the external module entrypoint");
 }
 
 if (!Array.isArray(providerCatalog.providers) || providerCatalog.providers.length < 20) {
@@ -27,14 +25,8 @@ if (!providerCatalog.providers.some(provider => provider.auth === "none") || !pr
   throw new Error("API provider catalog must include OpenAI and no-key public providers");
 }
 
-const dir = mkdtempSync(join(tmpdir(), "hermest-validate-"));
-const scriptPath = join(dir, "app.js");
-writeFileSync(scriptPath, scriptMatch[1]);
-
-try {
-  execFileSync("node", ["--check", scriptPath], { stdio: "inherit" });
-} finally {
-  rmSync(dir, { recursive: true, force: true });
+for (const file of findJavaScriptFiles("src")) {
+  execFileSync("node", ["--check", file], { stdio: "inherit" });
 }
 
 for (const file of findJavaScriptFiles("api")) {
