@@ -138,8 +138,16 @@ test("render manifest rejects credential carriers before command schema parsing"
     ["--header", cookieHeader],
     [`https://${sentinel}@example.invalid/input`],
     [`HTTP://user:${sentinel}@example.invalid/input`],
+    [`https://user${sentinel}%40example.invalid/input`],
     [`source=https://user:${sentinel}@example.invalid/input`],
-    ["--cookie", sentinel]
+    ["--cookie", sentinel],
+    [`token=${sentinel}`],
+    [`secret=${sentinel}`],
+    [`password=${sentinel}`],
+    [`credential=${sentinel}`],
+    [`api-key=${sentinel}`],
+    [`${"Set-Cook" + "ie"}: sid=${sentinel}`],
+    [`${"Cook" + "ie"}:sid=${sentinel}`]
   ];
   for (const argv of counterexamples) {
     assert.throws(
