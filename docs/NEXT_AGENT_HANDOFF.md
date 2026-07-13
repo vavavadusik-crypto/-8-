@@ -22,11 +22,10 @@ Do not use local OmniCoder. Do not push, deploy, publish, access secrets or alte
 - `bef0a66` + `9b96b1c` — structural preflight, independent ffprobe, physical `/tmp` boundary and portable regression.
 - `11da264` — exact per-command manifest argv schemas; reviewer credential carriers fail closed.
 - `38fb89e` — Board UI → loopback Vite worker → bounded queue/cancel → allowlisted artifact downloads.
-- `a4a12b0` — manifest security fix carried into the UI/connector line.
+- `fa5b71d` — merged permanent checkpoint with R1 security, R2 UI worker and Kimi/OpenCode handoff.
+- `f4a9bfb` — shared connector capability router, secret-free status route and capability-routed agent plan.
 
-The authoritative main checkout passed `npm run check` after `11da264`: 88/88 unit tests, API smoke, four real render/repro runs, Vite build and browser smoke.
-
-The UI branch passed its full gate before the final manifest carry: 98/98 unit tests, API smoke, four real render/repro runs, build and browser smoke. After carrying the manifest fix, the combined targeted gate passed 14/14. Rerun the full combined `npm run check` before the next completion claim.
+The current branch passed canonical `npm run check` after `f4a9bfb`: 102/102 unit tests, API smoke, four real render/repro runs, Vite build and browser smoke.
 
 No push, deploy or public publication was performed.
 
@@ -38,7 +37,10 @@ Implemented and real:
 - real WAV narration through a provider-neutral TTS port (Flite is only an English-quality offline smoke fallback);
 - real H.264/AAC 16:9 and 9:16 MP4, SRT, storyboard, manifest and hashes;
 - independent ffprobe QC and repeated-render reproducibility;
-- loopback-only Board render UI/worker with queue, cancel and downloads.
+- loopback-only Board render UI/worker with queue, cancel and downloads;
+- one 44-provider catalog plus Board-owned capability routing;
+- implemented no-key research/Commons routes and local-only Flite selection;
+- secret-free configured/implemented/executable status and blocked social plans.
 
 Not complete:
 
@@ -52,49 +54,34 @@ Not complete:
 
 Autopublishing must remain disabled.
 
-## Active next TDD slice: connector capability router
+## Active next TDD slice: immutable publish candidate
 
-Do not create a second provider catalog. `public/api-provider-catalog.json` is the descriptive provider source.
-
-Add a provider-neutral capability layer for the Board Agent:
-
-```text
-research.search
-media.search
-image.generate
-speech.synthesize
-speech.transcribe
-video.generate
-storage.put
-publish.draft
-analytics.read
-```
+Do not call social APIs and do not implement token exchange in this slice.
 
 Required behavior:
 
-1. Add `api/_lib/connector-capabilities.js` with immutable capability definitions and a planner.
-2. Distinguish these states:
-   - `working_adapter`;
-   - `configured_adapter`;
-   - `configured_but_adapter_missing`;
-   - `oauth_skeleton`;
-   - `approval_required`;
-   - `blocked`.
-3. Configuration/key presence is a boolean only and must never imply that an adapter is implemented.
-4. Never return env values, tokens, credential URLs or browser BYOK values.
-5. Existing no-key aggregate research may be executable now.
-6. Local Flite may be executable only in the local media runtime, never claimed available on public Vercel.
-7. Image/video/TTS provider slots such as fal/Replicate/ElevenLabs remain adapter targets until a real adapter and fixture exist.
-8. YouTube/TikTok/Instagram routes remain non-executable and approval-gated until OAuth exchange, scopes, durable candidate and provider review exist.
-9. Expose a safe read-only capability-status route in `api/product.js`.
-10. Add connector route selection/blockers to `buildAgentPlan` without making network calls.
+1. Add a pure canonical candidate builder that binds:
+   - project/workspace identity;
+   - normalized board snapshot hash;
+   - exact platform recipe/version;
+   - allowlisted render artifact names, sizes and SHA-256 hashes;
+   - render manifest hash;
+   - rights summary and selected platforms.
+2. Candidate IDs/digests must be deterministic for the same sealed input; timestamps and filesystem paths must not enter the digest.
+3. Add a dedicated storage collection and workspace authorization for publish candidates.
+4. Create/list/read candidate API routes; never return local paths, tokens, env values or arbitrary metadata.
+5. Candidate becomes immutable once sealed. Any project/render/rights change creates a new candidate.
+6. Bind approval to exact `candidateId`, `candidateDigest` and version. Reject stale/mismatched/unsealed/rights-unknown candidates before approval.
+7. Approval remains non-executing: even an approved candidate must return `canAutopublish: false` with durable worker/OAuth/provider-review blockers.
+8. Add audit records for candidate creation/sealing and approval decision without embedding the full board or secrets.
+9. Keep current job APIs backward-compatible or migrate them with explicit fixture updates; do not silently accept an unbound approval.
 
-Start with RED tests in `test/unit/connector-capabilities.test.mjs`. Include tests that secret sentinel env values never appear in serialized output and that `FAL_KEY`/`ELEVENLABS_API_KEY` presence alone does not mark an unimplemented adapter executable.
+Start RED in `test/unit/publish-candidate.test.mjs`. Include mutation-after-seal, hash/order determinism, path/secret stripping, cross-workspace denial and stale digest counterexamples. Extend API smoke only after the pure contract is GREEN.
 
-Then run:
+Run:
 
 ```bash
-node --test --test-reporter=spec test/unit/connector-capabilities.test.mjs
+node --test --test-reporter=spec test/unit/publish-candidate.test.mjs
 npm run smoke:api
 npm run check
 ```
@@ -103,6 +90,7 @@ npm run check
 
 - Independent final re-review of manifest commit `11da264`.
 - Independent security/lifecycle review of UI worker commit `38fb89e`.
+- Independent connector capability review of `f4a9bfb` is currently running.
 - Mandatory Claude Code Opus review: Claude CLI is installed but not logged in; run `claude auth login` when available.
 - Kimi Cloud smoke: Ollama is installed/running, but owner browser sign-in is still required via `ollama signin`.
 
