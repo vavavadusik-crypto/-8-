@@ -6,7 +6,16 @@ import path from "node:path";
 import test from "node:test";
 
 import { createLocalMediaJobManager } from "../../src/local-media/job-manager.js";
-import { createLocalMediaRequestHandler } from "../../src/local-media/vite-plugin.js";
+import { createLocalMediaRequestHandler, publicError } from "../../src/local-media/vite-plugin.js";
+
+test("publicError fully redacts Windows and Unicode POSIX absolute paths", () => {
+  const message = "cannot read C:\\Users\\architect\\secret.txt or /home/архив/файл.mp4";
+  const redacted = publicError(new TypeError(message), 400);
+  assert.equal(redacted, "cannot read <path> or <path>");
+  assert.equal(redacted.includes("secret.txt"), false);
+  assert.equal(redacted.includes("файл.mp4"), false);
+  assert.equal(redacted.includes("C:\\"), false);
+});
 
 test("local media HTTP boundary queues jobs and serves only allowlisted artifacts", async t => {
   const outputDir = await mkdtemp(path.join(os.tmpdir(), "hermest-local-http-artifacts-"));
@@ -24,6 +33,7 @@ test("local media HTTP boundary queues jobs and serves only allowlisted artifact
       manifestHashPath,
       manifest: {
         recipe: { id: "youtube-16x9-1080p" },
+        qc: { passed: true },
         blockers: [],
         warnings: [],
         artifacts: [{

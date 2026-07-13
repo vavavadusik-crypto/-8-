@@ -218,10 +218,16 @@ function statusForError(error) {
   return 500;
 }
 
-function publicError(error, status) {
+export function publicError(error, status) {
   if (error instanceof HttpError) return error.publicCode;
-  if (status < 500) return String(error?.message || "invalid_request").replace(/\/[A-Za-z0-9_./-]+/g, "<path>");
+  if (status < 500) return redactAbsolutePaths(String(error?.message || "invalid_request"));
   return "local_media_internal_error";
+}
+
+function redactAbsolutePaths(message) {
+  return message
+    .replace(/[A-Za-z]:\\[^\s"'<>]+/gu, "<path>")
+    .replace(/\/[^\s"'<>]+/gu, "<path>");
 }
 
 class HttpError extends Error {
