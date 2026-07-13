@@ -96,6 +96,8 @@ npm run render:project -- \
 - `docs/MODEL_ROUTING.md` - role-based модели, fallback, quota и eval policy;
 - `docs/TECHNOLOGY_RADAR.md` - adopt/adapter/study/reject решения по open-source компонентам;
 - `docs/RELEASE_READINESS.md` - текущий доказательный release ledger;
+- `docs/NEXT_AGENT_HANDOFF.md` - точный текущий checkpoint, следующий TDD-срез и recovery-команды;
+- `docs/KIMI_OLLAMA_HANDOFF.md` - запуск Kimi K2.7 Code через Ollama Cloud + OpenCode;
 - `docs/DEPLOYMENT.md` - Vercel, Netlify, Docker, static hosting;
 - `docs/ARCHITECTURE.md` - текущая архитектура и backend boundary;
 - `docs/CONNECTORS.md` - что нужно для TikTok, YouTube, Shorts, Instagram;
