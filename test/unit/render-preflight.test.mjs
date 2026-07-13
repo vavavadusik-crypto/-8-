@@ -125,5 +125,9 @@ test("filesystem roots outside system temp are not trusted render roots", async 
     () => resolveOutputRoot("/home"),
     /outside allowed render roots/
   );
+  await assert.rejects(
+    () => resolveOutputRoot(path.resolve("tmp")),
+    /outside allowed render roots/
+  );
   assert.equal(await resolveOutputRoot("/tmp"), "/tmp");
 });

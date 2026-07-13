@@ -123,21 +123,28 @@ test("render manifest allowlists tool metadata and removes secret-shaped fields"
   assert.doesNotMatch(serialized, /secret-value|must-not-survive/);
 });
 
-test("render manifest rejects credential carriers outside the internal command schemas", () => {
+test("render manifest rejects credential carriers before command schema parsing", () => {
   const sentinel = "review-sentinel-73f2";
   const authHeader = `${"Author" + "ization"}: ${"Bear" + "er"} ${sentinel}`;
+  const proxyAuthHeader = `${"Proxy-Author" + "ization"}: Basic ${sentinel}`;
+  const cookieHeader = `${"Cook" + "ie"}: sid=${sentinel}`;
   const counterexamples = [
     [`--header=${authHeader}`],
     [`-H${authHeader}`],
+    [`-headers=${authHeader}`],
+    ["-headers", `  ${authHeader}`],
+    ["-headers", `X-Test: ok\r\n${authHeader}\r\n`],
+    ["--header", proxyAuthHeader],
+    ["--header", cookieHeader],
     [`https://${sentinel}@example.invalid/input`],
-    ["--cookie", sentinel],
-    ["--header", authHeader],
-    ["-H", authHeader]
+    [`HTTP://user:${sentinel}@example.invalid/input`],
+    [`source=https://user:${sentinel}@example.invalid/input`],
+    ["--cookie", sentinel]
   ];
   for (const argv of counterexamples) {
     assert.throws(
       () => build({ commands: [{ id: "render", tool: "ffmpeg", argv }] }),
-      /command argv schema/i
+      /sensitive command argument/i
     );
   }
 });

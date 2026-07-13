@@ -14,11 +14,11 @@ const TTS_KEYS = [
   "codec",
   "scriptSha256"
 ];
-const SENSITIVE_FLAG = /^(?:--?(?:api[-_]?key|token|secret|password|authorization)|authorization)$/i;
-const SENSITIVE_ASSIGNMENT = /^(.*(?:api[-_]?key|token|secret|password|authorization)[^=]*=).*/i;
-const HEADER_FLAG = /^(?:--header|-H)$/i;
-const AUTHORIZATION_CARRIER = /^(?:authorization|proxy-authorization)\s*:/i;
-const CREDENTIAL_URL = /^[a-z][a-z0-9+.-]*:\/\/[^/@\s:]+:[^/@\s]+@/i;
+const SENSITIVE_FLAG = /^(?:--?(?:api[-_]?key|token|secret|password|authorization|cookie|credential)|authorization)$/i;
+const SENSITIVE_ASSIGNMENT = /^(.*(?:api[-_]?key|token|secret|password|authorization|cookie|credential)[^=]*=).*/i;
+const HEADER_FLAG = /^(?:--?headers?|--cookie)(?:=|$)/i;
+const SENSITIVE_HEADER_CARRIER = /(?:^|[=\r\n])\s*(?:authorization|proxy-authorization|cookie|set-cookie)\s*:/i;
+const CREDENTIAL_URL = /[a-z][a-z0-9+.-]*:\/\/[^/\s"'<>]*(?:@|%40)/i;
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 const ALLOWED_COMMAND_TOOLS = Object.freeze({ tts: "ffmpeg", render: "ffmpeg" });
 const MAX_COMMAND_ARGUMENTS = 512;
@@ -113,6 +113,9 @@ function normalizeCommands(commands) {
         throw new TypeError(`Unsafe command argument at ${commandIndex}:${argumentIndex}`);
       }
       const argument = String(value);
+      if (isSensitiveCommandArgument(argument)) {
+        throw new TypeError(`Sensitive command argument at ${commandIndex}:${argumentIndex}`);
+      }
       if (
         CONTROL_CHARACTER.test(argument) ||
         Buffer.byteLength(argument, "utf8") > MAX_COMMAND_ARGUMENT_BYTES
@@ -132,13 +135,23 @@ function normalizeCommands(commands) {
         redactNext = true;
         return argument;
       }
-      if (AUTHORIZATION_CARRIER.test(argument)) return "<redacted>";
+      if (SENSITIVE_HEADER_CARRIER.test(argument)) return "<redacted>";
       if (CREDENTIAL_URL.test(argument)) return "<redacted-url>";
       if (SENSITIVE_ASSIGNMENT.test(argument)) return argument.replace(SENSITIVE_ASSIGNMENT, "$1<redacted>");
       return redactRunPath(argument);
     });
     return { id, tool, argv: sanitized };
   });
+}
+
+function isSensitiveCommandArgument(argument) {
+  const normalized = String(argument).trimStart();
+  if (normalized.startsWith("-H")) return true;
+  return HEADER_FLAG.test(normalized)
+    || SENSITIVE_FLAG.test(normalized)
+    || SENSITIVE_HEADER_CARRIER.test(normalized)
+    || CREDENTIAL_URL.test(normalized)
+    || SENSITIVE_ASSIGNMENT.test(normalized);
 }
 
 function validateCommandArgv(id, argv, commandIndex) {
