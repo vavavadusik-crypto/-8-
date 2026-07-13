@@ -48,8 +48,9 @@ Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 - [x] Repeated real render produces the same manifest/artifact hashes.
 - [x] Existing `npm run check` stays green and now includes `test:media`.
 - [x] Follow-up independent review of snapshot `32f8813` completed with BLOCK and four exact counterexamples.
-- [x] All four review counterexamples now have local regression coverage and pass the full gate.
-- [ ] Independent read-only re-review of the post-BLOCK fix commit.
+- [x] First post-fix re-review of `bef0a66` closed six points but found one residual manifest argv bypass.
+- [x] Attached header, username-only URL and cookie carriers now have fail-closed command-schema regressions.
+- [ ] Independent read-only re-review of the final command-schema fix commit.
 - [ ] Claude Code Opus review after CLI login; current auth blocker is documented.
 
 ### R2 local Board worker

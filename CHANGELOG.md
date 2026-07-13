@@ -9,7 +9,7 @@
 - Added deterministic 16:9 and 9:16 FFmpeg rendering to H.264/AAC MP4, SRT and storyboard artifacts.
 - Added private per-run directories, atomic files, process cancellation/timeouts, scrubbed media subprocess environments and strict ffprobe QC.
 - Added deterministic manifests with recipe/tool/QC/lineage evidence, artifact hashes and a SHA-256 sidecar.
-- Added iterative structural preflight, fail-closed command evidence/redaction, physical `/tmp` output containment and direct independent ffprobe integration checks after an external BLOCK review.
+- Added iterative structural preflight, fail-closed per-command FFmpeg argv schemas/redaction, physical `/tmp` output containment and direct independent ffprobe integration checks after external BLOCK reviews.
 - Added 98 unit tests and four real repeat media renders across both aspect ratios to the canonical `npm run check` gate.
 - Added a loopback-only Board render worker with bounded queueing, cancellation, allowlisted artifact downloads and lifecycle cleanup.
 - Connected truthful local render controls to the Board UI and verified a real HTTP → FFmpeg/TTS → downloaded MP4 path independently with ffprobe.

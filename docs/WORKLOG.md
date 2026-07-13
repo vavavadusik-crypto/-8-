@@ -20,6 +20,8 @@
   - direct independent `/usr/bin/ffprobe` checks of MP4 and WAV;
   - four reproducibility renders across both aspect ratios and removal of repository `tmp` from trusted roots.
 - Verified the post-review `npm run check`: 88/88 unit tests, API smoke, four real FFmpeg/ffprobe renders, Vite build and browser screenshot smoke.
+- Independent re-review of `bef0a66` returned 6 PASS / 1 BLOCK: attached header flags, username-only credential URLs and cookie args could still enter manifest evidence.
+- Replaced permissive command evidence with exact `tts` and `render` FFmpeg argv schemas; all reviewer sentinels now fail closed and both real aspect-ratio integrations pass.
 - Added the R2 local Board worker and UI:
   - loopback/same-origin HTTP boundary with a required mutation header and bounded JSON bodies;
   - one-at-a-time bounded render queue, cancellation and private path redaction;
