@@ -101,6 +101,8 @@ test("Piper narration adapter synthesizes through stdin and returns auditable me
   assert.deepEqual(argv, [
     "--model", model,
     "--output_file", "/tmp/hermest-board-run/narration.wav",
+    "--noise_scale", "0",
+    "--noise_w", "0",
     "--sentence_silence", "0.35"
   ]);
   assert.equal(options.stdinText, "Проверка живого русского голоса.\n");

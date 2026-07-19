@@ -10,6 +10,10 @@ import { normalizeNarrationLanguage, normalizeNarrationScript } from "./tts.js";
 
 const PIPER_PROVIDER = "piper";
 const PIPER_SENTENCE_SILENCE = "0.35";
+// Zero generator noise keeps VITS synthesis byte-deterministic, preserving the
+// repeated-render manifest/hash reproducibility invariant of the media gate.
+const PIPER_NOISE_SCALE = "0";
+const PIPER_NOISE_WIDTH = "0";
 const SAFE_ABSOLUTE_PATH = /^\/[A-Za-z0-9_./-]+$/;
 const VOICE_NAME_PATTERN = /^[a-z]{2}_[A-Z]{2}-[a-z0-9]+-(?:x_low|low|medium|high)$/;
 
@@ -110,6 +114,8 @@ export function createPiperNarrationAdapter(dependencies = {}) {
         argv: [
           "--model", availability.modelPath,
           "--output_file", outputFile,
+          "--noise_scale", PIPER_NOISE_SCALE,
+          "--noise_w", PIPER_NOISE_WIDTH,
           "--sentence_silence", PIPER_SENTENCE_SILENCE
         ]
       };

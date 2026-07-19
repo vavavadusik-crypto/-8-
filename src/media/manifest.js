@@ -169,14 +169,19 @@ function validateCommandArgv(id, tool, argv, commandIndex) {
 }
 
 function validatePiperTtsArgv(argv) {
+  const decimal = /^\d+(?:\.\d{1,3})?$/;
   const cursor = argvCursor(argv);
   cursor.expect("--model");
   const model = cursor.take();
   if (!model.endsWith(".onnx") || !isSafeGeneratedPath(model)) throw new TypeError("invalid piper model");
   cursor.expect("--output_file");
   if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid piper output");
+  cursor.expect("--noise_scale");
+  if (!decimal.test(cursor.take())) throw new TypeError("invalid piper noise scale");
+  cursor.expect("--noise_w");
+  if (!decimal.test(cursor.take())) throw new TypeError("invalid piper noise width");
   cursor.expect("--sentence_silence");
-  if (!/^\d+(?:\.\d{1,3})?$/.test(cursor.take())) throw new TypeError("invalid piper silence");
+  if (!decimal.test(cursor.take())) throw new TypeError("invalid piper silence");
   cursor.finish();
 }
 

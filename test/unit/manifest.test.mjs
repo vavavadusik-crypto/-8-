@@ -181,6 +181,8 @@ const validPiperCommand = {
   argv: [
     "--model", "/home/tester/.local/share/piper/voices/ru_RU-dmitri-medium.onnx",
     "--output_file", "/tmp/private-run/narration.partial.wav",
+    "--noise_scale", "0",
+    "--noise_w", "0",
     "--sentence_silence", "0.35"
   ]
 };
