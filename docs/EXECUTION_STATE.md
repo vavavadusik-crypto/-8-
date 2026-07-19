@@ -7,7 +7,7 @@
 
 UPDATED: 2026-07-19 (Claude Fable 5, пятая сессия)
 ACTIVE PHASE: P2 — визуалы + звук
-ACTIVE TASK: P2.8 ЗАВЕРШЕНА + ключи прописаны и проверены живьём: HERMEST_PEXELS_API_KEY (200 OK) и HERMEST_FAL_API_KEY (auth валиден) в ~/.secrets/env.sh; закрыт schema-gap transparent overlay (--default-background-color не проходил валидацию манифеста — путь спал до появления ключа); ПЕРВЫЕ ПОЛНЫЕ РЕНДЕРЫ СТЕКА: ElevenLabs голос + живой Pexels b-roll (2 клипа) + музыка с дакингом, 0 warnings
+ACTIVE TASK: P2.2 FAL-адаптер — IN_PROGRESS, шаг 1: src/media/image-source.js (mock-TDD, sync endpoint fal.run/fal-ai/flux/schnell) + тесты; дальше style-пресет (B3) → интеграция в render-project → кэш (P2.3) → live-smoke
 STATUS: IN_PROGRESS
 LAST COMMIT: см. git log — fix transparent scene-frame schema; гейт 189/189 unit + 4/4 media
 NEXT ACTION: P2.2 FAL-адаптер (ключ ЕСТЬ, разблокирована): адаптер по контракту capability router, style-пресет проекта (B3), live-smoke FLUX schnell (~$0.01, бюджет Вадима подтверждён передачей ключа); референс-голоса: George JBFqnCBsd6RMkjVDRZzb · Alice Xb7hH8MSUJpSbSDYk0k2 · Aterna UX4FA7ZvSPh1ma6rI8P9 (кастомный Вадима)
