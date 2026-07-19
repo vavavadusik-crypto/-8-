@@ -6,12 +6,12 @@
 > Обновляется в начале каждой задачи и после каждого коммита. Это часть Definition of Done.
 
 UPDATED: 2026-07-19 (Claude Fable 5)
-ACTIVE PHASE: P0 — стабилизация и слияние
-ACTIVE TASK: P0.2/P0.3 — merge feat/board-connector-router → main, push, deploy
+ACTIVE PHASE: P1 — мультиязычный голос (русский первым)
+ACTIVE TASK: P1.1 ADR TTS-провайдеров + P1.2 Piper-адаптер
 STATUS: IN_PROGRESS
-LAST COMMIT: ea962b7 test: cover repo-tmp rejection and extra credential carrier forms
-NEXT ACTION: закоммитить docs (MASTER_PLAN + EXECUTION_STATE) на feat/board-connector-router → ff-merge в main → push origin main + ветку → тег v0.3.0-alpha
-UNCOMMITTED: docs/MASTER_PLAN_2026-07-19.md, docs/EXECUTION_STATE.md (новые, ожидают первого коммита)
+LAST COMMIT: см. git log (P0 закрыта: merge → main, push, тег v0.3.0-alpha, гейт зелёный 122/122)
+NEXT ACTION: docs/adr/ADR-001-tts-providers.md → установить piper + голоса ru_RU-dmitri/irina + en_US → RED-тест контракта piper-адаптера → src/media/piper-tts.js
+UNCOMMITTED: none (после коммита docs-sync)
 BLOCKERS: none
 
 ## Дорожная карта (кратко; полностью — MASTER_PLAN)
