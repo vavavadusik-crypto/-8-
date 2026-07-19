@@ -7,10 +7,10 @@
 
 UPDATED: 2026-07-19 (Claude Fable 5, вторая сессия)
 ACTIVE PHASE: P1 — мультиязычный голос (русский первым)
-ACTIVE TASK: P1.5 Audio normalization (loudnorm-замер в manifest QC)
+ACTIVE TASK: P1.6 Выбор языка и голоса в UI (селектор языка проекта + голоса/провайдера на доске)
 STATUS: IN_PROGRESS
-LAST COMMIT: см. git log — P1.1–P1.4 ЗАКРЫТЫ (ADR-001; Piper установлен+детерминизм+канонизация 48kHz; ElevenLabs BYOK; пер-сценный timeline: сцена = измеренная реплика + 400ms, wav-concat.js, SRT от речи); гейт 146/146 unit + 2/2 media
-NEXT ACTION: P1.5 — loudnorm уже применяется в MP4-рендере (-af loudnorm I=-16); осталось ЗАМЕРИТЬ фактическую громкость результата (ffmpeg loudnorm print_format=json / astats) и зафиксировать отчёт в manifest.qc → RED-тест: манифест без loudness-замера не собирается для рендера с аудио
+LAST COMMIT: см. git log — P1.1–P1.5 ЗАКРЫТЫ (ADR-001; Piper; ElevenLabs BYOK; пер-сценный timeline; loudness-замер в manifest.qc.loudness); гейт 152/152 unit + 2/2 media
+NEXT ACTION: P1.6 — найти в src/app.js место project.brief (language/voice/narrationProvider) → UI-селектор языка (RU/EN/ES/DE/FR + «любой через ElevenLabs BYOK») и голоса; статус executable из каталога голосов; browser smoke: выбор языка+голоса → рендер с ним. Затем P1.7 (RU-фикстура в гейт) и P1.8 (language lineage в manifest — частично готово: tools.tts уже несёт language/voice/provider, проверить и дописать тест)
 UNCOMMITTED: none
 BLOCKERS: (1) ключ ElevenLabs у Вадима — только для опционального live-smoke P1.3, разработка не блокирована; (2) субъективная приёмка голоса Вадимом: слушать ~/Видео/hermest-board-voice-samples/ (dmitri/irina/en)
 
