@@ -763,6 +763,22 @@
               <option value="instagram_reels">Instagram Reels 9:16</option>
             </select>
           </div>
+          <div class="field">
+            <label><span>Язык озвучки</span></label>
+            <select id="narrationLanguage"></select>
+          </div>
+          <div class="field">
+            <label><span>Голос</span></label>
+            <select id="narrationVoice"></select>
+          </div>
+          <div class="field">
+            <label><span>TTS-провайдер</span></label>
+            <select id="narrationProvider">
+              <option value="">Авто — Piper (локально, бесплатно)</option>
+              <option value="elevenlabs">ElevenLabs (BYOK, 29+ языков)</option>
+            </select>
+          </div>
+          <div class="mini-note" id="narrationHint"></div>
           <div class="panel-row two">
             <button id="renderLocalVideo" title="Создать настоящий локальный MP4 через FFmpeg">Рендер MP4</button>
             <button id="cancelLocalRender" title="Отменить текущий render job" disabled>Отмена</button>

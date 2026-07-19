@@ -11,12 +11,21 @@ test("board UI exposes truthful local render controls and artifact status", asyn
     "renderLocalVideo",
     "cancelLocalRender",
     "localRenderStatus",
-    "localRenderArtifacts"
+    "localRenderArtifacts",
+    "narrationLanguage",
+    "narrationVoice",
+    "narrationProvider",
+    "narrationHint"
   ]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.match(html, /Публикация не выполняется/);
   assert.match(app, /"x-hermest-local-media": "1"/);
+  assert.match(app, /brief: state\.brief/);
+  assert.match(app, /ru_RU-dmitri-medium/);
+  assert.match(app, /ru_RU-irina-medium/);
+  assert.match(app, /narrationProvider/);
+  assert.match(app, /ElevenLabs/);
   assert.match(app, /projectId: state\.server\?\.projectId \|\| ""/);
   assert.match(app, /Candidate blockers:/);
   assert.match(app, /\["completed", "failed", "cancelled"\]/);

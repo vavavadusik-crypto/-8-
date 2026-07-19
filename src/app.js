@@ -68,6 +68,45 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     const localRenderArtifacts = document.getElementById("localRenderArtifacts");
     const renderLocalVideoButton = document.getElementById("renderLocalVideo");
     const cancelLocalRenderButton = document.getElementById("cancelLocalRender");
+    const narrationLanguageSelect = document.getElementById("narrationLanguage");
+    const narrationVoiceSelect = document.getElementById("narrationVoice");
+    const narrationProviderSelect = document.getElementById("narrationProvider");
+    const narrationHint = document.getElementById("narrationHint");
+
+    const NARRATION_LANGUAGES = [
+      { code: "ru", label: "Русский", piper: true },
+      { code: "en", label: "English", piper: true },
+      { code: "es", label: "Español", piper: true },
+      { code: "de", label: "Deutsch", piper: true },
+      { code: "fr", label: "Français", piper: true },
+      { code: "pt", label: "Português — ElevenLabs", piper: false },
+      { code: "it", label: "Italiano — ElevenLabs", piper: false },
+      { code: "ja", label: "日本語 — ElevenLabs", piper: false },
+      { code: "zh", label: "中文 — ElevenLabs", piper: false }
+    ];
+    const NARRATION_VOICES = {
+      ru: [
+        { id: "", label: "Авто — Дмитрий (Piper)" },
+        { id: "ru_RU-dmitri-medium", label: "Дмитрий (Piper)" },
+        { id: "ru_RU-irina-medium", label: "Ирина (Piper)" }
+      ],
+      en: [
+        { id: "", label: "Авто — Lessac (Piper)" },
+        { id: "en_US-lessac-medium", label: "Lessac (Piper)" }
+      ],
+      es: [
+        { id: "", label: "Авто — DaveFX (Piper)" },
+        { id: "es_ES-davefx-medium", label: "DaveFX (Piper)" }
+      ],
+      de: [
+        { id: "", label: "Авто — Thorsten (Piper)" },
+        { id: "de_DE-thorsten-medium", label: "Thorsten (Piper)" }
+      ],
+      fr: [
+        { id: "", label: "Авто — Siwis (Piper)" },
+        { id: "fr_FR-siwis-medium", label: "Siwis (Piper)" }
+      ]
+    };
     const researchQueryInput = document.getElementById("researchQueryInput");
     const settingsPanel = document.getElementById("settingsPanel");
     const aiProviderInput = document.getElementById("aiProvider");
@@ -110,6 +149,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         schemaVersion: CONTENT_VERSION,
         title: "Hermest: оболочка над ИИ-агентами",
         view: { x: -120, y: -120, zoom: 1 },
+        brief: { language: "ru", voice: "", narrationProvider: "" },
         plan: [
           "1. Объяснить проблему: один чат быстро превращается в хаос, если в нем смешаны роли, память, инструменты и задачи.",
           "2. Показать Hermest как оболочку: один управляемый слой над агентами, файлами, API, памятью и логами.",
@@ -371,6 +411,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         schemaVersion: CONTENT_VERSION,
         title: input.title || base.title,
         view: input.view || base.view,
+        brief: normalizeBrief(input.brief, base.brief),
         plan: typeof input.plan === "string" && input.plan.trim() ? input.plan : base.plan,
         roadmap: typeof input.roadmap === "string" && input.roadmap.trim() ? input.roadmap : base.roadmap,
         script: typeof input.script === "string" ? input.script : base.script,
@@ -379,6 +420,20 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         links,
         cards: mergedCards.length ? mergedCards : base.cards
       };
+    }
+
+    function normalizeBrief(input, fallback) {
+      const source = input && typeof input === "object" ? input : {};
+      const language = NARRATION_LANGUAGES.some(entry => entry.code === source.language)
+        ? source.language
+        : fallback.language;
+      const piperCoversLanguage = NARRATION_LANGUAGES.find(entry => entry.code === language)?.piper === true;
+      const narrationProvider = piperCoversLanguage
+        ? (source.narrationProvider === "elevenlabs" ? "elevenlabs" : "")
+        : "elevenlabs";
+      const voices = narrationProvider === "elevenlabs" ? [] : NARRATION_VOICES[language] || [];
+      const voice = voices.some(entry => entry.id === source.voice) ? source.voice : "";
+      return { language, voice, narrationProvider };
     }
 
     function normalizeServer(input, fallback) {
@@ -896,6 +951,68 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     document.getElementById("recordVideo").addEventListener("click", recordVideo);
     renderLocalVideoButton.addEventListener("click", renderLocalVideo);
     cancelLocalRenderButton.addEventListener("click", cancelLocalRender);
+
+    function syncNarrationControls() {
+      narrationLanguageSelect.replaceChildren(...NARRATION_LANGUAGES.map(entry => {
+        const option = document.createElement("option");
+        option.value = entry.code;
+        option.textContent = entry.label;
+        return option;
+      }));
+      narrationLanguageSelect.value = state.brief.language;
+      const piperCoversLanguage = NARRATION_LANGUAGES.find(entry => entry.code === state.brief.language)?.piper === true;
+      narrationProviderSelect.value = state.brief.narrationProvider;
+      narrationProviderSelect.disabled = !piperCoversLanguage;
+      const voices = state.brief.narrationProvider === "elevenlabs"
+        ? [{ id: "", label: "Голос ElevenLabs по умолчанию" }]
+        : NARRATION_VOICES[state.brief.language] || [];
+      narrationVoiceSelect.replaceChildren(...voices.map(entry => {
+        const option = document.createElement("option");
+        option.value = entry.id;
+        option.textContent = entry.label;
+        return option;
+      }));
+      narrationVoiceSelect.value = state.brief.voice;
+      narrationVoiceSelect.disabled = state.brief.narrationProvider === "elevenlabs";
+      narrationHint.textContent = state.brief.narrationProvider === "elevenlabs"
+        ? (piperCoversLanguage
+          ? "Премиум-озвучка ElevenLabs: нужен свой API-ключ (BYOK)."
+          : "Язык вне матрицы Piper — доступно через ElevenLabs (BYOK), нужен свой API-ключ.")
+        : "Piper синтезирует локально и бесплатно. Языку соответствует свой каталог голосов.";
+    }
+
+    narrationLanguageSelect.addEventListener("change", () => {
+      const previousLanguagePiper =
+        NARRATION_LANGUAGES.find(entry => entry.code === state.brief.language)?.piper === true;
+      state.brief = normalizeBrief(
+        {
+          language: narrationLanguageSelect.value,
+          voice: "",
+          // ElevenLabs выбранный явно — сохраняем; навязанный языком вне матрицы — сбрасываем на авто.
+          narrationProvider: previousLanguagePiper ? state.brief.narrationProvider : ""
+        },
+        state.brief
+      );
+      syncNarrationControls();
+      saveState("Язык озвучки сохранён");
+    });
+    narrationProviderSelect.addEventListener("change", () => {
+      state.brief = normalizeBrief(
+        { language: state.brief.language, voice: "", narrationProvider: narrationProviderSelect.value },
+        state.brief
+      );
+      syncNarrationControls();
+      saveState("TTS-провайдер сохранён");
+    });
+    narrationVoiceSelect.addEventListener("change", () => {
+      state.brief = normalizeBrief(
+        { language: state.brief.language, voice: narrationVoiceSelect.value, narrationProvider: state.brief.narrationProvider },
+        state.brief
+      );
+      syncNarrationControls();
+      saveState("Голос озвучки сохранён");
+    });
+    syncNarrationControls();
     document.getElementById("buildMediaBrief").addEventListener("click", () => {
       state.publish.packageText = buildMediaBrief();
       publishOutput.value = state.publish.packageText;
@@ -2055,6 +2172,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         schemaVersion: CONTENT_VERSION,
         title: state.title,
         view: state.view,
+        brief: state.brief,
         plan: state.plan,
         roadmap: state.roadmap,
         script: state.script,
@@ -2069,6 +2187,8 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       const incoming = normalize(project || {});
       state.title = incoming.title;
       state.view = incoming.view;
+      state.brief = incoming.brief;
+      syncNarrationControls();
       state.plan = incoming.plan;
       state.roadmap = incoming.roadmap;
       state.script = incoming.script;
