@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "music-library-v1",
+  "tracks": [
+    {
+      "id": "calm-ambient-pad",
+      "file": "calm-ambient-pad.m4a",
+      "title": "Calm Ambient Pad",
+      "mood": "calm",
+      "license": "CC0",
+      "source": "procedural ffmpeg synthesis (hermest-board, self-generated)"
+    }
+  ]
+}
