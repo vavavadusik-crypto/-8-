@@ -348,7 +348,8 @@ function validateSceneFrameArgv(argv) {
     throw new TypeError("invalid chrome screenshot output");
   }
   const target = cursor.take();
-  if (!/^file:\/\/\/[A-Za-z0-9_./-]+\.html$/.test(target) || !isSafeGeneratedPath(target.slice("file://".length))) {
+  const targetMatch = target.match(/^file:\/\/(\/[A-Za-z0-9_./-]+\.html)(?:#t=\d{1,6})?$/);
+  if (!targetMatch || !isSafeGeneratedPath(targetMatch[1])) {
     throw new TypeError("invalid chrome target url");
   }
   cursor.finish();
