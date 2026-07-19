@@ -958,6 +958,78 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     renderLocalVideoButton.addEventListener("click", renderLocalVideo);
     cancelLocalRenderButton.addEventListener("click", cancelLocalRender);
 
+    const byokProviders = document.getElementById("byokProviders");
+
+    async function loadProviderKeys() {
+      let providers;
+      try {
+        const data = await fetchJson("/api/local-media/providers");
+        providers = data.providers || [];
+      } catch (_) {
+        byokProviders.replaceChildren();
+        const note = document.createElement("div");
+        note.className = "mini-note";
+        note.textContent = "BYOK-ключи доступны только при локальном `npm run dev` (worker недоступен).";
+        byokProviders.append(note);
+        return;
+      }
+      byokProviders.replaceChildren(...providers.map(provider => buildProviderKeyRow(provider)));
+    }
+
+    function buildProviderKeyRow(provider) {
+      const row = document.createElement("div");
+      row.className = "panel-row two";
+      const status = document.createElement("span");
+      status.textContent = provider.configured
+        ? `${provider.label}: ключ активен (${provider.source === "session" ? "сессия" : "env"})`
+        : `${provider.label}: ключ не задан`;
+      const keyInput = document.createElement("input");
+      keyInput.type = "password";
+      keyInput.placeholder = provider.configured ? "заменить ключ…" : "вставить ключ…";
+      keyInput.autocomplete = "off";
+      const saveButton = document.createElement("button");
+      saveButton.textContent = "Сохранить";
+      saveButton.addEventListener("click", async () => {
+        const key = keyInput.value.trim();
+        if (!key) return;
+        saveButton.disabled = true;
+        try {
+          await fetchJson(`/api/local-media/providers/${encodeURIComponent(provider.id)}/key`, {
+            method: "POST",
+            headers: { "content-type": "application/json", "x-hermest-local-media": "1" },
+            body: JSON.stringify({ key })
+          });
+          flashStatus(`${provider.label}: ключ передан локальному worker`);
+        } catch (error) {
+          flashStatus(`${provider.label}: ключ отклонён (${error.message || "ошибка"})`);
+        } finally {
+          keyInput.value = "";
+          saveButton.disabled = false;
+          await loadProviderKeys();
+        }
+      });
+      row.append(status, keyInput, saveButton);
+      if (provider.configured && provider.source === "session") {
+        const clearButton = document.createElement("button");
+        clearButton.textContent = "Убрать";
+        clearButton.addEventListener("click", async () => {
+          clearButton.disabled = true;
+          try {
+            await fetchJson(`/api/local-media/providers/${encodeURIComponent(provider.id)}/key`, {
+              method: "DELETE",
+              headers: { "content-type": "application/json", "x-hermest-local-media": "1" },
+              body: "{}"
+            });
+          } catch (_) {}
+          await loadProviderKeys();
+        });
+        row.append(clearButton);
+      }
+      return row;
+    }
+
+    void loadProviderKeys();
+
     function syncNarrationControls() {
       narrationLanguageSelect.replaceChildren(...NARRATION_LANGUAGES.map(entry => {
         const option = document.createElement("option");

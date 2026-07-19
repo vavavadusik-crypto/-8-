@@ -130,3 +130,67 @@ test("local media HTTP boundary rejects oversized JSON bodies", async t => {
   });
   assert.equal(response.status, 413);
 });
+
+test("local media HTTP boundary manages BYOK provider keys without leaking values", async t => {
+  const workerEnv = { HERMEST_PEXELS_API_KEY: "environment-key-123" };
+  const manager = createLocalMediaJobManager({ executeRender: async () => ({}) });
+  const { createProviderKeyStore } = await import("../../src/local-media/provider-keys.js");
+  const providerKeys = createProviderKeyStore({ env: workerEnv });
+  const server = createServer(createLocalMediaRequestHandler({ manager, providerKeys }));
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const origin = `http://127.0.0.1:${address.port}`;
+  t.after(() => new Promise(resolve => server.close(resolve)));
+
+  const listResponse = await fetch(`${origin}/api/local-media/providers`, { headers: { origin } });
+  assert.equal(listResponse.status, 200);
+  const listed = await listResponse.json();
+  assert.equal(listed.ok, true);
+  const pexels = listed.providers.find(provider => provider.id === "pexels");
+  assert.equal(pexels.configured, true);
+  assert.equal(pexels.source, "environment");
+  assert.equal(JSON.stringify(listed).includes("environment-key-123"), false);
+
+  const unauthorized = await fetch(`${origin}/api/local-media/providers/elevenlabs/key`, {
+    method: "POST",
+    headers: { origin, "content-type": "application/json" },
+    body: JSON.stringify({ key: "sk_0123456789abcdef" })
+  });
+  assert.equal(unauthorized.status, 403);
+  assert.equal(workerEnv.HERMEST_ELEVENLABS_API_KEY, undefined);
+
+  const saved = await fetch(`${origin}/api/local-media/providers/elevenlabs/key`, {
+    method: "POST",
+    headers: { origin, "content-type": "application/json", "x-hermest-local-media": "1" },
+    body: JSON.stringify({ key: "sk_0123456789abcdef" })
+  });
+  assert.equal(saved.status, 200);
+  const savedBody = await saved.json();
+  assert.equal(savedBody.provider.configured, true);
+  assert.equal(savedBody.provider.source, "session");
+  assert.equal(JSON.stringify(savedBody).includes("sk_0123456789abcdef"), false);
+  assert.equal(workerEnv.HERMEST_ELEVENLABS_API_KEY, "sk_0123456789abcdef");
+
+  const unknown = await fetch(`${origin}/api/local-media/providers/openai/key`, {
+    method: "POST",
+    headers: { origin, "content-type": "application/json", "x-hermest-local-media": "1" },
+    body: JSON.stringify({ key: "sk_0123456789abcdef" })
+  });
+  assert.equal(unknown.status, 400);
+
+  const cleared = await fetch(`${origin}/api/local-media/providers/elevenlabs/key`, {
+    method: "DELETE",
+    headers: { origin, "content-type": "application/json", "x-hermest-local-media": "1" },
+    body: "{}"
+  });
+  assert.equal(cleared.status, 200);
+  assert.equal(workerEnv.HERMEST_ELEVENLABS_API_KEY, undefined);
+
+  const environmentClear = await fetch(`${origin}/api/local-media/providers/pexels/key`, {
+    method: "DELETE",
+    headers: { origin, "content-type": "application/json", "x-hermest-local-media": "1" },
+    body: "{}"
+  });
+  assert.equal(environmentClear.status, 400);
+  assert.equal(workerEnv.HERMEST_PEXELS_API_KEY, "environment-key-123");
+});

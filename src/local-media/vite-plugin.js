@@ -4,12 +4,13 @@ import path from "node:path";
 
 import { renderProject } from "../media/render-project.js";
 import { createLocalMediaJobManager } from "./job-manager.js";
+import { createProviderKeyStore } from "./provider-keys.js";
 
 const DEFAULT_MAX_BODY_BYTES = 2 * 1024 * 1024;
 const MUTATION_HEADER = "x-hermest-local-media";
 const API_PREFIX = "/api/local-media";
 
-export function createLocalMediaVitePlugin({ manager, maxBodyBytes, persistVerifiedCandidate = null } = {}) {
+export function createLocalMediaVitePlugin({ manager, maxBodyBytes, persistVerifiedCandidate = null, providerKeys } = {}) {
   const activeManager = manager || createLocalMediaJobManager({
     executeRender: ({ project, platform, signal }) => renderProject({
       project,
@@ -20,7 +21,11 @@ export function createLocalMediaVitePlugin({ manager, maxBodyBytes, persistVerif
     persistVerifiedCandidate,
     cleanupRender: ({ outputDir }) => rm(outputDir, { recursive: true, force: true })
   });
-  const handler = createLocalMediaRequestHandler({ manager: activeManager, maxBodyBytes });
+  const handler = createLocalMediaRequestHandler({
+    manager: activeManager,
+    maxBodyBytes,
+    providerKeys: providerKeys || createProviderKeyStore()
+  });
   return {
     name: "hermest-board-local-media",
     configureServer(server) {
@@ -34,7 +39,8 @@ export function createLocalMediaVitePlugin({ manager, maxBodyBytes, persistVerif
 
 export function createLocalMediaRequestHandler({
   manager,
-  maxBodyBytes = DEFAULT_MAX_BODY_BYTES
+  maxBodyBytes = DEFAULT_MAX_BODY_BYTES,
+  providerKeys = createProviderKeyStore()
 } = {}) {
   if (!manager || typeof manager.submit !== "function") {
     throw new TypeError("A local media job manager is required");
@@ -44,7 +50,7 @@ export function createLocalMediaRequestHandler({
   }
 
   return function localMediaHandler(request, response, next) {
-    void routeRequest(request, response, manager, maxBodyBytes, next).catch(error => {
+    void routeRequest(request, response, manager, maxBodyBytes, providerKeys, next).catch(error => {
       if (response.headersSent) {
         response.destroy(error);
         return;
@@ -58,7 +64,7 @@ export function createLocalMediaRequestHandler({
   };
 }
 
-async function routeRequest(request, response, manager, maxBodyBytes, next) {
+async function routeRequest(request, response, manager, maxBodyBytes, providerKeys, next) {
   const host = String(request.headers.host || "");
   if (!isLoopbackHost(host) || !isAllowedOrigin(request.headers.origin, host)) {
     throw new HttpError(403, "local_media_origin_forbidden");
@@ -81,6 +87,26 @@ async function routeRequest(request, response, manager, maxBodyBytes, next) {
       renderer: "hermest-board-media-r1",
       publishEnabled: false
     });
+    return;
+  }
+
+  if (request.method === "GET" && pathname === `${API_PREFIX}/providers`) {
+    sendJson(response, 200, { ok: true, providers: providerKeys.listProviders() });
+    return;
+  }
+
+  const providerMatch = pathname.match(new RegExp(`^${API_PREFIX}/providers/([a-z0-9-]+)/key$`));
+  if (providerMatch && request.method === "POST") {
+    requireMutationRequest(request);
+    const body = await readJsonBody(request, maxBodyBytes);
+    const provider = providerKeys.setKey(providerMatch[1], body.key);
+    sendJson(response, 200, { ok: true, provider });
+    return;
+  }
+  if (providerMatch && request.method === "DELETE") {
+    requireMutationRequest(request);
+    const provider = providerKeys.clearKey(providerMatch[1]);
+    sendJson(response, 200, { ok: true, provider });
     return;
   }
 
