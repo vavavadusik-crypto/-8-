@@ -23,8 +23,18 @@ const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 const ALLOWED_COMMAND_TOOLS = Object.freeze({
   tts: Object.freeze(["ffmpeg", "piper"]),
   "narration-canonicalize": Object.freeze(["ffmpeg"]),
-  render: Object.freeze(["ffmpeg"])
+  render: Object.freeze(["ffmpeg"]),
+  "loudness-measure": Object.freeze(["ffmpeg"])
 });
+const LOUDNESS_KEYS = Object.freeze([
+  "integratedLufs",
+  "truePeakDbtp",
+  "loudnessRangeLu",
+  "thresholdLufs",
+  "targetIntegratedLufs",
+  "targetTruePeakDbtp",
+  "targetLoudnessRangeLu"
+]);
 const MAX_COMMAND_ARGUMENTS = 512;
 const MAX_COMMAND_ARGUMENT_BYTES = 16384;
 
@@ -163,6 +173,7 @@ function validateCommandArgv(id, tool, argv, commandIndex) {
     if (id === "tts" && tool === "piper") validatePiperTtsArgv(argv);
     else if (id === "tts") validateTtsArgv(argv);
     else if (id === "narration-canonicalize" && tool === "ffmpeg") validateNarrationCanonicalizeArgv(argv);
+    else if (id === "loudness-measure" && tool === "ffmpeg") validateLoudnessMeasureArgv(argv);
     else if (id === "render") validateRenderArgv(argv);
     else throw new TypeError("unsupported schema");
   } catch {
@@ -195,6 +206,18 @@ function validateTtsArgv(argv) {
   if (!match || !isSafeGeneratedPath(match[1])) throw new TypeError("invalid flite source");
   cursor.expect("-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le");
   if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid TTS output");
+  cursor.finish();
+}
+
+function validateLoudnessMeasureArgv(argv) {
+  const cursor = argvCursor(argv);
+  cursor.expect("-hide_banner", "-nostats", "-i");
+  if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid loudness input");
+  cursor.expect("-map", "0:a:0", "-af");
+  if (!/^loudnorm=I=-?\d+(?:\.\d+)?:TP=-?\d+(?:\.\d+)?:LRA=\d+(?:\.\d+)?:print_format=json$/.test(cursor.take())) {
+    throw new TypeError("invalid loudness filter");
+  }
+  cursor.expect("-f", "null", "-");
   cursor.finish();
 }
 
@@ -271,10 +294,29 @@ function redactRunPath(argument) {
 
 function normalizeQc(qc) {
   const source = qc && typeof qc === "object" && !Array.isArray(qc) ? qc : {};
-  return {
+  const normalized = {
     passed: source.passed === true,
     checks: uniqueText(source.checks)
   };
+  if (source.loudness !== undefined) {
+    normalized.loudness = normalizeLoudness(source.loudness);
+  }
+  return normalized;
+}
+
+function normalizeLoudness(loudness) {
+  if (!loudness || typeof loudness !== "object" || Array.isArray(loudness)) {
+    throw new TypeError("QC loudness report must be an object");
+  }
+  const normalized = {};
+  for (const key of LOUDNESS_KEYS) {
+    const value = Number(loudness[key]);
+    if (!Number.isFinite(value)) {
+      throw new TypeError(`QC loudness field ${key} must be a finite number`);
+    }
+    normalized[key] = value;
+  }
+  return normalized;
 }
 
 function normalizeLineage(lineage) {

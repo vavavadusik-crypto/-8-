@@ -57,6 +57,10 @@ for (const expected of [
     assert.equal(video.probe.video.width, expected.width);
     assert.equal(video.probe.video.height, expected.height);
     assert.ok(video.probe.durationSeconds > 0);
+    assert.ok(diskManifest.qc.checks.includes("audio_loudness_measured"));
+    assert.ok(Number.isFinite(diskManifest.qc.loudness.integratedLufs));
+    assert.ok(Number.isFinite(diskManifest.qc.loudness.truePeakDbtp));
+    assert.equal(diskManifest.qc.loudness.targetIntegratedLufs, -16);
     assert.ok(video.bytes > 0);
     assert.ok(audio.bytes > 0);
     assert.ok(subtitles.bytes > 0);

@@ -233,6 +233,62 @@ test("render manifest rejects canonicalization argv that changes the audio contr
   );
 });
 
+const validLoudnessCommand = {
+  id: "loudness-measure",
+  tool: "ffmpeg",
+  argv: [
+    "-hide_banner", "-nostats",
+    "-i", "/tmp/private-run/youtube.partial.mp4",
+    "-map", "0:a:0",
+    "-af", "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json",
+    "-f", "null", "-"
+  ]
+};
+
+test("render manifest records measured loudness in qc and accepts the measure command", () => {
+  const manifest = build({
+    commands: [validTtsCommand, validRenderCommand, validLoudnessCommand],
+    qc: {
+      passed: true,
+      checks: ["audio_loudness_measured"],
+      loudness: {
+        integratedLufs: -15.98,
+        truePeakDbtp: -1.62,
+        loudnessRangeLu: 4.1,
+        thresholdLufs: -26.34,
+        targetIntegratedLufs: -16,
+        targetTruePeakDbtp: -1.5,
+        targetLoudnessRangeLu: 11
+      }
+    }
+  });
+
+  assert.equal(manifest.qc.loudness.integratedLufs, -15.98);
+  assert.equal(manifest.qc.loudness.targetIntegratedLufs, -16);
+  assert.ok(manifest.commands.some(command => command.id === "loudness-measure"));
+});
+
+test("render manifest fails closed on a malformed loudness report", () => {
+  assert.throws(
+    () => build({
+      qc: {
+        passed: true,
+        checks: [],
+        loudness: { integratedLufs: "loud", truePeakDbtp: -1 }
+      }
+    }),
+    TypeError
+  );
+  assert.throws(
+    () => build({
+      commands: [
+        { ...validLoudnessCommand, argv: [...validLoudnessCommand.argv, "--extra"] }
+      ]
+    }),
+    TypeError
+  );
+});
+
 test("render manifest accepts Piper narration command evidence", () => {
   const manifest = build({ commands: [validPiperCommand, validRenderCommand] });
   const ttsCommand = manifest.commands.find(command => command.tool === "piper");

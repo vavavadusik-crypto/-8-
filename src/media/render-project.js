@@ -35,6 +35,7 @@ import {
 import { buildSubtitleCues, formatSrt } from "./subtitles.js";
 import { selectNarrationAdapter } from "./narration.js";
 import { concatNarrationWavBuffers } from "./wav-concat.js";
+import { measureRenderedLoudness } from "./loudness.js";
 import { validateJsonStructure } from "./structural-preflight.js";
 
 const MAX_BOARD_INPUT_BYTES = 2 * 1024 * 1024;
@@ -196,6 +197,7 @@ export async function renderProject({
       recipe,
       { expectedDurationSeconds: narrationProbe.durationSeconds }
     );
+    const { command: loudnessCommand, loudness } = await measureRenderedLoudness(videoPartial, { signal });
     await chmod(videoPartial, PRIVATE_FILE_MODE);
     await rename(videoPartial, videoFile);
 
@@ -222,7 +224,7 @@ export async function renderProject({
       })
     ]);
 
-    const commands = [...narrationCommands, renderCommand];
+    const commands = [...narrationCommands, renderCommand, loudnessCommand];
     const manifest = buildRenderManifest({
       project,
       storyboard,
@@ -242,8 +244,10 @@ export async function renderProject({
           "narration_audio_probe",
           "subtitle_timeline",
           "video_streams_codecs_dimensions_duration",
+          "audio_loudness_measured",
           "artifact_hashes"
-        ]
+        ],
+        loudness
       },
       blockers: recipe.readinessBlockers,
       warnings: tts.warnings,
