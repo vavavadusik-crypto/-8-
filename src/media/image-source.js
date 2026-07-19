@@ -105,6 +105,113 @@ export function createFalImageAdapter({ env = process.env, fetchImpl = fetch } =
   };
 }
 
+const PEXELS_PHOTO_SEARCH_URL = "https://api.pexels.com/v1/search";
+const MAX_KEYWORDS_CHARS = 120;
+
+export function createPexelsImageAdapter({ env = process.env, fetchImpl = fetch } = {}) {
+  return {
+    provider: "pexels-photos",
+    async generateImage({ prompt, width, height, outputPath, signal }) {
+      const apiKey = typeof env.HERMEST_PEXELS_API_KEY === "string" ? env.HERMEST_PEXELS_API_KEY.trim() : "";
+      if (!apiKey) throw new RangeError("Pexels API key is not configured");
+      const keywords = String(prompt ?? "").replace(/[^\p{L}\p{N} -]/gu, " ").replace(/\s+/g, " ").trim();
+      if (!keywords) throw new RangeError("Image prompt is required");
+      const safeWidth = imageDimension(width, "width");
+      const safeHeight = imageDimension(height, "height");
+      const safeOutputPath = assertSafeGeneratedPath(outputPath);
+
+      const url = new URL(PEXELS_PHOTO_SEARCH_URL);
+      url.searchParams.set("query", keywords.slice(0, MAX_KEYWORDS_CHARS));
+      url.searchParams.set("orientation", safeHeight > safeWidth ? "portrait" : "landscape");
+      url.searchParams.set("per_page", "10");
+      const searchResponse = await fetchWithTimeout(fetchImpl, url.href, {
+        headers: { Authorization: apiKey },
+        signal
+      }, REQUEST_TIMEOUT_MS);
+      if (searchResponse.status === 401 || searchResponse.status === 403) {
+        throw new RangeError("Pexels rejected the API key");
+      }
+      if (!searchResponse.ok) {
+        throw new RangeError(`Pexels photo search failed with status ${searchResponse.status}`);
+      }
+      const payload = await readBoundedJson(searchResponse, MAX_RESPONSE_BYTES, "Pexels response");
+      const photo = selectPexelsPhoto(payload, { width: safeWidth, height: safeHeight });
+      if (!photo) throw new RangeError("Pexels returned no photo for the scene");
+      if (!photo.fileUrl.startsWith("https://")) throw new RangeError("Pexels returned an unsafe image url");
+
+      const imageResponse = await fetchWithTimeout(fetchImpl, photo.fileUrl, { signal }, DOWNLOAD_TIMEOUT_MS);
+      if (!imageResponse.ok) {
+        throw new RangeError(`Pexels photo download failed with status ${imageResponse.status}`);
+      }
+      const imageBytes = await readBoundedBytes(imageResponse, MAX_IMAGE_BYTES, "Pexels photo");
+      if (imageBytes.length === 0 || !hasImageMagic(imageBytes)) {
+        throw new RangeError("Pexels response is not a supported image format");
+      }
+      await writeFile(safeOutputPath, imageBytes, { flag: "wx", mode: PRIVATE_FILE_MODE });
+      await chmod(safeOutputPath, PRIVATE_FILE_MODE);
+      return {
+        path: safeOutputPath,
+        sha256: createHash("sha256").update(imageBytes).digest("hex"),
+        bytes: imageBytes.length,
+        width: photo.width,
+        height: photo.height,
+        license: "pexels",
+        provenance: {
+          source: "stock",
+          provider: "pexels-photos",
+          photoId: photo.photoId,
+          author: photo.author,
+          url: photo.pageUrl
+        }
+      };
+    }
+  };
+}
+
+function selectPexelsPhoto(payload, { width, height }) {
+  const photos = Array.isArray(payload?.photos) ? payload.photos : [];
+  const candidates = [];
+  for (const photo of photos) {
+    const source = photo?.src && typeof photo.src === "object" ? photo.src : {};
+    const fileUrl = typeof source.original === "string" ? source.original : "";
+    const photoWidth = Number(photo?.width);
+    const photoHeight = Number(photo?.height);
+    if (!fileUrl || !Number.isFinite(photoWidth) || !Number.isFinite(photoHeight)) continue;
+    candidates.push({
+      photoId: String(photo?.id ?? ""),
+      author: String(photo?.photographer ?? ""),
+      pageUrl: typeof photo?.url === "string" ? photo.url : "",
+      fileUrl,
+      width: photoWidth,
+      height: photoHeight,
+      // покрытие целевого кадра: фото должно закрывать обе стороны
+      coverage: Math.min(photoWidth / width, photoHeight / height)
+    });
+  }
+  candidates.sort((left, right) => right.coverage - left.coverage);
+  return candidates[0] || null;
+}
+
+export function createImageSourceCascade(adapters, { onWarning } = {}) {
+  const chain = (Array.isArray(adapters) ? adapters : []).filter(Boolean);
+  if (chain.length === 0) throw new RangeError("Image source cascade requires at least one adapter");
+  return {
+    provider: chain.map(adapter => adapter.provider).join("+"),
+    async generateImage(request) {
+      let lastError = null;
+      for (const adapter of chain) {
+        try {
+          return await adapter.generateImage(request);
+        } catch (error) {
+          lastError = error;
+          onWarning?.(`image source ${adapter.provider} failed: ${error.message}`);
+        }
+      }
+      throw lastError;
+    }
+  };
+}
+
 function composePrompt(prompt, stylePreset) {
   const scene = typeof prompt === "string" ? prompt.replace(/\s+/g, " ").trim() : "";
   if (!scene) throw new RangeError("Image prompt is required");

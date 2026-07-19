@@ -129,3 +129,99 @@ test("fal adapter fails closed on auth, bad payloads and unsafe urls", async () 
     await rm(outputDir, { recursive: true, force: true });
   }
 });
+
+test("pexels image adapter picks the best-covering photo with provenance", async () => {
+  const { createPexelsImageAdapter } = await import("../../src/media/image-source.js");
+  const outputDir = await mkdtemp(path.join(tmpdir(), "pexels-image-"));
+  try {
+    const outputPath = path.join(outputDir, "bg.png");
+    const calls = [];
+    const fetchImpl = async (url, options = {}) => {
+      calls.push({ url: String(url), options });
+      if (calls.length === 1) {
+        return jsonResponse({
+          photos: [
+            {
+              id: 11,
+              width: 800,
+              height: 600,
+              url: "https://www.pexels.com/photo/11/",
+              photographer: "Автор Фото",
+              src: { original: "https://images.pexels.com/photos/11/a.jpg", large2x: "https://images.pexels.com/photos/11/a-large.jpg" }
+            },
+            {
+              id: 12,
+              width: 4000,
+              height: 2250,
+              url: "https://www.pexels.com/photo/12/",
+              photographer: "Big Author",
+              src: { original: "https://images.pexels.com/photos/12/b.jpg", large2x: "https://images.pexels.com/photos/12/b-large.jpg" }
+            }
+          ]
+        });
+      }
+      return binaryResponse(PNG_BYTES);
+    };
+    const adapter = createPexelsImageAdapter({ env: { HERMEST_PEXELS_API_KEY: "px-key" }, fetchImpl });
+    const image = await adapter.generateImage({
+      prompt: "квантовые компьютеры",
+      width: 1920,
+      height: 1080,
+      outputPath
+    });
+    assert.equal(calls[0].options.headers.Authorization, "px-key");
+    assert.match(calls[0].url, /orientation=landscape/);
+    assert.match(calls[1].url, /photos\/12/);
+    assert.equal(image.license, "pexels");
+    assert.equal(image.provenance.source, "stock");
+    assert.equal(image.provenance.provider, "pexels-photos");
+    assert.equal(image.provenance.author, "Big Author");
+    assert.match(image.sha256, /^[0-9a-f]{64}$/);
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("pexels image adapter fails closed without key, photos or safe urls", async () => {
+  const { createPexelsImageAdapter } = await import("../../src/media/image-source.js");
+  const outputDir = await mkdtemp(path.join(tmpdir(), "pexels-image-"));
+  try {
+    const base = { prompt: "тема", width: 1080, height: 1920, outputPath: path.join(outputDir, "x.png") };
+    const noKey = createPexelsImageAdapter({ env: {}, fetchImpl: async () => jsonResponse({}) });
+    await assert.rejects(noKey.generateImage(base), /not configured/);
+    const empty = createPexelsImageAdapter({
+      env: { HERMEST_PEXELS_API_KEY: "k" },
+      fetchImpl: async () => jsonResponse({ photos: [] })
+    });
+    await assert.rejects(empty.generateImage(base), /no photo/i);
+    const unsafe = createPexelsImageAdapter({
+      env: { HERMEST_PEXELS_API_KEY: "k" },
+      fetchImpl: async () => jsonResponse({
+        photos: [{ id: 1, width: 2000, height: 3000, url: "https://www.pexels.com/photo/1/", photographer: "a", src: { original: "http://images.pexels.com/1.jpg" } }]
+      })
+    });
+    await assert.rejects(unsafe.generateImage(base), /image url/i);
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("image source cascade falls through failing adapters with warnings", async () => {
+  const { createImageSourceCascade } = await import("../../src/media/image-source.js");
+  const warnings = [];
+  const failing = {
+    provider: "fal",
+    generateImage: async () => { throw new RangeError("Exhausted balance"); }
+  };
+  const succeeding = {
+    provider: "procedural",
+    generateImage: async request => ({ path: request.outputPath, sha256: "c".repeat(64), license: "generated-procedural", provenance: { source: "generated", provider: "procedural" } })
+  };
+  const cascade = createImageSourceCascade([failing, succeeding], { onWarning: message => warnings.push(message) });
+  const image = await cascade.generateImage({ prompt: "p", width: 100, height: 100, outputPath: "/tmp/x.png" });
+  assert.equal(image.provenance.provider, "procedural");
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /fal.*Exhausted balance/);
+  const allFail = createImageSourceCascade([failing], {});
+  await assert.rejects(allFail.generateImage({ prompt: "p", width: 100, height: 100, outputPath: "/tmp/x.png" }), /Exhausted balance/);
+});
