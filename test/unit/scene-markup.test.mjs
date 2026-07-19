@@ -72,3 +72,42 @@ test("scene markup validates dimensions and scene", () => {
 test("escapeHtml covers the html special set", () => {
   assert.equal(escapeHtml(`&<>"'`), "&amp;&lt;&gt;&quot;&#39;");
 });
+
+test("scene markup builds in with staged premium animations by default", () => {
+  const html = buildSceneMarkup({ ...baseInput });
+
+  assert.match(html, /@keyframes rise-in/);
+  assert.match(html, /@keyframes panel-in/);
+  assert.match(html, /@keyframes link-draw/);
+  assert.match(html, /@keyframes node-in/);
+  assert.match(html, /@keyframes node-pulse/);
+  assert.match(html, /@keyframes glow-drift/);
+  assert.match(html, /@keyframes twinkle/);
+  // каскад: заголовок → лид → карточка → схема (узлы позже текста)
+  assert.match(html, /\.kicker \{[^}]*animation:[^}]*rise-in/s);
+  assert.match(html, /h1 \{[^}]*animation:[^}]*rise-in/s);
+  assert.match(html, /\.lead \{[^}]*animation:[^}]*rise-in/s);
+  assert.match(html, /\.diagram-panel \{[^}]*animation:[^}]*panel-in/s);
+  // stagger узлов через --i
+  assert.match(html, /class="dg-link" style="--i:0/);
+  assert.match(html, /class="dg-node[^"]*" style="--i:2/);
+  assert.match(html, /calc\([\d.]+s \+ var\(--i\) \* [\d.]+s\)/);
+  // прорисовка линий через stroke-dashoffset
+  assert.match(html, /stroke-dasharray/);
+  // финальное состояние — база: все анимации backwards
+  assert.match(html, /animation-fill-mode: backwards|backwards\b/);
+  // пауза по виртуальному времени из #t=
+  assert.match(html, /location\.hash/);
+  assert.match(html, /getAnimations\(\{ subtree: true \}\)/);
+  assert.match(html, /animation\.pause\(\)/);
+});
+
+test("disabling animation yields exactly the same final frame markup", () => {
+  const animated = buildSceneMarkup({ ...baseInput });
+  const still = buildSceneMarkup({ ...baseInput, animated: false });
+  const disableRule = "* { animation: none !important; }";
+
+  assert.ok(still.includes(disableRule));
+  assert.ok(!animated.includes(disableRule));
+  assert.equal(animated, still.replace(`\n  ${disableRule}`, ""));
+});

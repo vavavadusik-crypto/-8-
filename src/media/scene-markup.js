@@ -50,7 +50,8 @@ function starField({ seed, width, height }) {
     const y = Math.round(random() * height * 0.72);
     const radius = random() < 0.85 ? 1 : 2;
     const opacity = (0.25 + random() * 0.55).toFixed(2);
-    stars.push(`<circle cx="${x}" cy="${y}" r="${radius}" fill="#cfe3ff" opacity="${opacity}"/>`);
+    const twinkleClass = index % 3 === 0 ? "tw-a" : index % 3 === 1 ? "tw-b" : "";
+    stars.push(`<circle class="${twinkleClass}" cx="${x}" cy="${y}" r="${radius}" fill="#cfe3ff" opacity="${opacity}"/>`);
   }
   return stars.join("");
 }
@@ -83,15 +84,20 @@ function topicDiagram({ centerLabel, orbitLabels, activeIndex, size }) {
     const color = NODE_COLORS[index % NODE_COLORS.length];
     const isActive = index === activeIndex;
     const nodeRadius = isActive ? 46 : 34;
+    const linkLength = Math.hypot(x - half, y - half).toFixed(1);
     return `
-      <line x1="${half}" y1="${half}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#24405f" stroke-width="2"/>
-      <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${nodeRadius}" fill="#0b1526" stroke="${color}" stroke-width="${isActive ? 4 : 2}"/>
-      <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" fill="${color}"/>
-      <text x="${x.toFixed(1)}" y="${(y + nodeRadius + 26).toFixed(1)}" text-anchor="middle" fill="${isActive ? THEME.text : THEME.textMuted}" font-size="19" font-family="DejaVu Sans" font-weight="${isActive ? 700 : 400}">${escapeHtml(clampText(label, 26))}</text>`;
+      <line class="dg-link" style="--i:${index};--len:${linkLength}" stroke-dasharray="${linkLength}" x1="${half}" y1="${half}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#24405f" stroke-width="2"/>
+      <g class="dg-node${isActive ? " dg-node-active" : ""}" style="--i:${index}" transform-origin="${x.toFixed(1)}px ${y.toFixed(1)}px">
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${nodeRadius}" fill="#0b1526" stroke="${color}" stroke-width="${isActive ? 4 : 2}"/>
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" fill="${color}"/>
+      </g>
+      <text class="dg-label" style="--i:${index}" x="${x.toFixed(1)}" y="${(y + nodeRadius + 26).toFixed(1)}" text-anchor="middle" fill="${isActive ? THEME.text : THEME.textMuted}" font-size="19" font-family="DejaVu Sans" font-weight="${isActive ? 700 : 400}">${escapeHtml(clampText(label, 26))}</text>`;
   });
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" role="img">
-    <circle cx="${half}" cy="${half}" r="${half * 0.34}" fill="rgba(45,212,191,0.08)" stroke="${THEME.accent}" stroke-width="3"/>
-    <text x="${half}" y="${half + 8}" text-anchor="middle" fill="${THEME.text}" font-size="26" font-family="DejaVu Sans" font-weight="700">${escapeHtml(clampText(centerLabel, 18))}</text>
+    <g class="dg-center" transform-origin="${half}px ${half}px">
+      <circle cx="${half}" cy="${half}" r="${half * 0.34}" fill="rgba(45,212,191,0.08)" stroke="${THEME.accent}" stroke-width="3"/>
+      <text x="${half}" y="${half + 8}" text-anchor="middle" fill="${THEME.text}" font-size="26" font-family="DejaVu Sans" font-weight="700">${escapeHtml(clampText(centerLabel, 18))}</text>
+    </g>
     ${nodes.join("")}
   </svg>`;
 }
@@ -101,7 +107,7 @@ function progressDots({ total, activeIndex }) {
   for (let index = 0; index < total; index += 1) {
     const active = index === activeIndex;
     dots.push(
-      `<span style="display:inline-block;width:${active ? 26 : 10}px;height:10px;border-radius:5px;background:${active ? THEME.accent : "#28425f"};"></span>`
+      `<span style="--d:${index};display:inline-block;width:${active ? 26 : 10}px;height:10px;border-radius:5px;background:${active ? THEME.accent : "#28425f"};"></span>`
     );
   }
   return dots.join("");
@@ -115,7 +121,8 @@ export function buildSceneMarkup({
   width,
   height,
   seed,
-  mode = "opaque"
+  mode = "opaque",
+  animated = true
 }) {
   if (!scene || typeof scene !== "object") throw new TypeError("Scene is required");
   if (mode !== "opaque" && mode !== "overlay") {
@@ -216,6 +223,36 @@ export function buildSceneMarkup({
     position: absolute; left: 0; right: 0; bottom: 0; height: ${captionHeight}px;
     background: linear-gradient(180deg, rgba(4, 9, 18, 0), ${THEME.captionBar} 38%);
   }
+
+  /* Premium build-in: база каждого элемента — финальное состояние, анимация
+     с fill-mode backwards лишь ведёт к нему. Отключение анимаций даёт ровно
+     текущий статичный кадр. */
+  @keyframes rise-in { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes drop-in { from { opacity: 0; transform: translateY(-18px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes panel-in { from { opacity: 0; transform: translateY(20px) scale(0.955); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes center-in { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+  @keyframes link-draw { from { stroke-dashoffset: var(--len); } to { stroke-dashoffset: 0; } }
+  @keyframes node-in { from { opacity: 0; transform: scale(0.45); } to { opacity: 1; transform: scale(1); } }
+  @keyframes label-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes node-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.045); } }
+  @keyframes glow-drift { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(${Math.round(safeWidth * 0.012)}px, ${Math.round(safeHeight * 0.02)}px); } }
+  @keyframes twinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  @keyframes dot-in { from { opacity: 0; } to { opacity: 1; } }
+  .chrome-bar { animation: drop-in 0.55s ease-out 0.05s backwards; }
+  .kicker { animation: rise-in 0.5s ease-out 0.12s backwards; }
+  h1 { animation: rise-in 0.6s cubic-bezier(0.22, 0.9, 0.3, 1) 0.28s backwards; }
+  .lead { animation: rise-in 0.6s ease-out 0.48s backwards; }
+  .diagram-panel { animation: panel-in 0.7s cubic-bezier(0.22, 0.9, 0.3, 1) 0.58s backwards; }
+  .dg-center { animation: center-in 0.55s cubic-bezier(0.22, 0.9, 0.3, 1) 0.78s backwards; }
+  .dg-link { animation: link-draw 0.45s ease-in-out calc(0.95s + var(--i) * 0.16s) backwards; }
+  .dg-node { animation: node-in 0.5s cubic-bezier(0.22, 0.9, 0.3, 1) calc(1.08s + var(--i) * 0.16s) backwards; }
+  .dg-label { animation: label-in 0.4s ease-out calc(1.2s + var(--i) * 0.16s) backwards; }
+  .dg-node-active { animation: node-in 0.5s cubic-bezier(0.22, 0.9, 0.3, 1) calc(1.08s + var(--i) * 0.16s) backwards, node-pulse 2.6s ease-in-out calc(2.2s + var(--i) * 0.16s) infinite; }
+  .progress span { animation: dot-in 0.35s ease-out calc(1.9s + var(--d) * 0.06s) backwards; }
+  .glow-a { animation: glow-drift 9s ease-in-out 0s infinite; }
+  .glow-b { animation: glow-drift 11s ease-in-out -4s infinite reverse; }
+  .tw-a { animation: twinkle 3.4s ease-in-out 0s infinite; }
+  .tw-b { animation: twinkle 4.2s ease-in-out -1.7s infinite; }${animated ? "" : "\n  * { animation: none !important; }"}
 </style>
 </head>
 <body>
@@ -245,6 +282,15 @@ ${isOverlay ? '  <div class="headline-scrim"></div>' : `  <svg class="backdrop" 
   </div>
   <div class="progress">${progressDots({ total, activeIndex: index })}</div>
   <div class="caption-zone"></div>
+  <script>
+// Детерминированный покадровый захват: #t=<ms> ставит каждую анимацию на
+// точное виртуальное время и замораживает её до скриншота.
+const frameTimeMs = Number((location.hash.match(/t=(\\d+)/) || [0, 0])[1]);
+for (const animation of document.getAnimations({ subtree: true })) {
+  animation.currentTime = frameTimeMs;
+  animation.pause();
+}
+  </script>
 </body>
 </html>
 `;
