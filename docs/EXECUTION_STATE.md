@@ -5,14 +5,14 @@
 > Протокол непрерывности: `docs/MASTER_PLAN_2026-07-19.md`, раздел 8.6.
 > Обновляется в начале каждой задачи и после каждого коммита. Это часть Definition of Done.
 
-UPDATED: 2026-07-19 (Claude Fable 5)
+UPDATED: 2026-07-19 (Claude Fable 5, вторая сессия)
 ACTIVE PHASE: P1 — мультиязычный голос (русский первым)
-ACTIVE TASK: P1.1 ADR TTS-провайдеров + P1.2 Piper-адаптер
+ACTIVE TASK: P1.3 ElevenLabs BYOK-адаптер (mock-HTTP TDD; live-smoke опционален при наличии ключа)
 STATUS: IN_PROGRESS
-LAST COMMIT: см. git log (P0 закрыта: merge → main, push, тег v0.3.0-alpha, гейт зелёный 122/122)
-NEXT ACTION: docs/adr/ADR-001-tts-providers.md → установить piper + голоса ru_RU-dmitri/irina + en_US → RED-тест контракта piper-адаптера → src/media/piper-tts.js
-UNCOMMITTED: none (после коммита docs-sync)
-BLOCKERS: none
+LAST COMMIT: см. git log — P1.1 (ADR-001) и P1.2 (Piper) ЗАКРЫТЫ: адаптер+каталог голосов, piper установлен (~/.local/opt/piper) + 6 моделей (~/.local/share/piper/voices), детерминизм байт-в-байт, канонизация наррейшна в 48kHz mono, гейт 134/134 unit + 2/2 media
+NEXT ACTION: RED-тест ElevenLabs-адаптера (mock HTTP, ключ только из BYOK-vault) → src/media/elevenlabs-tts.js → интеграция в selectNarrationAdapter → npm run check
+UNCOMMITTED: none
+BLOCKERS: ключ ElevenLabs у Вадима — нужен ТОЛЬКО для опционального live-smoke, разработка не блокирована. Сэмплы голосов для субъективной приёмки: ~/Видео/hermest-board-voice-samples/ (dmitri/irina/en)
 
 ## Дорожная карта (кратко; полностью — MASTER_PLAN)
 

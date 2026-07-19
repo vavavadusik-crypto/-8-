@@ -1,5 +1,16 @@
 # Worklog
 
+## 2026-07-19
+
+- Finalized and committed the execution master plan (`docs/MASTER_PLAN_2026-07-19.md`) and the continuity protocol (`docs/EXECUTION_STATE.md`); closed P0 (merge to `main`, push, tag `v0.3.0-alpha`).
+- P1.1: recorded ADR-001 — Piper as default local multilingual TTS, ElevenLabs `eleven_multilingual_v2` as premium BYOK "any language" mode, flite demoted to offline smoke only.
+- P1.2: shipped the Piper narration adapter with per-language voice catalog (RU dmitri/irina, EN lessac, ES davefx, DE thorsten, FR siwis), fail-closed availability statuses, argv evidence validated in the manifest.
+- Pinned Piper generator noise to zero → repeated synthesis verified byte-identical (sha256), preserving manifest/hash determinism.
+- Installed Piper 2023.11.14-2 and all six voice models on the render host; live-synthesized real Russian (both voices) and English WAVs through the project adapter (ffprobe-verified, samples in `~/Видео/hermest-board-voice-samples/`).
+- Routed `renderProject` narration through language-aware adapter selection (`brief.language`/`brief.voice`/`brief.narrationProvider`), honest flite fallback when Piper is unavailable.
+- Added a provider-neutral narration canonicalization step (ffmpeg → 48 kHz mono PCM) between synthesis and render so any provider's native sample rate meets the pipeline audio contract; command evidence recorded and schema-validated in the manifest; media gate now exercises real Piper narration end to end.
+- Full `npm run check` green: 134/134 unit, 2/2 real FFmpeg renders, API smoke, build, browser smoke.
+
 ## 2026-07-13
 
 - Locked the Board-only North Star, content pipeline, media architecture, delivery plan, agent orchestration and readiness ledger.
