@@ -5,14 +5,14 @@
 > Протокол непрерывности: `docs/MASTER_PLAN_2026-07-19.md`, раздел 8.6.
 > Обновляется в начале каждой задачи и после каждого коммита. Это часть Definition of Done.
 
-UPDATED: 2026-07-19 (Claude Fable 5, вторая сессия)
-ACTIVE PHASE: P1 — мультиязычный голос (русский первым)
-ACTIVE TASK: P2.1 ADR image-провайдеров (фаза P1 кодово ЗАВЕРШЕНА, ждёт субъективной приёмки Вадима)
+UPDATED: 2026-07-19 (Claude Fable 5, третья сессия, ультракод)
+ACTIVE PHASE: P1→P2 переход
+ACTIVE TASK: P2.1 ADR image-провайдеров; параллельно в фоне — адверсариальное ревью P1-диффа (43bd6c8..266efd6)
 STATUS: IN_PROGRESS
-LAST COMMIT: см. git log — ВСЯ P1 ЗАКРЫТА КОДОМ (P1.1 ADR; P1.2 Piper; P1.3 ElevenLabs BYOK; P1.4 пер-сценный timeline; P1.5 loudness в qc; P1.6 UI-селекторы; P1.7 RU-фикстура в гейте 3/3 media; P1.8 language lineage в manifest); гейт 152/152 unit + 3/3 media
-NEXT ACTION: P2.1 — docs/adr/ADR-002-image-providers.md (FAL FLUX schnell/dev = основной BYOK; Stability/Replicate = fallback; Wikimedia Commons + Openverse/Pexels = бесплатный сток) → затем P2.2 FAL-адаптер в capability router (style-пресет проекта, B3) по TDD
+LAST COMMIT: см. git log — P1 закрыта кодом; P1.3 live-smoke ElevenLabs ЗАКРЫТ живым ключом (3 продуктовых рендера RU-фикстуры: George/Alice/Aterna, ffprobe-valid, утечек ключа 0, квота 750/10000)
+NEXT ACTION: P2.1 — docs/adr/ADR-002-image-providers.md (FAL FLUX schnell/dev = основной BYOK; Stability/Replicate = fallback; Wikimedia Commons + Openverse/Pexels = бесплатный сток) → затем P2.2 FAL-адаптер в capability router (style-пресет проекта, B3) по TDD; при завершении фонового ревью — все confirmed-находки фиксятся RED→GREEN до мержа P2-кода
 UNCOMMITTED: none
-BLOCKERS: (1) субъективная приёмка голоса Вадимом: ~/Видео/hermest-board-voice-samples/ (dmitri/irina/en + ru-demo-dmitri-per-scene.mp4) — гейт фазы P1; (2) ключ ElevenLabs — только для опционального live-smoke; (3) ключ FAL.ai (~$5–10) понадобится для live-smoke P2.2, mock-TDD не блокирован
+BLOCKERS: (1) ГЛАВНЫЙ: Вадим забраковал Piper-голоса («отстой») — Piper остаётся free/offline-уровнем, релизный голос = ElevenLabs; ждём прослушку ~/Видео/hermest-board-voice-samples/elevenlabs-{george,alice,aterna}-ru.mp4 и выбор голосов «Дмитрий»/«Светлана»; (2) ключ ElevenLabs есть (free 10k символов/мес, ~/.secrets/env.sh: ELEVENLABS_API_KEY → адаптеру нужен HERMEST_ELEVENLABS_API_KEY); (3) ключ FAL.ai (~$5–10) понадобится для live-smoke P2.2, mock-TDD не блокирован
 
 ## Дорожная карта (кратко; полностью — MASTER_PLAN)
 

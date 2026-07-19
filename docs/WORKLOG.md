@@ -2,6 +2,8 @@
 
 ## 2026-07-19
 
+- P1.3 live smoke CLOSED with a real ElevenLabs key (free tier): three full product renders of the Russian fixture through `renderProject` with `narrationProvider: "elevenlabs"` — voices George/Alice/Aterna (Vadim's custom voice), all ffprobe-valid H.264/AAC MP4s (17.1–19.5 s), zero key leakage in any artifact/manifest (grep-verified), 750/10000 monthly characters used. Samples for subjective acceptance: `~/Видео/hermest-board-voice-samples/elevenlabs-{george,alice,aterna}-ru.mp4`. Context: Vadim REJECTED the Piper medium voices as release quality ("отстой") — Piper stays as the free/offline tier, ElevenLabs (or an equivalent premium adapter) is the release voice path; P1 phase gate now waits on acceptance of the ElevenLabs samples.
+- Launched a background adversarial code review (3 lenses: correctness/security/test-honesty + refutation pass) over the whole P1 diff `43bd6c8..266efd6`; confirmed findings will be fixed RED→GREEN before P2 code lands.
 - Finalized and committed the execution master plan (`docs/MASTER_PLAN_2026-07-19.md`) and the continuity protocol (`docs/EXECUTION_STATE.md`); closed P0 (merge to `main`, push, tag `v0.3.0-alpha`).
 - P1.1: recorded ADR-001 — Piper as default local multilingual TTS, ElevenLabs `eleven_multilingual_v2` as premium BYOK "any language" mode, flite demoted to offline smoke only.
 - P1.2: shipped the Piper narration adapter with per-language voice catalog (RU dmitri/irina, EN lessac, ES davefx, DE thorsten, FR siwis), fail-closed availability statuses, argv evidence validated in the manifest.
