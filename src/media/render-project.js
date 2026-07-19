@@ -28,6 +28,7 @@ import {
 import { composeSceneFrames, describeSceneComposerAvailability } from "./scene-frames.js";
 import { createPexelsBrollAdapter, describeBrollAvailability } from "./broll-source.js";
 import { createFalImageAdapter, describeImageSourceAvailability } from "./image-source.js";
+import { createCachedImageAdapter } from "./asset-cache.js";
 
 const DEFAULT_STYLE_PRESET = "cinematic dark tech aesthetic, deep blue and teal palette, volumetric light, high detail, no text, no watermark";
 const MAX_GENERATED_BACKGROUNDS = 8;
@@ -212,7 +213,10 @@ export async function renderProject({
       if (scenesWithoutFootage > 0) {
         const imageAvailability = describeImageSourceAvailability();
         if (imageAvailability.status === "executable") {
-          const imageAdapter = createFalImageAdapter();
+          const imageAdapter = createCachedImageAdapter({
+            adapter: createFalImageAdapter(),
+            onWarning: message => footageWarnings.push(message)
+          });
           const projectSeed = Number.parseInt(hashJson(project).slice(0, 8), 16);
           const stylePreset = typeof project?.brief?.stylePreset === "string" && project.brief.stylePreset.trim()
             ? project.brief.stylePreset.trim()
