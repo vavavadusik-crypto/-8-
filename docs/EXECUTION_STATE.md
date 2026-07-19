@@ -5,14 +5,14 @@
 > Протокол непрерывности: `docs/MASTER_PLAN_2026-07-19.md`, раздел 8.6.
 > Обновляется в начале каждой задачи и после каждого коммита. Это часть Definition of Done.
 
-UPDATED: 2026-07-19 (Claude Fable 5, четвёртая сессия)
+UPDATED: 2026-07-19 (Claude Fable 5, пятая сессия)
 ACTIVE PHASE: P2 — визуалы + звук
-ACTIVE TASK: P2.8 музыка+auto-ducking ЗАВЕРШЕНА: music-library порт (assets/music, CC0, fail-closed license), sidechaincompress-микс в composed-рендере, music-провенанс в manifest + QC music_bed_ducking, переключатель «Музыка» в UI (brief.music: ""=авто/"off"), ducking-тест в медиа-гейте; b-roll порт тоже закоммичен и запушен ранее этой сессией
+ACTIVE TASK: P2.8 ЗАВЕРШЕНА + ключи прописаны и проверены живьём: HERMEST_PEXELS_API_KEY (200 OK) и HERMEST_FAL_API_KEY (auth валиден) в ~/.secrets/env.sh; закрыт schema-gap transparent overlay (--default-background-color не проходил валидацию манифеста — путь спал до появления ключа); ПЕРВЫЕ ПОЛНЫЕ РЕНДЕРЫ СТЕКА: ElevenLabs голос + живой Pexels b-roll (2 клипа) + музыка с дакингом, 0 warnings
 STATUS: IN_PROGRESS
-LAST COMMIT: см. git log — music bed: обнаружен и устранён недетерминизм sidechaincompress/loudnorm под threaded-скедулером ffmpeg 8 (asetnsamples=n=1024 на входах) — 4/4 идентичных рендера; гейт 188/188 unit + 4/4 media
-NEXT ACTION: следующая задача P2 — P2.2 FAL-адаптер (нужен ключ, BLOCKED) или P2.9 стоковый фолбэк без ключей (Openverse/Commons, можно без ключа); при появлении HERMEST_PEXELS_API_KEY — live-smoke RU-демо с видеофоном+музыкой → сэмпл Вадиму
+LAST COMMIT: см. git log — fix transparent scene-frame schema; гейт 189/189 unit + 4/4 media
+NEXT ACTION: P2.2 FAL-адаптер (ключ ЕСТЬ, разблокирована): адаптер по контракту capability router, style-пресет проекта (B3), live-smoke FLUX schnell (~$0.01, бюджет Вадима подтверждён передачей ключа); референс-голоса: George JBFqnCBsd6RMkjVDRZzb · Alice Xb7hH8MSUJpSbSDYk0k2 · Aterna UX4FA7ZvSPh1ma6rI8P9 (кастомный Вадима)
 UNCOMMITTED: none
-BLOCKERS: (1) БЕСПЛАТНЫЙ ключ Pexels от Вадима — оживляет видеофоны (код готов); (2) выбор голосов Вадимом: george/alice/aterna → «Дмитрий»/«Светлана»; (3) ключ FAL.ai — премиум-генерация визуалов, блокирует P2.2; (4) прослушивание музыкальной подложки Вадимом (стартовый трек — процедурный ambient, можно докинуть CC0-треки в assets/music)
+BLOCKERS: (1) Вадим слушает ru-fullstack-{aterna,george}.mp4 и выбирает release-голос (Piper отвергнут ранее — сэмплы ТОЛЬКО ElevenLabs); (2) прослушивание музыкальной подложки (процедурный ambient — можно докинуть CC0-треки в assets/music); ключи Pexels/FAL — ЗАКРЫТЫ
 
 ## Дорожная карта (кратко; полностью — MASTER_PLAN)
 
