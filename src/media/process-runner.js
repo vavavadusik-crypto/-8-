@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { assertSafeGeneratedPath } from "./ffmpeg-args.js";
 import { parseProbeOutput } from "./ffprobe.js";
@@ -20,14 +22,31 @@ const SCRUBBED_ENV = Object.freeze({
 const MAX_CAPTURE_CHARS = 128000;
 const MAX_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 const KILL_GRACE_MS = 2000;
+const MAX_STDIN_BYTES = 1024 * 1024;
+
+const SAFE_ABSOLUTE_PATH = /^\/[A-Za-z0-9_./-]+$/;
+
+export function resolvePiperBinaryPath({ env = process.env, homeDirectory = os.homedir() } = {}) {
+  const configured = typeof env.HERMEST_PIPER_PATH === "string" ? env.HERMEST_PIPER_PATH.trim() : "";
+  if (configured) {
+    if (!SAFE_ABSOLUTE_PATH.test(configured)) {
+      throw new RangeError("HERMEST_PIPER_PATH must be a safe absolute path");
+    }
+    return configured;
+  }
+  return path.join(homeDirectory, ".local", "opt", "piper", "piper");
+}
 
 export function getMediaToolDescriptor(tool) {
+  if (tool === "piper") {
+    return { path: resolvePiperBinaryPath(), env: { ...SCRUBBED_ENV } };
+  }
   const binaryPath = TOOL_PATHS[tool];
   if (!binaryPath) throw new RangeError(`Unsupported media tool: ${tool}`);
   return { path: binaryPath, env: { ...SCRUBBED_ENV } };
 }
 
-export async function runMediaTool(tool, args, { timeoutMs = 300000, signal } = {}) {
+export async function runMediaTool(tool, args, { timeoutMs = 300000, signal, stdinText } = {}) {
   const descriptor = getMediaToolDescriptor(tool);
   if (!Array.isArray(args) || args.some(value => typeof value !== "string")) {
     throw new TypeError("Media tool arguments must be a string array");
@@ -35,14 +54,24 @@ export async function runMediaTool(tool, args, { timeoutMs = 300000, signal } = 
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_TIMEOUT_MS) {
     throw new RangeError(`Media tool timeout must be within 1..${MAX_TIMEOUT_MS}ms`);
   }
+  if (stdinText !== undefined) {
+    if (typeof stdinText !== "string") throw new TypeError("Media tool stdin must be a string");
+    if (Buffer.byteLength(stdinText, "utf8") > MAX_STDIN_BYTES) {
+      throw new RangeError(`Media tool stdin limit is ${MAX_STDIN_BYTES} bytes`);
+    }
+  }
   signal?.throwIfAborted();
 
   return new Promise((resolve, reject) => {
     const child = spawn(descriptor.path, args, {
       shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: [stdinText === undefined ? "ignore" : "pipe", "pipe", "pipe"],
       env: descriptor.env
     });
+    if (stdinText !== undefined) {
+      child.stdin.on("error", () => {});
+      child.stdin.end(stdinText);
+    }
     let stdout = "";
     let stderr = "";
     let settled = false;

@@ -66,6 +66,14 @@ export function createFliteNarrationAdapter(dependencies = {}) {
   });
 }
 
+export function normalizeNarrationScript(value) {
+  return normalizeScript(value);
+}
+
+export function normalizeNarrationLanguage(value) {
+  return normalizeLanguage(value);
+}
+
 function normalizeScript(value) {
   if (typeof value !== "string") throw new TypeError("Narration text must be a string");
   const text = value.trim();
