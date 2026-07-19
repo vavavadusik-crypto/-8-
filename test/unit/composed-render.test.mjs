@@ -103,6 +103,42 @@ test("manifest accepts the composed ffmpeg render schema", () => {
   assert.equal(manifest.commands[0].id, "render-composed");
 });
 
+test("manifest accepts the transparent overlay scene-frame schema", () => {
+  const manifest = manifestWith([{
+    id: "scene-frame",
+    tool: "chrome",
+    argv: [
+      "--headless=new",
+      "--disable-gpu",
+      "--disable-extensions",
+      "--hide-scrollbars",
+      "--force-device-scale-factor=1",
+      "--default-background-color=00000000",
+      "--user-data-dir=/tmp/run/chrome-profile",
+      "--window-size=1920,1080",
+      "--screenshot=/tmp/run/scene-002.png",
+      "file:///tmp/run/scene-002.html"
+    ]
+  }]);
+  assert.equal(manifest.commands.length, 1);
+  assert.throws(() => manifestWith([{
+    id: "scene-frame",
+    tool: "chrome",
+    argv: [
+      "--headless=new",
+      "--disable-gpu",
+      "--disable-extensions",
+      "--hide-scrollbars",
+      "--force-device-scale-factor=1",
+      "--default-background-color=ff0000ff",
+      "--user-data-dir=/tmp/run/chrome-profile",
+      "--window-size=1920,1080",
+      "--screenshot=/tmp/run/scene-002.png",
+      "file:///tmp/run/scene-002.html"
+    ]
+  }]), /schema mismatch/);
+});
+
 test("manifest rejects scene-frame drift from the locked schema", () => {
   assert.throws(() => manifestWith([{
     id: "scene-frame",

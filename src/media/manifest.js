@@ -332,6 +332,9 @@ function validateSceneFrameArgv(argv) {
     "--hide-scrollbars",
     "--force-device-scale-factor=1"
   );
+  if (argv[cursorIndex(cursor)] === "--default-background-color=00000000") {
+    cursor.take();
+  }
   const profile = cursor.take();
   if (!/^--user-data-dir=\/[A-Za-z0-9_./-]+$/.test(profile) || !isSafeGeneratedPath(profile.slice("--user-data-dir=".length))) {
     throw new TypeError("invalid chrome profile dir");

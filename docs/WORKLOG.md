@@ -160,3 +160,4 @@
 - Confirmed Fable auto-resume created infrastructure but no product commits; paused the timer to avoid more limit burn and agent conflicts.
 - Added a security review baseline, CSP/COOP headers, and a live production verification script.
 - Added P2.8 music bed with auto-ducking: local CC0 library port, sidechaincompress mix in composed renders, music provenance in manifest, UI toggle; fixed ffmpeg threaded-scheduler nondeterminism via asetnsamples (4/4 identical renders verified).
+- Fixed transparent overlay scene-frame argv schema gap (builder emitted --default-background-color=00000000, manifest validator rejected it — path was dormant until a live Pexels key arrived). First full-stack renders shipped: ElevenLabs voice (Aterna/George) + live Pexels b-roll (2 clips) + ducked music bed, zero warnings; samples in ~/Видео/hermest-board-ads/samples/ru-fullstack-{aterna,george}.mp4. Pexels + FAL keys registered in ~/.secrets/env.sh (FAL pending P2.2 adapter).
