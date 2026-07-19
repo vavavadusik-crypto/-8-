@@ -368,13 +368,9 @@ function validateComposedRenderArgv(argv) {
       cursor.expect("-i");
       const brollPath = cursor.take();
       if (!brollPath.endsWith(".mp4") || !isSafeGeneratedPath(brollPath)) throw new TypeError("invalid broll input");
-      cursor.expect("-loop", "1", "-t");
-      if (!decimal.test(cursor.take())) throw new TypeError("invalid frame duration");
-      cursor.expect("-framerate");
-      if (!/^\d{1,3}$/.test(cursor.take())) throw new TypeError("invalid frame rate");
-      cursor.expect("-i");
-      const framePath = cursor.take();
-      if (!framePath.endsWith(".png") || !isSafeGeneratedPath(framePath)) throw new TypeError("invalid frame input");
+      expectFrameOrSequenceInput(cursor, argv, decimal);
+    } else if (marker === "-framerate") {
+      expectSequenceInput(cursor);
     } else if (marker === "-loop") {
       cursor.expect("-loop", "1", "-t");
       if (!decimal.test(cursor.take())) throw new TypeError("invalid frame duration");
@@ -432,6 +428,30 @@ function cursorIndex(cursor) {
   return cursor.position();
 }
 
+function expectFrameOrSequenceInput(cursor, argv, decimal) {
+  if (argv[cursorIndex(cursor)] === "-framerate") {
+    expectSequenceInput(cursor);
+    return;
+  }
+  cursor.expect("-loop", "1", "-t");
+  if (!decimal.test(cursor.take())) throw new TypeError("invalid frame duration");
+  cursor.expect("-framerate");
+  if (!/^\d{1,3}$/.test(cursor.take())) throw new TypeError("invalid frame rate");
+  cursor.expect("-i");
+  const framePath = cursor.take();
+  if (!framePath.endsWith(".png") || !isSafeGeneratedPath(framePath)) throw new TypeError("invalid frame input");
+}
+
+function expectSequenceInput(cursor) {
+  cursor.expect("-framerate");
+  if (!/^\d{1,3}$/.test(cursor.take())) throw new TypeError("invalid sequence frame rate");
+  cursor.expect("-start_number", "0", "-i");
+  const pattern = cursor.take();
+  if (!/^\/[A-Za-z0-9_./-]+-f%04d\.png$/.test(pattern) || !isSafeGeneratedPath(pattern.replace("%04d", "0000"))) {
+    throw new TypeError("invalid sequence input");
+  }
+}
+
 const KEN_BURNS_ZOOM_EXPRESSION =
   "(?:1\\+0\\.080\\*on\\/\\d+|1\\.080-0\\.080\\*on\\/\\d+|1\\.080)";
 const KEN_BURNS_X_EXPRESSION =
@@ -448,9 +468,15 @@ const FILTER_SEGMENT_PATTERNS = Object.freeze([
     `zoompan=z='${KEN_BURNS_ZOOM_EXPRESSION}':x='${KEN_BURNS_X_EXPRESSION}':y='\\(ih-ih\\/zoom\\)\\/2'` +
     ":d=1:s=\\d+x\\d+:fps=\\d+," +
     "eq=brightness=-?\\d+(?:\\.\\d+)?:saturation=\\d+(?:\\.\\d+)?,setsar=1\\[b\\d+\\]$"
-  )
+  ),
+  new RegExp(
+    "^\\[\\d+:v\\]fps=\\d+,tpad=stop_mode=clone:stop_duration=\\d+(?:\\.\\d{1,3})?,trim=duration=\\d+(?:\\.\\d{1,3})?," +
+    "zoompan=z='1\\+0\\.040\\*on\\/\\d+':x='\\(iw-iw\\/zoom\\)\\/2':y='\\(ih-ih\\/zoom\\)\\/2':d=1:s=\\d+x\\d+:fps=\\d+," +
+    "setsar=1,format=yuv420p\\[v\\d+\\]$"
+  ),
+  /^\[\d+:v\]fps=\d+,tpad=stop_mode=clone:stop_duration=\d+(?:\.\d{1,3})?,trim=duration=\d+(?:\.\d{1,3})?,setsar=1\[f\d+\]$/
 ]);
-const SCENE_SEGMENT_PATTERN_INDICES = Object.freeze([0, 1, 2, 3, 6]);
+const SCENE_SEGMENT_PATTERN_INDICES = Object.freeze([0, 1, 2, 3, 6, 7, 8]);
 
 const MUSIC_SEGMENT_PATTERNS = Object.freeze([
   /^\[\d+:a\]aformat=sample_rates=\d+:channel_layouts=stereo,asetnsamples=n=1024:p=0,asplit=2\[nv\]\[nsc\]$/,

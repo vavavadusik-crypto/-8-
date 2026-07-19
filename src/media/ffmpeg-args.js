@@ -122,6 +122,35 @@ export function buildVideoRenderArgs({
 
 const KEN_BURNS_ZOOM_SPAN = "0.080";
 const KEN_BURNS_MAX_ZOOM = "1.080";
+const CAMERA_PUSH_IN_SPAN = "0.040";
+
+export function assertSafeSequencePattern(value) {
+  const candidate = typeof value === "string" ? value : "";
+  if (!/^\/[A-Za-z0-9_./-]+-f%04d\.png$/.test(candidate)) {
+    throw new TypeError("Expected a safe frame sequence pattern");
+  }
+  assertSafeGeneratedPath(candidate.replace("%04d", "0000"));
+  return candidate;
+}
+
+function sequenceInput(frame) {
+  const pattern = assertSafeSequencePattern(frame.sequencePattern);
+  const frameCount = positiveInteger(frame.sequenceFrameCount, "sequenceFrameCount");
+  const sequenceFps = positiveInteger(frame.sequenceFps, "sequenceFps");
+  return {
+    args: ["-framerate", String(sequenceFps), "-start_number", "0", "-i", pattern],
+    frameCount,
+    sequenceFps
+  };
+}
+
+// Секвенция кадров build-in играет целиком, затем финальный кадр клонируется
+// (tpad) до точной длительности сцены; trim держит таймлайн сетккалендарно.
+function sequenceHoldChain({ frameCount, sequenceFps, durationSeconds, durationArg, fps }) {
+  const playedSeconds = frameCount / sequenceFps;
+  const padSeconds = Math.max(0, durationSeconds - playedSeconds);
+  return `fps=${fps},tpad=stop_mode=clone:stop_duration=${padSeconds.toFixed(3)},trim=duration=${durationArg}`;
+}
 
 // Детерминированный Ken Burns: 4 фиксированных пресета дрейфа, выбираемые
 // индексом сцены — одинаковый вход всегда даёт одинаковый filter graph.
@@ -189,22 +218,32 @@ export function buildComposedVideoRenderArgs({
       throw new RangeError(`Invalid scene frame duration at index ${index}`);
     }
     const durationArg = frameDuration.toFixed(3);
+    const hasSequence = frame?.sequencePattern !== undefined;
+    const overlayInputArgs = hasSequence
+      ? null
+      : ["-loop", "1", "-t", durationArg, "-framerate", String(fps), "-i", framePath];
     if (frame?.brollPath !== undefined) {
       const brollPath = assertSafeGeneratedPath(frame.brollPath);
       const brollInput = inputIndex;
       const overlayInput = inputIndex + 1;
-      frameInputs.push(
-        "-stream_loop", "-1",
-        "-t", durationArg,
-        "-i", brollPath,
-        "-loop", "1",
-        "-t", durationArg,
-        "-framerate", String(fps),
-        "-i", framePath
-      );
+      frameInputs.push("-stream_loop", "-1", "-t", durationArg, "-i", brollPath);
+      let overlayChain = "setsar=1";
+      if (hasSequence) {
+        const sequence = sequenceInput(frame);
+        frameInputs.push(...sequence.args);
+        overlayChain = `${sequenceHoldChain({
+          frameCount: sequence.frameCount,
+          sequenceFps: sequence.sequenceFps,
+          durationSeconds: frameDuration,
+          durationArg,
+          fps
+        })},setsar=1`;
+      } else {
+        frameInputs.push(...overlayInputArgs);
+      }
       filterSegments.push(
         `[${brollInput}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},fps=${fps},eq=brightness=-0.22:saturation=0.7,setsar=1[b${index}]`,
-        `[${overlayInput}:v]setsar=1[f${index}]`,
+        `[${overlayInput}:v]${overlayChain}[f${index}]`,
         `[b${index}][f${index}]overlay=0:0,format=yuv420p[v${index}]`
       );
       inputIndex += 2;
@@ -216,26 +255,46 @@ export function buildComposedVideoRenderArgs({
         "-loop", "1",
         "-t", durationArg,
         "-framerate", String(fps),
-        "-i", backgroundPath,
-        "-loop", "1",
-        "-t", durationArg,
-        "-framerate", String(fps),
-        "-i", framePath
+        "-i", backgroundPath
       );
+      let overlayChain = "setsar=1";
+      if (hasSequence) {
+        const sequence = sequenceInput(frame);
+        frameInputs.push(...sequence.args);
+        overlayChain = `${sequenceHoldChain({
+          frameCount: sequence.frameCount,
+          sequenceFps: sequence.sequenceFps,
+          durationSeconds: frameDuration,
+          durationArg,
+          fps
+        })},setsar=1`;
+      } else {
+        frameInputs.push(...overlayInputArgs);
+      }
       const drift = kenBurnsDrift({ sceneIndex: index, durationSeconds: frameDuration, fps });
       filterSegments.push(
         `[${backgroundInput}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},zoompan=z='${drift.z}':x='${drift.x}':y='${drift.y}':d=1:s=${width}x${height}:fps=${fps},eq=brightness=-0.18:saturation=0.85,setsar=1[b${index}]`,
-        `[${overlayInput}:v]setsar=1[f${index}]`,
+        `[${overlayInput}:v]${overlayChain}[f${index}]`,
         `[b${index}][f${index}]overlay=0:0,format=yuv420p[v${index}]`
       );
       inputIndex += 2;
-    } else {
-      frameInputs.push(
-        "-loop", "1",
-        "-t", durationArg,
-        "-framerate", String(fps),
-        "-i", framePath
+    } else if (hasSequence) {
+      const sequence = sequenceInput(frame);
+      frameInputs.push(...sequence.args);
+      const holdChain = sequenceHoldChain({
+        frameCount: sequence.frameCount,
+        sequenceFps: sequence.sequenceFps,
+        durationSeconds: frameDuration,
+        durationArg,
+        fps
+      });
+      const lastFrame = Math.max(Math.round(frameDuration * fps) - 1, 1);
+      filterSegments.push(
+        `[${inputIndex}:v]${holdChain},zoompan=z='1+${CAMERA_PUSH_IN_SPAN}*on/${lastFrame}':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d=1:s=${width}x${height}:fps=${fps},setsar=1,format=yuv420p[v${index}]`
       );
+      inputIndex += 1;
+    } else {
+      frameInputs.push(...overlayInputArgs);
       filterSegments.push(
         `[${inputIndex}:v]scale=${width}:${height},setsar=1,format=yuv420p[v${index}]`
       );

@@ -13,6 +13,10 @@ import { renderProject } from "../../src/media/render-project.js";
 
 const execFileAsync = promisify(execFile);
 
+// Полное окно build-in (84 кадра/сцена) слишком дорого для гейта: лимит
+// сохраняет анимированный путь (секвенция+tpad), но держит прогон быстрым.
+process.env.HERMEST_SCENE_BUILD_FRAME_LIMIT = "6";
+
 const enFixture = path.resolve("test/fixtures/minimal-board.json");
 const ruFixture = path.resolve("test/fixtures/russian-board.json");
 

@@ -424,3 +424,72 @@ test("manifest rejects composed render drift", () => {
     argv: tampered
   }]), /schema mismatch/);
 });
+
+test("animated frame sequences flow through tpad hold and camera push-in", () => {
+  const args = buildArgs({
+    sceneFrames: [
+      {
+        path: "/tmp/run/scene-001-f0083.png",
+        sequencePattern: "/tmp/run/scene-001-f%04d.png",
+        sequenceFrameCount: 84,
+        sequenceFps: 30,
+        durationSeconds: 4.2
+      },
+      {
+        path: "/tmp/run/scene-002-f0083.png",
+        sequencePattern: "/tmp/run/scene-002-f%04d.png",
+        sequenceFrameCount: 84,
+        sequenceFps: 30,
+        durationSeconds: 5.1,
+        brollPath: "/tmp/run/broll-002.mp4"
+      }
+    ]
+  });
+  assert.ok(args.includes("/tmp/run/scene-001-f%04d.png"));
+  assert.ok(args.includes("-start_number"));
+  const filterComplex = args[args.indexOf("-filter_complex") + 1];
+  // plain-сцена: hold последнего кадра + мягкий push-in камеры
+  assert.match(filterComplex, /\[0:v\]fps=30,tpad=stop_mode=clone:stop_duration=1\.400,trim=duration=4\.200,zoompan=z='1\+0\.040\*on\/125':x='\(iw-iw\/zoom\)\/2':y='\(ih-ih\/zoom\)\/2':d=1:s=1920x1080:fps=30,setsar=1,format=yuv420p\[v0\]/);
+  // b-roll сцена: оверлейная секвенция с hold, фон как раньше
+  assert.match(filterComplex, /\[2:v\]fps=30,tpad=stop_mode=clone:stop_duration=2\.300,trim=duration=5\.100,setsar=1\[f1\]/);
+  assert.match(filterComplex, /\[b1\]\[f1\]overlay=0:0,format=yuv420p\[v1\]/);
+
+  const manifest = manifestWith([{ id: "render-composed", tool: "ffmpeg", argv: args }]);
+  assert.equal(manifest.commands[0].id, "render-composed");
+});
+
+test("sequence patterns are validated and tampered holds are rejected", () => {
+  assert.throws(() => buildArgs({
+    sceneFrames: [{
+      path: "/tmp/run/s.png",
+      sequencePattern: "/tmp/run/../evil-f%04d.png",
+      sequenceFrameCount: 10,
+      sequenceFps: 30,
+      durationSeconds: 2
+    }]
+  }), TypeError);
+
+  const args = buildArgs({
+    sceneFrames: [
+      {
+        path: "/tmp/run/scene-001-f0011.png",
+        sequencePattern: "/tmp/run/scene-001-f%04d.png",
+        sequenceFrameCount: 12,
+        sequenceFps: 30,
+        durationSeconds: 2,
+        backgroundImagePath: "/tmp/run/bg-001.png"
+      },
+      { path: "/tmp/run/scene-002.png", durationSeconds: 2 }
+    ],
+    durationSeconds: 4
+  });
+  const filterIndex = args.indexOf("-filter_complex") + 1;
+  const tampered = [...args];
+  tampered[filterIndex] = tampered[filterIndex].replace("stop_mode=clone", "stop_mode=add");
+  assert.notEqual(tampered[filterIndex], args[filterIndex]);
+  assert.throws(() => manifestWith([{
+    id: "render-composed",
+    tool: "ffmpeg",
+    argv: tampered
+  }]), /schema mismatch/);
+});
