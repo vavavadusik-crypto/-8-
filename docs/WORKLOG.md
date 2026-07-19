@@ -159,3 +159,4 @@
 - Added Fable 5 Ultracode maximum upgrade mandate with official standards references.
 - Confirmed Fable auto-resume created infrastructure but no product commits; paused the timer to avoid more limit burn and agent conflicts.
 - Added a security review baseline, CSP/COOP headers, and a live production verification script.
+- Added P2.8 music bed with auto-ducking: local CC0 library port, sidechaincompress mix in composed renders, music provenance in manifest, UI toggle; fixed ffmpeg threaded-scheduler nondeterminism via asetnsamples (4/4 identical renders verified).

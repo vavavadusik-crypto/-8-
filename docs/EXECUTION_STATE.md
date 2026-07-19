@@ -5,14 +5,14 @@
 > Протокол непрерывности: `docs/MASTER_PLAN_2026-07-19.md`, раздел 8.6.
 > Обновляется в начале каждой задачи и после каждого коммита. Это часть Definition of Done.
 
-UPDATED: 2026-07-19 (Claude Fable 5, третья сессия, ультракод)
+UPDATED: 2026-07-19 (Claude Fable 5, четвёртая сессия)
 ACTIVE PHASE: P2 — визуалы + звук
-ACTIVE TASK: P2 b-roll порт ЗАВЕРШЁН (ADR-003: Pexels-адаптер + overlay-кадры + footage-провенанс в манифесте); композитный вид принят Вадимом («карточки красиво обыграны — супер»), требование «фоновое видео по теме» реализовано кодом, ждёт живого ключа Pexels
+ACTIVE TASK: P2.8 музыка+auto-ducking ЗАВЕРШЕНА: music-library порт (assets/music, CC0, fail-closed license), sidechaincompress-микс в composed-рендере, music-провенанс в manifest + QC music_bed_ducking, переключатель «Музыка» в UI (brief.music: ""=авто/"off"), ducking-тест в медиа-гейте; b-roll порт тоже закоммичен и запушен ранее этой сессией
 STATUS: IN_PROGRESS
-LAST COMMIT: см. git log — b-roll: broll-source.js (Pexels, mock-TDD), scene-markup overlay-режим, transparent Chrome, расширенный render-composed (stream_loop+overlay, посегментная валидация фильтра), manifest.footage (license fail-closed); гейт 179/179 unit + 3/3 media
-NEXT ACTION: как появится HERMEST_PEXELS_API_KEY (бесплатная регистрация https://www.pexels.com/api/ → ключ в ~/.secrets/env.sh) — live-smoke: RU-демо с реальным стоковым видеофоном → сэмпл Вадиму; параллельно следующая задача P2.8 музыка+auto-ducking (самый заметный прирост качества)
+LAST COMMIT: см. git log — music bed: обнаружен и устранён недетерминизм sidechaincompress/loudnorm под threaded-скедулером ffmpeg 8 (asetnsamples=n=1024 на входах) — 4/4 идентичных рендера; гейт 188/188 unit + 4/4 media
+NEXT ACTION: следующая задача P2 — P2.2 FAL-адаптер (нужен ключ, BLOCKED) или P2.9 стоковый фолбэк без ключей (Openverse/Commons, можно без ключа); при появлении HERMEST_PEXELS_API_KEY — live-smoke RU-демо с видеофоном+музыкой → сэмпл Вадиму
 UNCOMMITTED: none
-BLOCKERS: (1) БЕСПЛАТНЫЙ ключ Pexels от Вадима — оживляет видеофоны (код готов); (2) выбор голосов Вадимом: george/alice/aterna → «Дмитрий»/«Светлана»; (3) ключ FAL.ai — премиум-генерация фонов/видео (LTX/WAN), не блокирует
+BLOCKERS: (1) БЕСПЛАТНЫЙ ключ Pexels от Вадима — оживляет видеофоны (код готов); (2) выбор голосов Вадимом: george/alice/aterna → «Дмитрий»/«Светлана»; (3) ключ FAL.ai — премиум-генерация визуалов, блокирует P2.2; (4) прослушивание музыкальной подложки Вадимом (стартовый трек — процедурный ambient, можно докинуть CC0-треки в assets/music)
 
 ## Дорожная карта (кратко; полностью — MASTER_PLAN)
 

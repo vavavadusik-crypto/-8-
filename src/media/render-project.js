@@ -27,6 +27,7 @@ import {
 } from "./ffmpeg-args.js";
 import { composeSceneFrames, describeSceneComposerAvailability } from "./scene-frames.js";
 import { createPexelsBrollAdapter, describeBrollAvailability } from "./broll-source.js";
+import { loadMusicLibrary, selectMusicTrack } from "./music-library.js";
 import { assertVideoProbe } from "./ffprobe.js";
 import { buildRenderManifest, hashJson } from "./manifest.js";
 import {
@@ -164,6 +165,7 @@ export async function renderProject({
     let sceneComposer = null;
     const footage = [];
     const footageWarnings = [];
+    let musicTrack = null;
     if (composerAvailability.status === "executable") {
       const brollAvailability = describeBrollAvailability();
       const brollClips = [];
@@ -199,6 +201,19 @@ export async function renderProject({
       } else {
         footageWarnings.push(brollAvailability.reason);
       }
+      const musicPreference = typeof project?.brief?.music === "string" ? project.brief.music.trim() : "";
+      if (musicPreference !== "off") {
+        try {
+          const musicTracks = await loadMusicLibrary();
+          musicTrack = selectMusicTrack(musicTracks, { mood: musicPreference || undefined });
+          if (!musicTrack) {
+            footageWarnings.push("music library has no matching track; rendering without music bed");
+          }
+        } catch (error) {
+          musicTrack = null;
+          footageWarnings.push(`music library unavailable: ${error.message}`);
+        }
+      }
       const composition = await composeSceneFrames({
         storyboard,
         brief: project?.brief,
@@ -219,7 +234,8 @@ export async function renderProject({
           subtitleFile,
           outputFile: videoPartial,
           durationSeconds: narrationProbe.durationSeconds,
-          recipe
+          recipe,
+          music: musicTrack ? { path: musicTrack.path } : undefined
         })
       };
       try {
@@ -324,6 +340,7 @@ export async function renderProject({
           "subtitle_timeline",
           sceneComposer ? "composed_scene_frames" : "legacy_color_scenes",
           ...(footage.length > 0 ? ["broll_footage_provenance"] : []),
+          ...(musicTrack ? ["music_bed_ducking"] : []),
           "video_streams_codecs_dimensions_duration",
           "audio_loudness_measured",
           "artifact_hashes"
@@ -332,6 +349,16 @@ export async function renderProject({
       },
       blockers: recipe.readinessBlockers,
       footage,
+      music: musicTrack
+        ? {
+            id: musicTrack.id,
+            title: musicTrack.title,
+            mood: musicTrack.mood,
+            license: musicTrack.license,
+            source: musicTrack.source,
+            sha256: musicTrack.sha256
+          }
+        : null,
       warnings: sceneComposer
         ? [...tts.warnings, ...footageWarnings]
         : [...tts.warnings, "scene composer unavailable; legacy color scenes used"],

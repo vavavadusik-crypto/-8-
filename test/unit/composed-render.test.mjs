@@ -192,6 +192,78 @@ test("manifest accepts the b-roll composed schema and footage provenance", () =>
   }), /without a license/);
 });
 
+test("composed render args mix a ducked music bed when music is provided", () => {
+  const args = buildArgs({ music: { path: "/tmp/run/music.m4a", gainDb: -13 } });
+  assert.ok(args.includes("/tmp/run/music.m4a"));
+  const filterComplex = args[args.indexOf("-filter_complex") + 1];
+  assert.match(filterComplex, /volume=-13dB,asetnsamples=n=1024:p=0\[mg\]/);
+  assert.match(filterComplex, /\[mg\]\[nsc\]sidechaincompress=/);
+  assert.match(filterComplex, /\[nv\]\[duck\]amix=inputs=2:duration=first:dropout_transition=0:normalize=0\[mix\]/);
+  assert.match(filterComplex, /\[mix\]asetnsamples=n=1024:p=0,loudnorm=I=-16:TP=-1\.5:LRA=11\[aout\]$/);
+  assert.equal(args[args.lastIndexOf("-map") + 1], "[aout]");
+  assert.ok(!args.includes("-af"));
+  assert.throws(() => buildArgs({ music: { path: "../evil.m4a" } }), TypeError);
+  assert.throws(() => buildArgs({ music: { path: "/tmp/run/music.m4a", gainDb: 20 } }), RangeError);
+});
+
+test("manifest accepts the music composed schema and music provenance", () => {
+  const args = buildArgs({ music: { path: "/tmp/run/music.m4a", gainDb: -13 } });
+  const manifest = buildRenderManifest({
+    project: { cards: [] },
+    storyboard: { schemaVersion: 1, scenes: [] },
+    recipe: { id: "youtube-16x9-1080p", platformId: "youtube_video" },
+    tools: { ffmpeg: "8.0.1", ffprobe: "8.0.1", renderer: "hermest-board-media-r1" },
+    commands: [{ id: "render-composed", tool: "ffmpeg", argv: args }],
+    qc: { passed: true, checks: ["music_bed_ducking"] },
+    blockers: [],
+    warnings: [],
+    lineage: { parents: [], children: [] },
+    music: {
+      id: "calm-ambient-pad",
+      title: "Calm Ambient Pad",
+      mood: "calm",
+      license: "CC0",
+      source: "procedural ffmpeg synthesis",
+      sha256: "c".repeat(64)
+    },
+    artifacts: [{ name: "a.mp4", type: "video/mp4", bytes: 10, sha256: "a".repeat(64) }]
+  });
+  assert.equal(manifest.music.id, "calm-ambient-pad");
+  assert.equal(manifest.music.license, "CC0");
+  assert.throws(() => buildRenderManifest({
+    project: { cards: [] },
+    storyboard: { schemaVersion: 1, scenes: [] },
+    recipe: { id: "r", platformId: "p" },
+    tools: {},
+    commands: [],
+    qc: {},
+    blockers: [],
+    warnings: [],
+    lineage: {},
+    music: { id: "x", license: "", sha256: "c".repeat(64) },
+    artifacts: [{ name: "a.mp4", type: "video/mp4", bytes: 10, sha256: "a".repeat(64) }]
+  }), /without a license/);
+});
+
+test("manifest rejects tampered music mix graphs", () => {
+  const args = buildArgs({ music: { path: "/tmp/run/music.m4a", gainDb: -13 } });
+  const filterIndex = args.indexOf("-filter_complex") + 1;
+  const unDucked = [...args];
+  unDucked[filterIndex] = unDucked[filterIndex].replace("normalize=0", "normalize=1");
+  assert.throws(() => manifestWith([{
+    id: "render-composed",
+    tool: "ffmpeg",
+    argv: unDucked
+  }]), /schema mismatch/);
+  const unsafeMusic = [...args];
+  unsafeMusic[unsafeMusic.indexOf("/tmp/run/music.m4a")] = "https://evil.example/music.m4a";
+  assert.throws(() => manifestWith([{
+    id: "render-composed",
+    tool: "ffmpeg",
+    argv: unsafeMusic
+  }]), /schema mismatch/);
+});
+
 test("manifest rejects composed render drift", () => {
   const args = buildArgs();
   const tampered = [...args];

@@ -3,6 +3,7 @@ import path from "node:path";
 const FLITE_VOICES = new Set(["slt", "awb", "kal", "kal16", "rms"]);
 const VIDEO_CODECS = new Set(["libx264"]);
 const AUDIO_CODECS = new Set(["aac"]);
+const MUSIC_BED_DEFAULT_GAIN_DB = -13;
 
 export function buildFliteAudioArgs({ textFile, outputFile, voice = "slt" }) {
   const safeTextFile = assertSafeGeneratedPath(textFile);
@@ -125,7 +126,8 @@ export function buildComposedVideoRenderArgs({
   subtitleFile,
   outputFile,
   durationSeconds,
-  recipe
+  recipe,
+  music
 }) {
   if (!Array.isArray(sceneFrames) || sceneFrames.length === 0 || sceneFrames.length > 64) {
     throw new RangeError("Composed render requires 1..64 scene frames");
@@ -200,18 +202,44 @@ export function buildComposedVideoRenderArgs({
   }
   const concatLabels = sceneFrames.map((_frame, index) => `[v${index}]`).join("");
   const subtitleFilter = `subtitles=filename=${safeSubtitleFile}:force_style='FontName=DejaVu Sans,Alignment=2,MarginV=${subtitleMargin}'`;
+  const narrationInput = inputIndex;
+  const musicArgs = [];
+  const audioFilterSegments = [];
+  let audioMap = `${narrationInput}:a:0`;
+  if (music !== undefined && music !== null) {
+    const safeMusicFile = assertSafeGeneratedPath(music?.path);
+    const musicGainDb = Number(music?.gainDb ?? MUSIC_BED_DEFAULT_GAIN_DB);
+    if (!Number.isFinite(musicGainDb) || musicGainDb < -60 || musicGainDb > 0) {
+      throw new RangeError("music.gainDb must be within -60..0");
+    }
+    const musicInput = narrationInput + 1;
+    musicArgs.push("-stream_loop", "-1", "-t", duration.toFixed(3), "-i", safeMusicFile);
+    // asetnsamples фиксирует границы аудио-фреймов: threaded-скедулер ffmpeg подаёт
+    // чанки переменного размера, и sidechaincompress/loudnorm дают недетерминированный
+    // хвост (±1 LSB) — ломается инвариант «одинаковый вход → одинаковые хеши».
+    audioFilterSegments.push(
+      `[${narrationInput}:a]aformat=sample_rates=${sampleRate}:channel_layouts=stereo,asetnsamples=n=1024:p=0,asplit=2[nv][nsc]`,
+      `[${musicInput}:a]aformat=sample_rates=${sampleRate}:channel_layouts=stereo,volume=${musicGainDb}dB,asetnsamples=n=1024:p=0[mg]`,
+      "[mg][nsc]sidechaincompress=threshold=0.015:ratio=8:attack=20:release=350[duck]",
+      "[nv][duck]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[mix]",
+      `[mix]asetnsamples=n=1024:p=0,loudnorm=I=${loudnessTarget}:TP=-1.5:LRA=11[aout]`
+    );
+    audioMap = "[aout]";
+  }
   const filterComplex = [
     ...filterSegments,
     `${concatLabels}concat=n=${sceneFrames.length}:v=1:a=0[vc]`,
-    `[vc]${subtitleFilter}[vout]`
+    `[vc]${subtitleFilter}[vout]`,
+    ...audioFilterSegments
   ].join(";");
   return [
     "-hide_banner", "-loglevel", "error", "-n",
     ...frameInputs,
     "-i", safeAudioFile,
+    ...musicArgs,
     "-filter_complex", filterComplex,
     "-map", "[vout]",
-    "-map", `${inputIndex}:a:0`,
+    "-map", audioMap,
     "-c:v", recipe.videoCodec,
     "-preset", "veryfast",
     "-crf", "21",
@@ -221,7 +249,7 @@ export function buildComposedVideoRenderArgs({
     "-b:a", "192k",
     "-ar", String(sampleRate),
     "-ac", String(audioChannels),
-    "-af", `loudnorm=I=${loudnessTarget}:TP=-1.5:LRA=11`,
+    ...(audioMap === "[aout]" ? [] : ["-af", `loudnorm=I=${loudnessTarget}:TP=-1.5:LRA=11`]),
     "-shortest",
     "-movflags", "+faststart",
     safeOutputFile

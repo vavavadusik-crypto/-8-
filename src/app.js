@@ -71,6 +71,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     const narrationLanguageSelect = document.getElementById("narrationLanguage");
     const narrationVoiceSelect = document.getElementById("narrationVoice");
     const narrationProviderSelect = document.getElementById("narrationProvider");
+    const musicBedSelect = document.getElementById("musicBed");
     const narrationHint = document.getElementById("narrationHint");
 
     const NARRATION_LANGUAGES = [
@@ -149,7 +150,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         schemaVersion: CONTENT_VERSION,
         title: "Hermest: оболочка над ИИ-агентами",
         view: { x: -120, y: -120, zoom: 1 },
-        brief: { language: "ru", voice: "", narrationProvider: "" },
+        brief: { language: "ru", voice: "", narrationProvider: "", music: "" },
         plan: [
           "1. Объяснить проблему: один чат быстро превращается в хаос, если в нем смешаны роли, память, инструменты и задачи.",
           "2. Показать Hermest как оболочку: один управляемый слой над агентами, файлами, API, памятью и логами.",
@@ -433,7 +434,12 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         : "elevenlabs";
       const voices = narrationProvider === "elevenlabs" ? [] : NARRATION_VOICES[language] || [];
       const voice = voices.some(entry => entry.id === source.voice) ? source.voice : "";
-      return { language, voice, narrationProvider };
+      const music = source.music === "off"
+        ? "off"
+        : typeof source.music === "string"
+          ? source.music.trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24)
+          : (fallback.music === "off" ? "off" : fallback.music || "");
+      return { language, voice, narrationProvider, music };
     }
 
     function normalizeServer(input, fallback) {
@@ -979,6 +985,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
           ? "Премиум-озвучка ElevenLabs: нужен свой API-ключ (BYOK)."
           : "Язык вне матрицы Piper — доступно через ElevenLabs (BYOK), нужен свой API-ключ.")
         : "Piper синтезирует локально и бесплатно. Языку соответствует свой каталог голосов.";
+      musicBedSelect.value = state.brief.music === "off" ? "off" : "";
     }
 
     narrationLanguageSelect.addEventListener("change", () => {
@@ -1011,6 +1018,19 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       );
       syncNarrationControls();
       saveState("Голос озвучки сохранён");
+    });
+    musicBedSelect.addEventListener("change", () => {
+      state.brief = normalizeBrief(
+        {
+          language: state.brief.language,
+          voice: state.brief.voice,
+          narrationProvider: state.brief.narrationProvider,
+          music: musicBedSelect.value
+        },
+        state.brief
+      );
+      syncNarrationControls();
+      saveState("Настройка музыки сохранена");
     });
     syncNarrationControls();
     document.getElementById("buildMediaBrief").addEventListener("click", () => {

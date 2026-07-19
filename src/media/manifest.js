@@ -55,6 +55,7 @@ export function buildRenderManifest({
   warnings = [],
   lineage = {},
   footage = [],
+  music = null,
   artifacts
 }) {
   const normalizedRecipe = sortValue(structuredClone(recipe || {}));
@@ -75,7 +76,27 @@ export function buildRenderManifest({
     warnings: uniqueText(warnings),
     lineage: normalizeLineage(lineage),
     footage: normalizeFootage(footage),
+    music: normalizeMusic(music),
     artifacts: verifiedArtifacts
+  };
+}
+
+function normalizeMusic(music) {
+  if (music === null || music === undefined) return null;
+  if (typeof music !== "object" || Array.isArray(music)) {
+    throw new TypeError("Invalid music record");
+  }
+  const license = safeText(music.license);
+  if (!license) throw new TypeError("Music bed without a license record");
+  const sha256 = String(music.sha256 || "");
+  if (!SHA256_PATTERN.test(sha256)) throw new TypeError("Music bed without a verified sha256");
+  return {
+    id: safeText(music.id) || "unknown",
+    title: safeText(music.title),
+    mood: safeText(music.mood),
+    license,
+    sha256,
+    source: safeText(music.source) || "library"
   };
 }
 
@@ -364,17 +385,36 @@ function validateComposedRenderArgv(argv) {
   if (sceneCount === 0) throw new TypeError("missing frame inputs");
   cursor.expect("-i");
   if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid narration input");
+  let hasMusic = false;
+  if (argv[cursorIndex(cursor)] === "-stream_loop") {
+    cursor.expect("-stream_loop", "-1", "-t");
+    if (!decimal.test(cursor.take())) throw new TypeError("invalid music duration");
+    cursor.expect("-i");
+    const musicPath = cursor.take();
+    if (!/\.(?:m4a|mp3|wav|ogg|flac)$/.test(musicPath) || !isSafeGeneratedPath(musicPath)) {
+      throw new TypeError("invalid music input");
+    }
+    hasMusic = true;
+  }
   cursor.expect("-filter_complex");
-  validateComposedFilterGraph(cursor.take());
+  validateComposedFilterGraph(cursor.take(), { hasMusic });
   cursor.expect("-map", "[vout]", "-map");
-  if (!/^\d{1,2}:a:0$/.test(cursor.take())) throw new TypeError("invalid audio map");
+  const audioMap = cursor.take();
+  if (hasMusic) {
+    if (audioMap !== "[aout]") throw new TypeError("invalid audio map");
+  } else if (!/^\d{1,2}:a:0$/.test(audioMap)) {
+    throw new TypeError("invalid audio map");
+  }
   cursor.expect(
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
     "-pix_fmt", "yuv420p", "-r", "30", "-c:a", "aac",
-    "-b:a", "192k", "-ar", "48000", "-ac", "2", "-af"
+    "-b:a", "192k", "-ar", "48000", "-ac", "2"
   );
-  if (!/^loudnorm=I=-?\d+(?:\.\d+)?:TP=-1\.5:LRA=11$/.test(cursor.take())) {
-    throw new TypeError("invalid audio filter");
+  if (!hasMusic) {
+    cursor.expect("-af");
+    if (!/^loudnorm=I=-?\d+(?:\.\d+)?:TP=-1\.5:LRA=11$/.test(cursor.take())) {
+      throw new TypeError("invalid audio filter");
+    }
   }
   cursor.expect("-shortest", "-movflags", "+faststart");
   if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid render output");
@@ -394,11 +434,29 @@ const FILTER_SEGMENT_PATTERNS = Object.freeze([
   /^\[vc\]subtitles=filename=\/[A-Za-z0-9_./-]+:force_style='[A-Za-z0-9 =,]+'\[vout\]$/
 ]);
 
-function validateComposedFilterGraph(filterComplex) {
+const MUSIC_SEGMENT_PATTERNS = Object.freeze([
+  /^\[\d+:a\]aformat=sample_rates=\d+:channel_layouts=stereo,asetnsamples=n=1024:p=0,asplit=2\[nv\]\[nsc\]$/,
+  /^\[\d+:a\]aformat=sample_rates=\d+:channel_layouts=stereo,volume=-?\d+(?:\.\d+)?dB,asetnsamples=n=1024:p=0\[mg\]$/,
+  /^\[mg\]\[nsc\]sidechaincompress=threshold=0\.\d{1,4}:ratio=\d{1,2}:attack=\d{1,4}:release=\d{1,4}\[duck\]$/,
+  /^\[nv\]\[duck\]amix=inputs=2:duration=first:dropout_transition=0:normalize=0\[mix\]$/,
+  /^\[mix\]asetnsamples=n=1024:p=0,loudnorm=I=-?\d+(?:\.\d+)?:TP=-1\.5:LRA=11\[aout\]$/
+]);
+
+function validateComposedFilterGraph(filterComplex, { hasMusic = false } = {}) {
   if (/(?:[a-z][a-z0-9+.-]*:\/\/|authorization|cookie|--header)/i.test(filterComplex)) {
     throw new TypeError("invalid composed filter graph");
   }
-  const segments = String(filterComplex).split(";");
+  let segments = String(filterComplex).split(";");
+  if (hasMusic) {
+    if (segments.length < 3 + MUSIC_SEGMENT_PATTERNS.length) {
+      throw new TypeError("invalid composed filter graph");
+    }
+    const musicSegments = segments.slice(-MUSIC_SEGMENT_PATTERNS.length);
+    for (const [index, pattern] of MUSIC_SEGMENT_PATTERNS.entries()) {
+      if (!pattern.test(musicSegments[index])) throw new TypeError("invalid music mix segment");
+    }
+    segments = segments.slice(0, -MUSIC_SEGMENT_PATTERNS.length);
+  }
   if (segments.length < 3) throw new TypeError("invalid composed filter graph");
   const finalSegment = segments[segments.length - 1];
   const concatSegment = segments[segments.length - 2];
