@@ -16,14 +16,14 @@ build + browser smoke. Всё запушено в `main`.
 
 `~/.secrets/env.sh` (вне git, проверено):
 - `HERMEST_PEXELS_API_KEY` — VERIFIED 200 (бесплатный, b-roll работает)
-- `HERMEST_FAL_API_KEY` — auth валиден (формат uuid:hex, платный ~$0.003/img FLUX schnell); адаптера ещё НЕТ — это P2.2
+- `HERMEST_FAL_API_KEY` — auth валиден, но аккаунт fal.ai ЗАБЛОКИРОВАН (403 Exhausted balance — пополнить fal.ai/dashboard/billing); адаптер и интеграция фонов УЖЕ РЕАЛИЗОВАНЫ (src/media/image-source.js, render-project), live-smoke ждёт баланса
 - `HERMEST_ELEVENLABS_API_KEY` — VERIFIED, расход ~1000/10000 симв/мес
 
 ElevenLabs voice IDs: George `JBFqnCBsd6RMkjVDRZzb` · Alice `Xb7hH8MSUJpSbSDYk0k2` ·
 Aterna (кастомный голос Вадима) `UX4FA7ZvSPh1ma6rI8P9`.
 Piper ОТВЕРГНУТ Вадимом как релизный голос — остаётся free/offline-тиром.
 
-## Активная задача: P2.2 FAL-адаптер (разблокирована, ключ есть)
+## Активная задача: P2.2 ЗАВЕРШЁН КОДОМ (см. docs/EXECUTION_STATE.md — там актуальный NEXT ACTION; план ниже ИСПОЛНЕН, оставлен для истории)
 
 TDD-план: (1) `src/media/image-source.js` по образцу `src/media/broll-source.js`
 (mock-TDD, describe*Availability + create*Adapter, fail-closed, санитизация,
