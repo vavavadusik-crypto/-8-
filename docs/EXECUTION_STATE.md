@@ -7,10 +7,10 @@
 
 UPDATED: 2026-07-19 (Claude Fable 5, вторая сессия)
 ACTIVE PHASE: P1 — мультиязычный голос (русский первым)
-ACTIVE TASK: P1.4 Timeline reconciliation (пер-сценные длительности от измеренной озвучки)
+ACTIVE TASK: P1.5 Audio normalization (loudnorm-замер в manifest QC)
 STATUS: IN_PROGRESS
-LAST COMMIT: см. git log — P1.1 (ADR-001), P1.2 (Piper: адаптер+установка+детерминизм+канонизация 48kHz) и P1.3 (ElevenLabs BYOK: mock-HTTP TDD, бюджет, retry, без утечки ключа) ЗАКРЫТЫ; гейт 141/141 unit + 2/2 media
-NEXT ACTION: прочитать src/domain/content-pipeline.js (reconcileStoryboardDuration) → спроектировать пер-сценную озвучку: реплики сцены → отдельный synth → измеренная ffprobe длительность → сцена ≥ озвучка + padding → SRT от реальных таймингов → RED-тест
+LAST COMMIT: см. git log — P1.1–P1.4 ЗАКРЫТЫ (ADR-001; Piper установлен+детерминизм+канонизация 48kHz; ElevenLabs BYOK; пер-сценный timeline: сцена = измеренная реплика + 400ms, wav-concat.js, SRT от речи); гейт 146/146 unit + 2/2 media
+NEXT ACTION: P1.5 — loudnorm уже применяется в MP4-рендере (-af loudnorm I=-16); осталось ЗАМЕРИТЬ фактическую громкость результата (ffmpeg loudnorm print_format=json / astats) и зафиксировать отчёт в manifest.qc → RED-тест: манифест без loudness-замера не собирается для рендера с аудио
 UNCOMMITTED: none
 BLOCKERS: (1) ключ ElevenLabs у Вадима — только для опционального live-smoke P1.3, разработка не блокирована; (2) субъективная приёмка голоса Вадимом: слушать ~/Видео/hermest-board-voice-samples/ (dmitri/irina/en)
 
