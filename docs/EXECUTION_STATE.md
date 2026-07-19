@@ -7,12 +7,12 @@
 
 UPDATED: 2026-07-19 (Claude Fable 5, вторая сессия)
 ACTIVE PHASE: P1 — мультиязычный голос (русский первым)
-ACTIVE TASK: P1.7 Языковые фикстуры в гейт (RU-проект в test:media)
+ACTIVE TASK: P2.1 ADR image-провайдеров (фаза P1 кодово ЗАВЕРШЕНА, ждёт субъективной приёмки Вадима)
 STATUS: IN_PROGRESS
-LAST COMMIT: см. git log — P1.1–P1.6 ЗАКРЫТЫ (ADR-001; Piper; ElevenLabs BYOK; пер-сценный timeline; loudness в qc; UI-селектор языка/голоса/провайдера с brief в документе проекта); гейт 152/152 unit + 2/2 media
-NEXT ACTION: P1.7 — добавить test/fixtures/russian-board.json (brief.language=ru, голос dmitri) → включить RU-рендер в test/integration/render-project.test.mjs (третий кейс или параметризация) → npm run check включает RU+EN рендеры. Затем P1.8 (language lineage в manifest: тест, что manifest.tools.tts несёт language/voice/provider — код уже пишет, закрепить тестом)
+LAST COMMIT: см. git log — ВСЯ P1 ЗАКРЫТА КОДОМ (P1.1 ADR; P1.2 Piper; P1.3 ElevenLabs BYOK; P1.4 пер-сценный timeline; P1.5 loudness в qc; P1.6 UI-селекторы; P1.7 RU-фикстура в гейте 3/3 media; P1.8 language lineage в manifest); гейт 152/152 unit + 3/3 media
+NEXT ACTION: P2.1 — docs/adr/ADR-002-image-providers.md (FAL FLUX schnell/dev = основной BYOK; Stability/Replicate = fallback; Wikimedia Commons + Openverse/Pexels = бесплатный сток) → затем P2.2 FAL-адаптер в capability router (style-пресет проекта, B3) по TDD
 UNCOMMITTED: none
-BLOCKERS: (1) ключ ElevenLabs у Вадима — только для опционального live-smoke P1.3, разработка не блокирована; (2) субъективная приёмка голоса Вадимом: слушать ~/Видео/hermest-board-voice-samples/ (dmitri/irina/en)
+BLOCKERS: (1) субъективная приёмка голоса Вадимом: ~/Видео/hermest-board-voice-samples/ (dmitri/irina/en + ru-demo-dmitri-per-scene.mp4) — гейт фазы P1; (2) ключ ElevenLabs — только для опционального live-smoke; (3) ключ FAL.ai (~$5–10) понадобится для live-smoke P2.2, mock-TDD не блокирован
 
 ## Дорожная карта (кратко; полностью — MASTER_PLAN)
 
