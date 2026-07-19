@@ -10,6 +10,7 @@
 - Routed `renderProject` narration through language-aware adapter selection (`brief.language`/`brief.voice`/`brief.narrationProvider`), honest flite fallback when Piper is unavailable.
 - Added a provider-neutral narration canonicalization step (ffmpeg → 48 kHz mono PCM) between synthesis and render so any provider's native sample rate meets the pipeline audio contract; command evidence recorded and schema-validated in the manifest; media gate now exercises real Piper narration end to end.
 - Full `npm run check` green: 134/134 unit, 2/2 real FFmpeg renders, API smoke, build, browser smoke.
+- P1.3: shipped the ElevenLabs BYOK adapter (`eleven_multilingual_v2`, "any language" mode) — key only via injectable provider/env (never in metadata, logs, or errors), hard per-job character budget enforced before any paid call, retry with backoff on 429/5xx, fail-closed on auth errors, character usage returned as the UsageRecord prototype; explicit `narrationProvider: "elevenlabs"` selection wired into the narration selector. Mock-HTTP TDD (7 tests); live smoke pending an API key. Gate green: 141/141 unit + 2/2 media.
 
 ## 2026-07-13
 

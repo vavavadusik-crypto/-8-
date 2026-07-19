@@ -7,12 +7,12 @@
 
 UPDATED: 2026-07-19 (Claude Fable 5, вторая сессия)
 ACTIVE PHASE: P1 — мультиязычный голос (русский первым)
-ACTIVE TASK: P1.3 ElevenLabs BYOK-адаптер (mock-HTTP TDD; live-smoke опционален при наличии ключа)
+ACTIVE TASK: P1.4 Timeline reconciliation (пер-сценные длительности от измеренной озвучки)
 STATUS: IN_PROGRESS
-LAST COMMIT: см. git log — P1.1 (ADR-001) и P1.2 (Piper) ЗАКРЫТЫ: адаптер+каталог голосов, piper установлен (~/.local/opt/piper) + 6 моделей (~/.local/share/piper/voices), детерминизм байт-в-байт, канонизация наррейшна в 48kHz mono, гейт 134/134 unit + 2/2 media
-NEXT ACTION: RED-тест ElevenLabs-адаптера (mock HTTP, ключ только из BYOK-vault) → src/media/elevenlabs-tts.js → интеграция в selectNarrationAdapter → npm run check
+LAST COMMIT: см. git log — P1.1 (ADR-001), P1.2 (Piper: адаптер+установка+детерминизм+канонизация 48kHz) и P1.3 (ElevenLabs BYOK: mock-HTTP TDD, бюджет, retry, без утечки ключа) ЗАКРЫТЫ; гейт 141/141 unit + 2/2 media
+NEXT ACTION: прочитать src/domain/content-pipeline.js (reconcileStoryboardDuration) → спроектировать пер-сценную озвучку: реплики сцены → отдельный synth → измеренная ffprobe длительность → сцена ≥ озвучка + padding → SRT от реальных таймингов → RED-тест
 UNCOMMITTED: none
-BLOCKERS: ключ ElevenLabs у Вадима — нужен ТОЛЬКО для опционального live-smoke, разработка не блокирована. Сэмплы голосов для субъективной приёмки: ~/Видео/hermest-board-voice-samples/ (dmitri/irina/en)
+BLOCKERS: (1) ключ ElevenLabs у Вадима — только для опционального live-smoke P1.3, разработка не блокирована; (2) субъективная приёмка голоса Вадимом: слушать ~/Видео/hermest-board-voice-samples/ (dmitri/irina/en)
 
 ## Дорожная карта (кратко; полностью — MASTER_PLAN)
 
