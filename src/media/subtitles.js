@@ -6,14 +6,18 @@ export function buildSubtitleCues(storyboard) {
     if (!Number.isFinite(durationMs) || durationMs <= 0) {
       throw new TypeError(`Scene ${scene?.id || index + 1} requires a positive duration`);
     }
+    const narrationMs = Number(scene?.narrationDurationMs);
+    const speechMs = Number.isFinite(narrationMs) && narrationMs > 0
+      ? Math.min(Math.round(narrationMs), Math.round(durationMs))
+      : Math.round(durationMs);
     const cue = {
       index: index + 1,
       sceneId: String(scene?.id || `scene-${index + 1}`),
       startMs: cursorMs,
-      endMs: cursorMs + Math.round(durationMs),
+      endMs: cursorMs + speechMs,
       text: cleanText(scene?.narration)
     };
-    cursorMs = cue.endMs;
+    cursorMs += Math.round(durationMs);
     return cue;
   });
 }

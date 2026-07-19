@@ -11,10 +11,12 @@ import {
   writeFile
 } from "node:fs/promises";
 
+import { createHash } from "node:crypto";
+
 import {
   buildNarrationScript,
   buildStoryboard,
-  reconcileStoryboardDuration
+  reconcileStoryboardWithSceneDurations
 } from "../domain/content-pipeline.js";
 import { getPlatformRecipe } from "../domain/platform-recipes.js";
 import {
@@ -32,6 +34,7 @@ import {
 } from "./process-runner.js";
 import { buildSubtitleCues, formatSrt } from "./subtitles.js";
 import { selectNarrationAdapter } from "./narration.js";
+import { concatNarrationWavBuffers } from "./wav-concat.js";
 import { validateJsonStructure } from "./structural-preflight.js";
 
 const MAX_BOARD_INPUT_BYTES = 2 * 1024 * 1024;
@@ -59,7 +62,6 @@ export async function renderProject({
   let completed = false;
 
   try {
-    const narrationRawFile = path.join(runDir, "narration.raw.wav");
     const narrationPartial = path.join(runDir, "narration.partial.wav");
     const narrationAudioFile = path.join(runDir, "narration.wav");
     const narrationLanguage = project?.brief?.language || "en";
@@ -71,35 +73,79 @@ export async function renderProject({
       voice: narrationVoice,
       provider: project?.brief?.narrationProvider
     });
-    const tts = await narrationAdapter.synthesize({
-      text: narration,
-      language: narrationLanguage,
-      voice: narrationVoice,
-      outputPath: narrationRawFile,
-      signal
+
+    const narrationCommands = [];
+    const sceneNarrations = [];
+    let sceneTtsMetadata = null;
+    const ttsWarnings = new Set();
+    for (const [sceneIndex, scene] of estimatedStoryboard.scenes.entries()) {
+      const sceneTag = String(sceneIndex + 1).padStart(3, "0");
+      const sceneRawFile = path.join(runDir, `narration-scene-${sceneTag}.raw.wav`);
+      const sceneWavFile = path.join(runDir, `narration-scene-${sceneTag}.wav`);
+      const sceneTts = await narrationAdapter.synthesize({
+        text: scene.narration,
+        language: narrationLanguage,
+        voice: narrationVoice,
+        outputPath: sceneRawFile,
+        signal
+      });
+      sceneTtsMetadata = sceneTtsMetadata || sceneTts;
+      for (const warning of sceneTts.warnings || []) ttsWarnings.add(warning);
+      if (sceneTts.command) narrationCommands.push(sceneTts.command);
+      const canonicalizeCommand = {
+        id: "narration-canonicalize",
+        tool: "ffmpeg",
+        argv: buildNarrationCanonicalizeArgs({
+          inputFile: sceneRawFile,
+          outputFile: sceneWavFile
+        })
+      };
+      await runMediaTool(canonicalizeCommand.tool, canonicalizeCommand.argv, {
+        timeoutMs: 300000,
+        signal
+      });
+      narrationCommands.push(canonicalizeCommand);
+      await rm(sceneRawFile, { force: true });
+      const sceneProbe = await probeMediaFile(sceneWavFile, { signal });
+      if (!sceneProbe.audio) {
+        throw new TypeError(`Scene ${scene.id} narration does not contain an audio stream`);
+      }
+      sceneNarrations.push({
+        file: sceneWavFile,
+        durationMs: Math.ceil(sceneProbe.durationSeconds * 1000)
+      });
+    }
+
+    const storyboard = reconcileStoryboardWithSceneDurations(
+      estimatedStoryboard,
+      sceneNarrations.map(sceneNarration => sceneNarration.durationMs)
+    );
+    const sceneWavBuffers = await Promise.all(
+      sceneNarrations.map(sceneNarration => readFile(sceneNarration.file))
+    );
+    const combinedNarration = concatNarrationWavBuffers(
+      sceneWavBuffers,
+      storyboard.scenes.map(scene => scene.durationMs)
+    );
+    await writeFile(narrationPartial, combinedNarration, {
+      flag: "wx",
+      mode: PRIVATE_FILE_MODE
     });
-    const canonicalizeCommand = {
-      id: "narration-canonicalize",
-      tool: "ffmpeg",
-      argv: buildNarrationCanonicalizeArgs({
-        inputFile: narrationRawFile,
-        outputFile: narrationPartial
-      })
-    };
-    await runMediaTool(canonicalizeCommand.tool, canonicalizeCommand.argv, {
-      timeoutMs: 300000,
-      signal
-    });
-    await rm(narrationRawFile, { force: true });
+    await Promise.all(sceneNarrations.map(sceneNarration => rm(sceneNarration.file, { force: true })));
     const narrationProbe = await probeMediaFile(narrationPartial, { signal });
     if (!narrationProbe.audio) throw new TypeError("Narration output does not contain an audio stream");
-    await chmod(narrationPartial, PRIVATE_FILE_MODE);
     await rename(narrationPartial, narrationAudioFile);
 
-    const storyboard = reconcileStoryboardDuration(
-      estimatedStoryboard,
-      Math.round(narrationProbe.durationSeconds * 1000)
-    );
+    const tts = {
+      ...sceneTtsMetadata,
+      durationSeconds: Number(narrationProbe.durationSeconds),
+      sampleRate: Number(narrationProbe.audio.sampleRate || 0),
+      channels: Number(narrationProbe.audio.channels || 0),
+      codec: String(narrationProbe.audio.codec || "unknown"),
+      scriptSha256: createHash("sha256").update(narration).digest("hex"),
+      warnings: [...ttsWarnings],
+      command: null
+    };
     const storyboardFile = path.join(runDir, "storyboard.json");
     const subtitleFile = path.join(runDir, "narration.srt");
     await atomicWriteFile(storyboardFile, `${JSON.stringify(storyboard, null, 2)}\n`);
@@ -176,7 +222,7 @@ export async function renderProject({
       })
     ]);
 
-    const commands = [tts.command, canonicalizeCommand, renderCommand].filter(Boolean);
+    const commands = [...narrationCommands, renderCommand];
     const manifest = buildRenderManifest({
       project,
       storyboard,

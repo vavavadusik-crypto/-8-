@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   buildNarrationScript,
   buildStoryboard,
-  reconcileStoryboardDuration
+  reconcileStoryboardWithSceneDurations
 } from "../../src/domain/content-pipeline.js";
 
 const board = {
@@ -71,19 +71,19 @@ test("buildStoryboard rejects a board without renderable cards", () => {
   );
 });
 
-test("reconcileStoryboardDuration scales scene timing to measured narration", () => {
-  const reconciled = reconcileStoryboardDuration({
+test("per-scene reconciliation keeps every scene at least as long as its narration", () => {
+  const reconciled = reconcileStoryboardWithSceneDurations({
     schemaVersion: 1,
     scenes: [
       { id: "a", durationMs: 2500 },
       { id: "b", durationMs: 3000 }
     ]
-  }, 11000);
+  }, [4100, 900]);
 
-  assert.equal(reconciled.scenes.reduce((total, scene) => total + scene.durationMs, 0), 11000);
-  assert.ok(reconciled.scenes.every(scene => scene.durationMs >= 250));
-  assert.ok(reconciled.scenes[1].durationMs > reconciled.scenes[0].durationMs);
-  assert.equal(reconciled.measuredDurationMs, 11000);
+  assert.deepEqual(reconciled.scenes.map(scene => scene.narrationDurationMs), [4100, 900]);
+  assert.deepEqual(reconciled.scenes.map(scene => scene.durationMs), [4500, 1300]);
+  assert.ok(reconciled.scenes.every(scene => scene.durationMs >= scene.narrationDurationMs));
+  assert.equal(reconciled.measuredDurationMs, 5800);
 });
 
 test("storyboard enforces bounded card and narration input", () => {
@@ -129,18 +129,20 @@ test("storyboard assigns sorted order and rejects normalized id collisions", () 
   );
 });
 
-test("duration reconciliation preserves a practical minimum for every scene", () => {
-  const input = {
-    schemaVersion: 1,
-    scenes: [
-      { id: "a", durationMs: 1 },
-      { id: "b", durationMs: 1 },
-      { id: "c", durationMs: 1 }
-    ]
-  };
-  assert.throws(() => reconcileStoryboardDuration(input, 749), /shorter than scene minimum/);
-  assert.deepEqual(
-    reconcileStoryboardDuration(input, 750).scenes.map(scene => scene.durationMs),
-    [250, 250, 250]
-  );
+test("per-scene reconciliation honors custom padding and the practical minimum", () => {
+  const shortScene = { schemaVersion: 1, scenes: [{ id: "a", durationMs: 1 }] };
+
+  const clamped = reconcileStoryboardWithSceneDurations(shortScene, [100], { paddingMs: 50 });
+  assert.equal(clamped.scenes[0].durationMs, 250);
+
+  const unpadded = reconcileStoryboardWithSceneDurations(shortScene, [1000], { paddingMs: 0 });
+  assert.equal(unpadded.scenes[0].durationMs, 1000);
+});
+
+test("per-scene reconciliation fails closed on mismatched or invalid measurements", () => {
+  const storyboard = { schemaVersion: 1, scenes: [{ id: "a", durationMs: 1000 }] };
+  assert.throws(() => reconcileStoryboardWithSceneDurations(storyboard, []), TypeError);
+  assert.throws(() => reconcileStoryboardWithSceneDurations(storyboard, [0]), TypeError);
+  assert.throws(() => reconcileStoryboardWithSceneDurations(storyboard, [Number.NaN]), TypeError);
+  assert.throws(() => reconcileStoryboardWithSceneDurations({ scenes: [] }, []), TypeError);
 });

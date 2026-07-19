@@ -32,6 +32,21 @@ test("formatSrt emits valid sequential timestamps", () => {
   );
 });
 
+test("subtitle cues end with the measured narration inside each scene", () => {
+  const cues = buildSubtitleCues({
+    scenes: [
+      { id: "scene-a", narration: "Первая сцена.", durationMs: 3000, narrationDurationMs: 2600 },
+      { id: "scene-b", narration: "Вторая сцена.", durationMs: 2000, narrationDurationMs: 1500 }
+    ]
+  });
+
+  assert.deepEqual(cues, [
+    { index: 1, sceneId: "scene-a", startMs: 0, endMs: 2600, text: "Первая сцена." },
+    { index: 2, sceneId: "scene-b", startMs: 3000, endMs: 4500, text: "Вторая сцена." }
+  ]);
+  assert.ok(cues.every(cue => cue.endMs <= 5000));
+});
+
 test("subtitle builder rejects non-positive scene duration", () => {
   assert.throws(
     () => buildSubtitleCues({ scenes: [{ id: "bad", narration: "Ошибка", durationMs: 0 }] }),

@@ -1,6 +1,7 @@
 const DEFAULT_WORDS_PER_MINUTE = 150;
 const DEFAULT_MIN_SCENE_DURATION_MS = 2000;
 const MIN_RECONCILED_SCENE_DURATION_MS = 250;
+const DEFAULT_SCENE_PADDING_MS = 400;
 const MAX_CARDS = 200;
 const MAX_CARD_TEXT_CHARS = 20000;
 const MAX_TOTAL_NARRATION_CHARS = 100000;
@@ -65,37 +66,33 @@ export function buildNarrationScript(storyboard) {
   return scenes.map(scene => cleanText(scene?.narration)).filter(Boolean).join("\n\n");
 }
 
-export function reconcileStoryboardDuration(storyboard, measuredDurationMs) {
-  const targetMs = Math.round(Number(measuredDurationMs));
+export function reconcileStoryboardWithSceneDurations(storyboard, measuredSceneDurationsMs, options = {}) {
   const scenes = Array.isArray(storyboard?.scenes) ? storyboard.scenes : [];
-  const estimatedTotalMs = scenes.reduce((total, scene) => total + Number(scene?.durationMs || 0), 0);
-  if (targetMs <= 0 || scenes.length === 0 || estimatedTotalMs <= 0) {
-    throw new TypeError("Duration reconciliation requires scenes and a positive measured duration");
-  }
-  const minimumTotalMs = scenes.length * MIN_RECONCILED_SCENE_DURATION_MS;
-  if (targetMs < minimumTotalMs) {
-    throw new RangeError("Measured narration is shorter than scene minimum duration");
+  const paddingMs = nonNegativeInteger(options.paddingMs, DEFAULT_SCENE_PADDING_MS);
+  if (
+    scenes.length === 0 ||
+    !Array.isArray(measuredSceneDurationsMs) ||
+    measuredSceneDurationsMs.length !== scenes.length
+  ) {
+    throw new TypeError("Per-scene reconciliation requires one measured duration per scene");
   }
 
-  const distributableMs = targetMs - minimumTotalMs;
-  const shares = scenes.map((scene, index) => {
-    const exact = (Number(scene.durationMs) / estimatedTotalMs) * distributableMs;
-    return { index, base: Math.floor(exact), remainder: exact - Math.floor(exact) };
+  const reconciledScenes = scenes.map((scene, index) => {
+    const narrationMs = Math.ceil(Number(measuredSceneDurationsMs[index]));
+    if (!Number.isFinite(narrationMs) || narrationMs <= 0) {
+      throw new TypeError(`Scene ${scene?.id || index + 1} requires a positive measured narration duration`);
+    }
+    return {
+      ...scene,
+      narrationDurationMs: narrationMs,
+      durationMs: Math.max(MIN_RECONCILED_SCENE_DURATION_MS, narrationMs + paddingMs)
+    };
   });
-  let remainingMs = distributableMs - shares.reduce((total, share) => total + share.base, 0);
-  for (const share of [...shares].sort((left, right) => right.remainder - left.remainder || left.index - right.index)) {
-    if (remainingMs <= 0) break;
-    share.base += 1;
-    remainingMs -= 1;
-  }
 
   return {
     ...storyboard,
-    measuredDurationMs: targetMs,
-    scenes: scenes.map((scene, index) => ({
-      ...scene,
-      durationMs: MIN_RECONCILED_SCENE_DURATION_MS + shares[index].base
-    }))
+    measuredDurationMs: reconciledScenes.reduce((total, scene) => total + scene.durationMs, 0),
+    scenes: reconciledScenes
   };
 }
 
@@ -172,6 +169,11 @@ function finiteNumber(value) {
 function positiveNumber(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function nonNegativeInteger(value, fallback) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= 0 ? number : fallback;
 }
 
 function uniqueStrings(values) {
