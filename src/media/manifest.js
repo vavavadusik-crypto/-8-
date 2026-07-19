@@ -20,7 +20,10 @@ const HEADER_FLAG = /^(?:--?headers?|--cookie)(?:=|$)/i;
 const SENSITIVE_HEADER_CARRIER = /(?:^|[=\r\n])\s*(?:authorization|proxy-authorization|cookie|set-cookie)\s*:/i;
 const CREDENTIAL_URL = /[a-z][a-z0-9+.-]*:\/\/[^/\s"'<>]*(?:@|%40)/i;
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
-const ALLOWED_COMMAND_TOOLS = Object.freeze({ tts: "ffmpeg", render: "ffmpeg" });
+const ALLOWED_COMMAND_TOOLS = Object.freeze({
+  tts: Object.freeze(["ffmpeg", "piper"]),
+  render: Object.freeze(["ffmpeg"])
+});
 const MAX_COMMAND_ARGUMENTS = 512;
 const MAX_COMMAND_ARGUMENT_BYTES = 16384;
 
@@ -102,7 +105,7 @@ function normalizeCommands(commands) {
     }
     const id = safeText(command.id);
     const tool = safeText(command.tool);
-    if (!id || ALLOWED_COMMAND_TOOLS[id] !== tool) {
+    if (!id || !ALLOWED_COMMAND_TOOLS[id]?.includes(tool)) {
       throw new TypeError(`Unsupported command evidence at index ${commandIndex}`);
     }
     if (!Array.isArray(command.argv) || command.argv.length === 0 || command.argv.length > MAX_COMMAND_ARGUMENTS) {
@@ -124,7 +127,7 @@ function normalizeCommands(commands) {
       }
       return argument;
     });
-    validateCommandArgv(id, argv, commandIndex);
+    validateCommandArgv(id, tool, argv, commandIndex);
     let redactNext = false;
     const sanitized = argv.map(argument => {
       if (redactNext) {
@@ -154,14 +157,27 @@ function isSensitiveCommandArgument(argument) {
     || SENSITIVE_ASSIGNMENT.test(normalized);
 }
 
-function validateCommandArgv(id, argv, commandIndex) {
+function validateCommandArgv(id, tool, argv, commandIndex) {
   try {
-    if (id === "tts") validateTtsArgv(argv);
+    if (id === "tts" && tool === "piper") validatePiperTtsArgv(argv);
+    else if (id === "tts") validateTtsArgv(argv);
     else if (id === "render") validateRenderArgv(argv);
     else throw new TypeError("unsupported schema");
   } catch {
     throw new TypeError(`Command argv schema mismatch at index ${commandIndex}`);
   }
+}
+
+function validatePiperTtsArgv(argv) {
+  const cursor = argvCursor(argv);
+  cursor.expect("--model");
+  const model = cursor.take();
+  if (!model.endsWith(".onnx") || !isSafeGeneratedPath(model)) throw new TypeError("invalid piper model");
+  cursor.expect("--output_file");
+  if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid piper output");
+  cursor.expect("--sentence_silence");
+  if (!/^\d+(?:\.\d{1,3})?$/.test(cursor.take())) throw new TypeError("invalid piper silence");
+  cursor.finish();
 }
 
 function validateTtsArgv(argv) {

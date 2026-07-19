@@ -174,3 +174,49 @@ test("render manifest rejects unverifiable artifacts", () => {
     /verified bytes and sha256/
   );
 });
+
+const validPiperCommand = {
+  id: "tts",
+  tool: "piper",
+  argv: [
+    "--model", "/home/tester/.local/share/piper/voices/ru_RU-dmitri-medium.onnx",
+    "--output_file", "/tmp/private-run/narration.partial.wav",
+    "--sentence_silence", "0.35"
+  ]
+};
+
+test("render manifest accepts Piper narration command evidence", () => {
+  const manifest = build({ commands: [validPiperCommand, validRenderCommand] });
+  const ttsCommand = manifest.commands.find(command => command.tool === "piper");
+  assert.equal(ttsCommand.id, "tts");
+  assert.equal(ttsCommand.argv[0], "--model");
+});
+
+test("render manifest rejects malformed Piper narration argv", () => {
+  assert.throws(
+    () => build({
+      commands: [
+        {
+          id: "tts",
+          tool: "piper",
+          argv: ["--model", "not-a-model", "--output_file", "/tmp/private-run/n.wav", "--sentence_silence", "0.35"]
+        },
+        validRenderCommand
+      ]
+    }),
+    TypeError
+  );
+  assert.throws(
+    () => build({
+      commands: [
+        {
+          id: "tts",
+          tool: "piper",
+          argv: [...validPiperCommand.argv, "--unexpected"]
+        },
+        validRenderCommand
+      ]
+    }),
+    TypeError
+  );
+});
