@@ -119,6 +119,91 @@ export function buildVideoRenderArgs({
   ];
 }
 
+export function buildComposedVideoRenderArgs({
+  sceneFrames,
+  audioFile,
+  subtitleFile,
+  outputFile,
+  durationSeconds,
+  recipe
+}) {
+  if (!Array.isArray(sceneFrames) || sceneFrames.length === 0 || sceneFrames.length > 64) {
+    throw new RangeError("Composed render requires 1..64 scene frames");
+  }
+  const safeAudioFile = assertSafeGeneratedPath(audioFile);
+  const safeSubtitleFile = assertSafeGeneratedPath(subtitleFile);
+  const safeOutputFile = assertSafeGeneratedPath(outputFile);
+  const width = positiveInteger(recipe?.width, "width");
+  const height = positiveInteger(recipe?.height, "height");
+  const fps = positiveInteger(recipe?.fps, "fps");
+  const duration = Number(durationSeconds);
+  if (!Number.isFinite(duration) || duration <= 0 || duration > 21600) {
+    throw new RangeError("durationSeconds must be within 0..21600");
+  }
+  if (!VIDEO_CODECS.has(recipe?.videoCodec)) {
+    throw new RangeError(`Unsupported video codec: ${recipe?.videoCodec}`);
+  }
+  if (!AUDIO_CODECS.has(recipe?.audioCodec)) {
+    throw new RangeError(`Unsupported audio codec: ${recipe?.audioCodec}`);
+  }
+  if (recipe?.pixelFormat !== "yuv420p") {
+    throw new RangeError(`Unsupported pixel format: ${recipe?.pixelFormat}`);
+  }
+  const sampleRate = positiveInteger(recipe?.audioSampleRate, "audioSampleRate");
+  const audioChannels = positiveInteger(recipe?.audioChannels, "audioChannels");
+  const subtitleMargin = positiveInteger(recipe?.safeZones?.bottom, "safeZones.bottom");
+  const loudnessTarget = Number(recipe?.loudnessTargetLufs);
+  if (!Number.isFinite(loudnessTarget) || loudnessTarget < -70 || loudnessTarget > -5) {
+    throw new RangeError("loudnessTargetLufs must be within -70..-5");
+  }
+  const frameInputs = [];
+  const filterInputs = [];
+  for (const [index, frame] of sceneFrames.entries()) {
+    const framePath = assertSafeGeneratedPath(frame?.path);
+    const frameDuration = Number(frame?.durationSeconds);
+    if (!Number.isFinite(frameDuration) || frameDuration <= 0 || frameDuration > 3600) {
+      throw new RangeError(`Invalid scene frame duration at index ${index}`);
+    }
+    frameInputs.push(
+      "-loop", "1",
+      "-t", frameDuration.toFixed(3),
+      "-framerate", String(fps),
+      "-i", framePath
+    );
+    filterInputs.push(
+      `[${index}:v]scale=${width}:${height},setsar=1,format=yuv420p[v${index}]`
+    );
+  }
+  const concatLabels = sceneFrames.map((_frame, index) => `[v${index}]`).join("");
+  const subtitleFilter = `subtitles=filename=${safeSubtitleFile}:force_style='FontName=DejaVu Sans,Alignment=2,MarginV=${subtitleMargin}'`;
+  const filterComplex = [
+    ...filterInputs,
+    `${concatLabels}concat=n=${sceneFrames.length}:v=1:a=0[vc]`,
+    `[vc]${subtitleFilter}[vout]`
+  ].join(";");
+  return [
+    "-hide_banner", "-loglevel", "error", "-n",
+    ...frameInputs,
+    "-i", safeAudioFile,
+    "-filter_complex", filterComplex,
+    "-map", "[vout]",
+    "-map", `${sceneFrames.length}:a:0`,
+    "-c:v", recipe.videoCodec,
+    "-preset", "veryfast",
+    "-crf", "21",
+    "-pix_fmt", recipe.pixelFormat,
+    "-r", String(fps),
+    "-c:a", recipe.audioCodec,
+    "-b:a", "192k",
+    "-ar", String(sampleRate),
+    "-ac", String(audioChannels),
+    "-af", `loudnorm=I=${loudnessTarget}:TP=-1.5:LRA=11`,
+    "-shortest",
+    "-movflags", "+faststart",
+    safeOutputFile
+  ];
+}
+
 export function assertSafeGeneratedPath(value) {
   const candidate = typeof value === "string" ? value : "";
   if (!/^\/[A-Za-z0-9_./-]+$/.test(candidate) || path.posix.normalize(candidate) !== candidate) {

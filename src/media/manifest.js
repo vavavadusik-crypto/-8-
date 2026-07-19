@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
-const TOOL_TEXT_KEYS = ["ffmpeg", "ffprobe", "renderer"];
+const TOOL_TEXT_KEYS = ["ffmpeg", "ffprobe", "renderer", "sceneComposer", "chrome"];
 const TTS_KEYS = [
   "provider",
   "model",
@@ -24,6 +24,8 @@ const ALLOWED_COMMAND_TOOLS = Object.freeze({
   tts: Object.freeze(["ffmpeg", "piper"]),
   "narration-canonicalize": Object.freeze(["ffmpeg"]),
   render: Object.freeze(["ffmpeg"]),
+  "render-composed": Object.freeze(["ffmpeg"]),
+  "scene-frame": Object.freeze(["chrome"]),
   "loudness-measure": Object.freeze(["ffmpeg"])
 });
 const LOUDNESS_KEYS = Object.freeze([
@@ -175,6 +177,8 @@ function validateCommandArgv(id, tool, argv, commandIndex) {
     else if (id === "narration-canonicalize" && tool === "ffmpeg") validateNarrationCanonicalizeArgv(argv);
     else if (id === "loudness-measure" && tool === "ffmpeg") validateLoudnessMeasureArgv(argv);
     else if (id === "render") validateRenderArgv(argv);
+    else if (id === "render-composed" && tool === "ffmpeg") validateComposedRenderArgv(argv);
+    else if (id === "scene-frame" && tool === "chrome") validateSceneFrameArgv(argv);
     else throw new TypeError("unsupported schema");
   } catch {
     throw new TypeError(`Command argv schema mismatch at index ${commandIndex}`);
@@ -260,6 +264,76 @@ function validateRenderArgv(argv) {
   cursor.finish();
 }
 
+function validateSceneFrameArgv(argv) {
+  const cursor = argvCursor(argv);
+  cursor.expect(
+    "--headless=new",
+    "--disable-gpu",
+    "--disable-extensions",
+    "--hide-scrollbars",
+    "--force-device-scale-factor=1"
+  );
+  const profile = cursor.take();
+  if (!/^--user-data-dir=\/[A-Za-z0-9_./-]+$/.test(profile) || !isSafeGeneratedPath(profile.slice("--user-data-dir=".length))) {
+    throw new TypeError("invalid chrome profile dir");
+  }
+  if (!/^--window-size=\d{2,5},\d{2,5}$/.test(cursor.take())) throw new TypeError("invalid chrome window size");
+  const screenshot = cursor.take();
+  if (!/^--screenshot=\/[A-Za-z0-9_./-]+\.png$/.test(screenshot) || !isSafeGeneratedPath(screenshot.slice("--screenshot=".length))) {
+    throw new TypeError("invalid chrome screenshot output");
+  }
+  const target = cursor.take();
+  if (!/^file:\/\/\/[A-Za-z0-9_./-]+\.html$/.test(target) || !isSafeGeneratedPath(target.slice("file://".length))) {
+    throw new TypeError("invalid chrome target url");
+  }
+  cursor.finish();
+}
+
+function validateComposedRenderArgv(argv) {
+  const cursor = argvCursor(argv);
+  cursor.expect("-hide_banner", "-loglevel", "error", "-n");
+  let frameCount = 0;
+  while (argv[cursorIndex(cursor)] === "-loop") {
+    cursor.expect("-loop", "1", "-t");
+    if (!/^\d+(?:\.\d{1,3})?$/.test(cursor.take())) throw new TypeError("invalid frame duration");
+    cursor.expect("-framerate");
+    if (!/^\d{1,3}$/.test(cursor.take())) throw new TypeError("invalid frame rate");
+    cursor.expect("-i");
+    const framePath = cursor.take();
+    if (!framePath.endsWith(".png") || !isSafeGeneratedPath(framePath)) throw new TypeError("invalid frame input");
+    frameCount += 1;
+    if (frameCount > 64) throw new TypeError("too many frame inputs");
+  }
+  if (frameCount === 0) throw new TypeError("missing frame inputs");
+  cursor.expect("-i");
+  if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid narration input");
+  cursor.expect("-filter_complex");
+  const filterComplex = cursor.take();
+  if (
+    !/^(?:\[\d+:v\]scale=\d+:\d+,setsar=1,format=yuv420p\[v\d+\];)+(?:\[v\d+\])+concat=n=\d+:v=1:a=0\[vc\];\[vc\]subtitles=filename=\/[A-Za-z0-9_./-]+:force_style='[A-Za-z0-9 =,]+'\[vout\]$/.test(filterComplex) ||
+    /(?:[a-z][a-z0-9+.-]*:\/\/|authorization|cookie|--header)/i.test(filterComplex)
+  ) {
+    throw new TypeError("invalid composed filter graph");
+  }
+  cursor.expect("-map", "[vout]", "-map");
+  if (!/^\d{1,2}:a:0$/.test(cursor.take())) throw new TypeError("invalid audio map");
+  cursor.expect(
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+    "-pix_fmt", "yuv420p", "-r", "30", "-c:a", "aac",
+    "-b:a", "192k", "-ar", "48000", "-ac", "2", "-af"
+  );
+  if (!/^loudnorm=I=-?\d+(?:\.\d+)?:TP=-1\.5:LRA=11$/.test(cursor.take())) {
+    throw new TypeError("invalid audio filter");
+  }
+  cursor.expect("-shortest", "-movflags", "+faststart");
+  if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid render output");
+  cursor.finish();
+}
+
+function cursorIndex(cursor) {
+  return cursor.position();
+}
+
 function argvCursor(argv) {
   let index = 0;
   return {
@@ -277,6 +351,9 @@ function argvCursor(argv) {
     },
     finish() {
       if (index !== argv.length) throw new TypeError("unexpected trailing argument");
+    },
+    position() {
+      return index;
     }
   };
 }
@@ -286,6 +363,9 @@ function isSafeGeneratedPath(value) {
 }
 
 function redactRunPath(argument) {
+  if (argument.startsWith("file:///")) {
+    return `file://<run>/${path.posix.basename(argument.slice("file://".length))}`;
+  }
   if (argument.startsWith("/")) return `<run>/${path.posix.basename(argument)}`;
   return argument.replace(/(=)(\/[A-Za-z0-9_./-]+)/g, (_match, prefix, absolutePath) => (
     `${prefix}<run>/${path.posix.basename(absolutePath)}`

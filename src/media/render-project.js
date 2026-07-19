@@ -20,10 +20,12 @@ import {
 } from "../domain/content-pipeline.js";
 import { getPlatformRecipe } from "../domain/platform-recipes.js";
 import {
+  buildComposedVideoRenderArgs,
   buildNarrationCanonicalizeArgs,
   buildVideoRenderArgs,
   assertSafeGeneratedPath
 } from "./ffmpeg-args.js";
+import { composeSceneFrames, describeSceneComposerAvailability } from "./scene-frames.js";
 import { assertVideoProbe } from "./ffprobe.js";
 import { buildRenderManifest, hashJson } from "./manifest.js";
 import {
@@ -152,45 +154,81 @@ export async function renderProject({
     await atomicWriteFile(storyboardFile, `${JSON.stringify(storyboard, null, 2)}\n`);
     await atomicWriteFile(subtitleFile, formatSrt(buildSubtitleCues(storyboard)));
 
-    let sceneCursorMs = 0;
-    const sceneTitleFiles = [];
-    for (const [index, scene] of storyboard.scenes.entries()) {
-      const titleFile = path.join(runDir, `scene-${String(index + 1).padStart(3, "0")}.txt`);
-      await writeFile(titleFile, `${scene.title}\n`, {
-        encoding: "utf8",
-        flag: "wx",
-        mode: PRIVATE_FILE_MODE
-      });
-      sceneTitleFiles.push({
-        path: titleFile,
-        startSeconds: sceneCursorMs / 1000,
-        endSeconds: (sceneCursorMs + scene.durationMs) / 1000
-      });
-      sceneCursorMs += scene.durationMs;
-    }
-
     const videoName = `${recipe.id}.mp4`;
     const videoPartial = path.join(runDir, `${recipe.id}.partial.mp4`);
     const videoFile = path.join(runDir, videoName);
-    const renderCommand = {
-      id: "render",
-      tool: "ffmpeg",
-      argv: buildVideoRenderArgs({
-        audioFile: narrationAudioFile,
-        subtitleFile,
-        outputFile: videoPartial,
-        durationSeconds: narrationProbe.durationSeconds,
-        sceneTitleFiles,
-        recipe
-      })
-    };
-    try {
-      await runMediaTool(renderCommand.tool, renderCommand.argv, {
-        timeoutMs: 300000,
+    const composerAvailability = await describeSceneComposerAvailability();
+    let renderCommand;
+    let sceneFrameCommands = [];
+    let sceneComposer = null;
+    if (composerAvailability.status === "executable") {
+      const composition = await composeSceneFrames({
+        storyboard,
+        brief: project?.brief,
+        recipe,
+        runDir,
+        seed: Number.parseInt(hashJson(project).slice(0, 8), 16),
         signal
       });
-    } finally {
-      await Promise.all(sceneTitleFiles.map(scene => rm(scene.path, { force: true })));
+      sceneFrameCommands = composition.commands;
+      sceneComposer = composition.composer;
+      renderCommand = {
+        id: "render-composed",
+        tool: "ffmpeg",
+        argv: buildComposedVideoRenderArgs({
+          sceneFrames: composition.frames,
+          audioFile: narrationAudioFile,
+          subtitleFile,
+          outputFile: videoPartial,
+          durationSeconds: narrationProbe.durationSeconds,
+          recipe
+        })
+      };
+      try {
+        await runMediaTool(renderCommand.tool, renderCommand.argv, {
+          timeoutMs: 300000,
+          signal
+        });
+      } finally {
+        await Promise.all(composition.frames.map(frame => rm(frame.path, { force: true })));
+      }
+    } else {
+      let sceneCursorMs = 0;
+      const sceneTitleFiles = [];
+      for (const [index, scene] of storyboard.scenes.entries()) {
+        const titleFile = path.join(runDir, `scene-${String(index + 1).padStart(3, "0")}.txt`);
+        await writeFile(titleFile, `${scene.title}\n`, {
+          encoding: "utf8",
+          flag: "wx",
+          mode: PRIVATE_FILE_MODE
+        });
+        sceneTitleFiles.push({
+          path: titleFile,
+          startSeconds: sceneCursorMs / 1000,
+          endSeconds: (sceneCursorMs + scene.durationMs) / 1000
+        });
+        sceneCursorMs += scene.durationMs;
+      }
+      renderCommand = {
+        id: "render",
+        tool: "ffmpeg",
+        argv: buildVideoRenderArgs({
+          audioFile: narrationAudioFile,
+          subtitleFile,
+          outputFile: videoPartial,
+          durationSeconds: narrationProbe.durationSeconds,
+          sceneTitleFiles,
+          recipe
+        })
+      };
+      try {
+        await runMediaTool(renderCommand.tool, renderCommand.argv, {
+          timeoutMs: 300000,
+          signal
+        });
+      } finally {
+        await Promise.all(sceneTitleFiles.map(scene => rm(scene.path, { force: true })));
+      }
     }
     const videoProbe = assertVideoProbe(
       await probeMediaFile(videoPartial, { signal }),
@@ -224,17 +262,19 @@ export async function renderProject({
       })
     ]);
 
-    const commands = [...narrationCommands, renderCommand, loudnessCommand];
+    const commands = [...narrationCommands, ...sceneFrameCommands, renderCommand, loudnessCommand];
+    const manifestTools = {
+      ffmpeg: await mediaToolVersion("ffmpeg", { signal }),
+      ffprobe: await mediaToolVersion("ffprobe", { signal }),
+      renderer: "hermest-board-media-r1",
+      tts
+    };
+    if (sceneComposer) manifestTools.sceneComposer = sceneComposer;
     const manifest = buildRenderManifest({
       project,
       storyboard,
       recipe,
-      tools: {
-        ffmpeg: await mediaToolVersion("ffmpeg", { signal }),
-        ffprobe: await mediaToolVersion("ffprobe", { signal }),
-        renderer: "hermest-board-media-r1",
-        tts
-      },
+      tools: manifestTools,
       commands,
       qc: {
         passed: true,
@@ -243,6 +283,7 @@ export async function renderProject({
           "storyboard_schema",
           "narration_audio_probe",
           "subtitle_timeline",
+          sceneComposer ? "composed_scene_frames" : "legacy_color_scenes",
           "video_streams_codecs_dimensions_duration",
           "audio_loudness_measured",
           "artifact_hashes"
@@ -250,7 +291,9 @@ export async function renderProject({
         loudness
       },
       blockers: recipe.readinessBlockers,
-      warnings: tts.warnings,
+      warnings: sceneComposer
+        ? tts.warnings
+        : [...tts.warnings, "scene composer unavailable; legacy color scenes used"],
       lineage: {
         parents: [`project:${project.projectId || hashJson(project)}`],
         children: artifacts.map(artifact => `artifact:${artifact.sha256}`)

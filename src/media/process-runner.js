@@ -37,9 +37,23 @@ export function resolvePiperBinaryPath({ env = process.env, homeDirectory = os.h
   return path.join(homeDirectory, ".local", "opt", "piper", "piper");
 }
 
+export function resolveChromeBinaryPath({ env = process.env } = {}) {
+  const configured = typeof env.HERMEST_CHROME_PATH === "string" ? env.HERMEST_CHROME_PATH.trim() : "";
+  if (configured) {
+    if (!SAFE_ABSOLUTE_PATH.test(configured)) {
+      throw new RangeError("HERMEST_CHROME_PATH must be a safe absolute path");
+    }
+    return configured;
+  }
+  return "/usr/bin/google-chrome";
+}
+
 export function getMediaToolDescriptor(tool) {
   if (tool === "piper") {
     return { path: resolvePiperBinaryPath(), env: { ...SCRUBBED_ENV } };
+  }
+  if (tool === "chrome") {
+    return { path: resolveChromeBinaryPath(), env: { ...SCRUBBED_ENV } };
   }
   const binaryPath = TOOL_PATHS[tool];
   if (!binaryPath) throw new RangeError(`Unsupported media tool: ${tool}`);
