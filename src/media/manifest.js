@@ -54,6 +54,7 @@ export function buildRenderManifest({
   blockers = [],
   warnings = [],
   lineage = {},
+  footage = [],
   artifacts
 }) {
   const normalizedRecipe = sortValue(structuredClone(recipe || {}));
@@ -73,8 +74,45 @@ export function buildRenderManifest({
     blockers: uniqueText(blockers),
     warnings: uniqueText(warnings),
     lineage: normalizeLineage(lineage),
+    footage: normalizeFootage(footage),
     artifacts: verifiedArtifacts
   };
+}
+
+function normalizeFootage(footage) {
+  if (!Array.isArray(footage)) return [];
+  return footage.map((clip, clipIndex) => {
+    if (!clip || typeof clip !== "object" || Array.isArray(clip)) {
+      throw new TypeError(`Invalid footage record at index ${clipIndex}`);
+    }
+    const sceneIndex = Number(clip.sceneIndex);
+    const license = safeText(clip.license);
+    const sha256 = String(clip.sha256 || "");
+    if (!Number.isSafeInteger(sceneIndex) || sceneIndex < 0) {
+      throw new TypeError(`Invalid footage scene index at ${clipIndex}`);
+    }
+    if (!license) throw new TypeError(`Footage without a license record at index ${clipIndex}`);
+    if (!SHA256_PATTERN.test(sha256)) throw new TypeError(`Footage without a verified sha256 at index ${clipIndex}`);
+    const provenance = clip.provenance && typeof clip.provenance === "object" && !Array.isArray(clip.provenance)
+      ? clip.provenance
+      : {};
+    return {
+      sceneIndex,
+      license,
+      sha256,
+      source: safeText(provenance.source) || "unknown",
+      provider: safeText(provenance.provider) || "unknown",
+      author: safeText(provenance.author),
+      url: sanitizeFootageUrl(provenance.url)
+    };
+  });
+}
+
+function sanitizeFootageUrl(value) {
+  const url = safeText(value);
+  if (!url) return "";
+  if (!/^https:\/\/[^\s"'<>@]+$/.test(url)) return "";
+  return url;
 }
 
 function normalizeArtifact(artifact) {
@@ -292,29 +330,42 @@ function validateSceneFrameArgv(argv) {
 function validateComposedRenderArgv(argv) {
   const cursor = argvCursor(argv);
   cursor.expect("-hide_banner", "-loglevel", "error", "-n");
-  let frameCount = 0;
-  while (argv[cursorIndex(cursor)] === "-loop") {
-    cursor.expect("-loop", "1", "-t");
-    if (!/^\d+(?:\.\d{1,3})?$/.test(cursor.take())) throw new TypeError("invalid frame duration");
-    cursor.expect("-framerate");
-    if (!/^\d{1,3}$/.test(cursor.take())) throw new TypeError("invalid frame rate");
-    cursor.expect("-i");
-    const framePath = cursor.take();
-    if (!framePath.endsWith(".png") || !isSafeGeneratedPath(framePath)) throw new TypeError("invalid frame input");
-    frameCount += 1;
-    if (frameCount > 64) throw new TypeError("too many frame inputs");
+  const decimal = /^\d+(?:\.\d{1,3})?$/;
+  let sceneCount = 0;
+  for (;;) {
+    const marker = argv[cursorIndex(cursor)];
+    if (marker === "-stream_loop") {
+      cursor.expect("-stream_loop", "-1", "-t");
+      if (!decimal.test(cursor.take())) throw new TypeError("invalid broll duration");
+      cursor.expect("-i");
+      const brollPath = cursor.take();
+      if (!brollPath.endsWith(".mp4") || !isSafeGeneratedPath(brollPath)) throw new TypeError("invalid broll input");
+      cursor.expect("-loop", "1", "-t");
+      if (!decimal.test(cursor.take())) throw new TypeError("invalid frame duration");
+      cursor.expect("-framerate");
+      if (!/^\d{1,3}$/.test(cursor.take())) throw new TypeError("invalid frame rate");
+      cursor.expect("-i");
+      const framePath = cursor.take();
+      if (!framePath.endsWith(".png") || !isSafeGeneratedPath(framePath)) throw new TypeError("invalid frame input");
+    } else if (marker === "-loop") {
+      cursor.expect("-loop", "1", "-t");
+      if (!decimal.test(cursor.take())) throw new TypeError("invalid frame duration");
+      cursor.expect("-framerate");
+      if (!/^\d{1,3}$/.test(cursor.take())) throw new TypeError("invalid frame rate");
+      cursor.expect("-i");
+      const framePath = cursor.take();
+      if (!framePath.endsWith(".png") || !isSafeGeneratedPath(framePath)) throw new TypeError("invalid frame input");
+    } else {
+      break;
+    }
+    sceneCount += 1;
+    if (sceneCount > 64) throw new TypeError("too many frame inputs");
   }
-  if (frameCount === 0) throw new TypeError("missing frame inputs");
+  if (sceneCount === 0) throw new TypeError("missing frame inputs");
   cursor.expect("-i");
   if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid narration input");
   cursor.expect("-filter_complex");
-  const filterComplex = cursor.take();
-  if (
-    !/^(?:\[\d+:v\]scale=\d+:\d+,setsar=1,format=yuv420p\[v\d+\];)+(?:\[v\d+\])+concat=n=\d+:v=1:a=0\[vc\];\[vc\]subtitles=filename=\/[A-Za-z0-9_./-]+:force_style='[A-Za-z0-9 =,]+'\[vout\]$/.test(filterComplex) ||
-    /(?:[a-z][a-z0-9+.-]*:\/\/|authorization|cookie|--header)/i.test(filterComplex)
-  ) {
-    throw new TypeError("invalid composed filter graph");
-  }
+  validateComposedFilterGraph(cursor.take());
   cursor.expect("-map", "[vout]", "-map");
   if (!/^\d{1,2}:a:0$/.test(cursor.take())) throw new TypeError("invalid audio map");
   cursor.expect(
@@ -332,6 +383,31 @@ function validateComposedRenderArgv(argv) {
 
 function cursorIndex(cursor) {
   return cursor.position();
+}
+
+const FILTER_SEGMENT_PATTERNS = Object.freeze([
+  /^\[\d+:v\]scale=\d+:\d+,setsar=1,format=yuv420p\[v\d+\]$/,
+  /^\[\d+:v\]scale=\d+:\d+:force_original_aspect_ratio=increase,crop=\d+:\d+,fps=\d+,eq=brightness=-?\d+(?:\.\d+)?:saturation=\d+(?:\.\d+)?,setsar=1\[b\d+\]$/,
+  /^\[\d+:v\]setsar=1\[f\d+\]$/,
+  /^\[b\d+\]\[f\d+\]overlay=0:0,format=yuv420p\[v\d+\]$/,
+  /^(?:\[v\d+\])+concat=n=\d+:v=1:a=0\[vc\]$/,
+  /^\[vc\]subtitles=filename=\/[A-Za-z0-9_./-]+:force_style='[A-Za-z0-9 =,]+'\[vout\]$/
+]);
+
+function validateComposedFilterGraph(filterComplex) {
+  if (/(?:[a-z][a-z0-9+.-]*:\/\/|authorization|cookie|--header)/i.test(filterComplex)) {
+    throw new TypeError("invalid composed filter graph");
+  }
+  const segments = String(filterComplex).split(";");
+  if (segments.length < 3) throw new TypeError("invalid composed filter graph");
+  const finalSegment = segments[segments.length - 1];
+  const concatSegment = segments[segments.length - 2];
+  if (!FILTER_SEGMENT_PATTERNS[5].test(finalSegment)) throw new TypeError("invalid subtitles segment");
+  if (!FILTER_SEGMENT_PATTERNS[4].test(concatSegment)) throw new TypeError("invalid concat segment");
+  for (const segment of segments.slice(0, -2)) {
+    const matches = FILTER_SEGMENT_PATTERNS.slice(0, 4).some(pattern => pattern.test(segment));
+    if (!matches) throw new TypeError("invalid scene filter segment");
+  }
 }
 
 function argvCursor(argv) {

@@ -33,7 +33,7 @@ function resolveChromeBinaryPathFromEnv(env) {
   return "/usr/bin/google-chrome";
 }
 
-export function buildSceneScreenshotArgs({ profileDir, width, height, outputFile, inputFile }) {
+export function buildSceneScreenshotArgs({ profileDir, width, height, outputFile, inputFile, transparent = false }) {
   const safeProfileDir = assertSafeGeneratedPath(profileDir);
   const safeOutputFile = assertSafeGeneratedPath(outputFile);
   const safeInputFile = assertSafeGeneratedPath(inputFile);
@@ -45,6 +45,7 @@ export function buildSceneScreenshotArgs({ profileDir, width, height, outputFile
     "--disable-extensions",
     "--hide-scrollbars",
     "--force-device-scale-factor=1",
+    ...(transparent ? ["--default-background-color=00000000"] : []),
     `--user-data-dir=${safeProfileDir}`,
     `--window-size=${safeWidth},${safeHeight}`,
     `--screenshot=${safeOutputFile}`,
@@ -59,6 +60,7 @@ export async function composeSceneFrames({
   runDir,
   seed,
   signal,
+  brollClips = [],
   runner = runMediaTool
 } = {}) {
   const scenes = storyboard?.scenes;
@@ -77,6 +79,7 @@ export async function composeSceneFrames({
     const sceneTag = String(sceneIndex + 1).padStart(3, "0");
     const markupFile = path.join(safeRunDir, `scene-${sceneTag}.html`);
     const frameFile = path.join(safeRunDir, `scene-${sceneTag}.png`);
+    const brollClip = brollClips[sceneIndex] || null;
     const markup = buildSceneMarkup({
       scene,
       sceneIndex,
@@ -84,7 +87,8 @@ export async function composeSceneFrames({
       brief,
       width,
       height,
-      seed
+      seed,
+      mode: brollClip ? "overlay" : "opaque"
     });
     await writeFile(markupFile, markup, { encoding: "utf8", flag: "wx", mode: PRIVATE_FILE_MODE });
     const command = {
@@ -95,7 +99,8 @@ export async function composeSceneFrames({
         width,
         height,
         outputFile: frameFile,
-        inputFile: markupFile
+        inputFile: markupFile,
+        transparent: Boolean(brollClip)
       })
     };
     await runner(command.tool, command.argv, { timeoutMs: SCREENSHOT_TIMEOUT_MS, signal });
@@ -109,7 +114,8 @@ export async function composeSceneFrames({
       path: frameFile,
       durationSeconds: Number(scene.durationMs) / 1000,
       markupSha256: createHash("sha256").update(markup).digest("hex"),
-      frameSha256: createHash("sha256").update(frameBytes).digest("hex")
+      frameSha256: createHash("sha256").update(frameBytes).digest("hex"),
+      ...(brollClip ? { brollPath: brollClip.path } : {})
     });
     await rm(markupFile, { force: true });
   }

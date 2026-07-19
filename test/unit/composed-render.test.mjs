@@ -131,6 +131,67 @@ test("manifest rejects scene-frame drift from the locked schema", () => {
   }]), /schema mismatch/);
 });
 
+test("composed render args support b-roll overlay scenes", () => {
+  const args = buildArgs({
+    sceneFrames: [
+      { path: "/tmp/run/scene-001.png", durationSeconds: 4.2 },
+      { path: "/tmp/run/scene-002.png", durationSeconds: 5.1, brollPath: "/tmp/run/broll-002.mp4" }
+    ]
+  });
+  assert.ok(args.includes("-stream_loop"));
+  assert.ok(args.includes("/tmp/run/broll-002.mp4"));
+  const filterComplex = args[args.indexOf("-filter_complex") + 1];
+  assert.match(filterComplex, /force_original_aspect_ratio=increase/);
+  assert.match(filterComplex, /\[b1\]\[f1\]overlay=0:0,format=yuv420p\[v1\]/);
+  assert.ok(args.includes("3:a:0"));
+  assert.throws(() => buildArgs({
+    sceneFrames: [{ path: "/tmp/run/s.png", durationSeconds: 2, brollPath: "../evil.mp4" }]
+  }), TypeError);
+});
+
+test("manifest accepts the b-roll composed schema and footage provenance", () => {
+  const args = buildArgs({
+    sceneFrames: [
+      { path: "/tmp/run/scene-001.png", durationSeconds: 4.2 },
+      { path: "/tmp/run/scene-002.png", durationSeconds: 5.1, brollPath: "/tmp/run/broll-002.mp4" }
+    ]
+  });
+  const manifest = buildRenderManifest({
+    project: { cards: [] },
+    storyboard: { schemaVersion: 1, scenes: [] },
+    recipe: { id: "youtube-16x9-1080p", platformId: "youtube_video" },
+    tools: { ffmpeg: "8.0.1", ffprobe: "8.0.1", renderer: "hermest-board-media-r1" },
+    commands: [{ id: "render-composed", tool: "ffmpeg", argv: args }],
+    qc: { passed: true, checks: ["broll_footage_provenance"] },
+    blockers: [],
+    warnings: [],
+    lineage: { parents: [], children: [] },
+    footage: [{
+      sceneIndex: 1,
+      license: "pexels",
+      sha256: "b".repeat(64),
+      provenance: { source: "stock", provider: "pexels", author: "Автор", url: "https://www.pexels.com/video/101/" }
+    }],
+    artifacts: [{ name: "a.mp4", type: "video/mp4", bytes: 10, sha256: "a".repeat(64) }]
+  });
+  assert.equal(manifest.footage.length, 1);
+  assert.equal(manifest.footage[0].provider, "pexels");
+  assert.equal(manifest.footage[0].url, "https://www.pexels.com/video/101/");
+  assert.throws(() => buildRenderManifest({
+    project: { cards: [] },
+    storyboard: { schemaVersion: 1, scenes: [] },
+    recipe: { id: "r", platformId: "p" },
+    tools: {},
+    commands: [],
+    qc: {},
+    blockers: [],
+    warnings: [],
+    lineage: {},
+    footage: [{ sceneIndex: 1, license: "", sha256: "b".repeat(64) }],
+    artifacts: [{ name: "a.mp4", type: "video/mp4", bytes: 10, sha256: "a".repeat(64) }]
+  }), /without a license/);
+});
+
 test("manifest rejects composed render drift", () => {
   const args = buildArgs();
   const tampered = [...args];

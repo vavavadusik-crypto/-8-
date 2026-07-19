@@ -7,12 +7,12 @@
 
 UPDATED: 2026-07-19 (Claude Fable 5, третья сессия, ультракод)
 ACTIVE PHASE: P2 — визуалы + звук
-ACTIVE TASK: P2 scene composer v1 ЗАВЕРШЁН (кадры уровня референса из ~/Загрузки/hermest-board-*-final-1080p.mp4); следующая задача — по выбору: P2.8 музыка+auto-ducking ИЛИ P2.5 Ken Burns-дрейф кадров ИЛИ P2.2 FAL-генерация фоновых изображений
+ACTIVE TASK: P2 b-roll порт ЗАВЕРШЁН (ADR-003: Pexels-адаптер + overlay-кадры + footage-провенанс в манифесте); композитный вид принят Вадимом («карточки красиво обыграны — супер»), требование «фоновое видео по теме» реализовано кодом, ждёт живого ключа Pexels
 STATUS: IN_PROGRESS
-LAST COMMIT: см. git log — компоузер сцен: scene-markup.js (детерминированная брендированная разметка, XSS-safe) + scene-frames.js (headless Chrome, locked argv) + render-composed ffmpeg-путь + схемы манифеста + file:// редакция; гейт 172/172 unit + 3/3 media
-NEXT ACTION: показать Вадиму COMPOSED-george-{16x9,9x16}.mp4; по его фидбеку — полировка разметки (варианты сцен-лейаутов) или следующая задача P2 (музыка P2.8 — самый заметный прирост качества); эталоны вида: ~/Загрузки/hermest-board-dmitry-v2-premium-1080p.mp4
+LAST COMMIT: см. git log — b-roll: broll-source.js (Pexels, mock-TDD), scene-markup overlay-режим, transparent Chrome, расширенный render-composed (stream_loop+overlay, посегментная валидация фильтра), manifest.footage (license fail-closed); гейт 179/179 unit + 3/3 media
+NEXT ACTION: как появится HERMEST_PEXELS_API_KEY (бесплатная регистрация https://www.pexels.com/api/ → ключ в ~/.secrets/env.sh) — live-smoke: RU-демо с реальным стоковым видеофоном → сэмпл Вадиму; параллельно следующая задача P2.8 музыка+auto-ducking (самый заметный прирост качества)
 UNCOMMITTED: none
-BLOCKERS: (1) приёмка Вадимом: голос — elevenlabs-{george,alice,aterna}-ru.mp4 (выбрать «Дмитрия»/«Светлану»), видео — COMPOSED-george-{16x9,9x16}.mp4; (2) ключ ElevenLabs есть (free 10k симв/мес; ~1500 израсходовано); (3) ключ FAL.ai — только для P2.2 live-smoke, генерация фонов не блокирует композитный вид
+BLOCKERS: (1) БЕСПЛАТНЫЙ ключ Pexels от Вадима — оживляет видеофоны (код готов); (2) выбор голосов Вадимом: george/alice/aterna → «Дмитрий»/«Светлана»; (3) ключ FAL.ai — премиум-генерация фонов/видео (LTX/WAN), не блокирует
 
 ## Дорожная карта (кратко; полностью — MASTER_PLAN)
 

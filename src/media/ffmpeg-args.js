@@ -157,27 +157,51 @@ export function buildComposedVideoRenderArgs({
     throw new RangeError("loudnessTargetLufs must be within -70..-5");
   }
   const frameInputs = [];
-  const filterInputs = [];
+  const filterSegments = [];
+  let inputIndex = 0;
   for (const [index, frame] of sceneFrames.entries()) {
     const framePath = assertSafeGeneratedPath(frame?.path);
     const frameDuration = Number(frame?.durationSeconds);
     if (!Number.isFinite(frameDuration) || frameDuration <= 0 || frameDuration > 3600) {
       throw new RangeError(`Invalid scene frame duration at index ${index}`);
     }
-    frameInputs.push(
-      "-loop", "1",
-      "-t", frameDuration.toFixed(3),
-      "-framerate", String(fps),
-      "-i", framePath
-    );
-    filterInputs.push(
-      `[${index}:v]scale=${width}:${height},setsar=1,format=yuv420p[v${index}]`
-    );
+    const durationArg = frameDuration.toFixed(3);
+    if (frame?.brollPath !== undefined) {
+      const brollPath = assertSafeGeneratedPath(frame.brollPath);
+      const brollInput = inputIndex;
+      const overlayInput = inputIndex + 1;
+      frameInputs.push(
+        "-stream_loop", "-1",
+        "-t", durationArg,
+        "-i", brollPath,
+        "-loop", "1",
+        "-t", durationArg,
+        "-framerate", String(fps),
+        "-i", framePath
+      );
+      filterSegments.push(
+        `[${brollInput}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},fps=${fps},eq=brightness=-0.22:saturation=0.7,setsar=1[b${index}]`,
+        `[${overlayInput}:v]setsar=1[f${index}]`,
+        `[b${index}][f${index}]overlay=0:0,format=yuv420p[v${index}]`
+      );
+      inputIndex += 2;
+    } else {
+      frameInputs.push(
+        "-loop", "1",
+        "-t", durationArg,
+        "-framerate", String(fps),
+        "-i", framePath
+      );
+      filterSegments.push(
+        `[${inputIndex}:v]scale=${width}:${height},setsar=1,format=yuv420p[v${index}]`
+      );
+      inputIndex += 1;
+    }
   }
   const concatLabels = sceneFrames.map((_frame, index) => `[v${index}]`).join("");
   const subtitleFilter = `subtitles=filename=${safeSubtitleFile}:force_style='FontName=DejaVu Sans,Alignment=2,MarginV=${subtitleMargin}'`;
   const filterComplex = [
-    ...filterInputs,
+    ...filterSegments,
     `${concatLabels}concat=n=${sceneFrames.length}:v=1:a=0[vc]`,
     `[vc]${subtitleFilter}[vout]`
   ].join(";");
@@ -187,7 +211,7 @@ export function buildComposedVideoRenderArgs({
     "-i", safeAudioFile,
     "-filter_complex", filterComplex,
     "-map", "[vout]",
-    "-map", `${sceneFrames.length}:a:0`,
+    "-map", `${inputIndex}:a:0`,
     "-c:v", recipe.videoCodec,
     "-preset", "veryfast",
     "-crf", "21",

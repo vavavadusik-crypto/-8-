@@ -26,6 +26,7 @@ import {
   assertSafeGeneratedPath
 } from "./ffmpeg-args.js";
 import { composeSceneFrames, describeSceneComposerAvailability } from "./scene-frames.js";
+import { createPexelsBrollAdapter, describeBrollAvailability } from "./broll-source.js";
 import { assertVideoProbe } from "./ffprobe.js";
 import { buildRenderManifest, hashJson } from "./manifest.js";
 import {
@@ -161,13 +162,50 @@ export async function renderProject({
     let renderCommand;
     let sceneFrameCommands = [];
     let sceneComposer = null;
+    const footage = [];
+    const footageWarnings = [];
     if (composerAvailability.status === "executable") {
+      const brollAvailability = describeBrollAvailability();
+      const brollClips = [];
+      if (brollAvailability.status === "executable") {
+        const brollAdapter = createPexelsBrollAdapter();
+        const brollOrientation = recipe.height > recipe.width ? "portrait" : "landscape";
+        for (const [sceneIndex, scene] of storyboard.scenes.entries()) {
+          if (sceneIndex === 0) continue;
+          const clipFile = path.join(runDir, `broll-${String(sceneIndex + 1).padStart(3, "0")}.mp4`);
+          try {
+            const clip = await brollAdapter.fetchClip({
+              keywords: [project?.brief?.topic, scene.title].filter(Boolean),
+              orientation: brollOrientation,
+              minDurationSeconds: scene.durationMs / 1000,
+              outputPath: clipFile,
+              signal
+            });
+            if (clip) {
+              brollClips[sceneIndex] = clip;
+              footage.push({
+                sceneIndex,
+                license: clip.license,
+                sha256: clip.sha256,
+                provenance: clip.provenance
+              });
+            } else {
+              footageWarnings.push(`no b-roll footage matched scene ${sceneIndex + 1}`);
+            }
+          } catch (error) {
+            footageWarnings.push(`b-roll fetch failed for scene ${sceneIndex + 1}: ${error.message}`);
+          }
+        }
+      } else {
+        footageWarnings.push(brollAvailability.reason);
+      }
       const composition = await composeSceneFrames({
         storyboard,
         brief: project?.brief,
         recipe,
         runDir,
         seed: Number.parseInt(hashJson(project).slice(0, 8), 16),
+        brollClips,
         signal
       });
       sceneFrameCommands = composition.commands;
@@ -191,6 +229,7 @@ export async function renderProject({
         });
       } finally {
         await Promise.all(composition.frames.map(frame => rm(frame.path, { force: true })));
+        await Promise.all(brollClips.filter(Boolean).map(clip => rm(clip.path, { force: true })));
       }
     } else {
       let sceneCursorMs = 0;
@@ -284,6 +323,7 @@ export async function renderProject({
           "narration_audio_probe",
           "subtitle_timeline",
           sceneComposer ? "composed_scene_frames" : "legacy_color_scenes",
+          ...(footage.length > 0 ? ["broll_footage_provenance"] : []),
           "video_streams_codecs_dimensions_duration",
           "audio_loudness_measured",
           "artifact_hashes"
@@ -291,8 +331,9 @@ export async function renderProject({
         loudness
       },
       blockers: recipe.readinessBlockers,
+      footage,
       warnings: sceneComposer
-        ? tts.warnings
+        ? [...tts.warnings, ...footageWarnings]
         : [...tts.warnings, "scene composer unavailable; legacy color scenes used"],
       lineage: {
         parents: [`project:${project.projectId || hashJson(project)}`],

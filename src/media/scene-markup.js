@@ -114,9 +114,14 @@ export function buildSceneMarkup({
   brief,
   width,
   height,
-  seed
+  seed,
+  mode = "opaque"
 }) {
   if (!scene || typeof scene !== "object") throw new TypeError("Scene is required");
+  if (mode !== "opaque" && mode !== "overlay") {
+    throw new RangeError(`Unsupported scene markup mode: ${mode}`);
+  }
+  const isOverlay = mode === "overlay";
   const safeWidth = Number(width);
   const safeHeight = Number(height);
   if (!Number.isSafeInteger(safeWidth) || safeWidth <= 0 || !Number.isSafeInteger(safeHeight) || safeHeight <= 0) {
@@ -159,10 +164,14 @@ export function buildSceneMarkup({
     width: ${safeWidth}px;
     height: ${safeHeight}px;
     overflow: hidden;
-    background: ${THEME.background};
+    background: ${isOverlay ? "transparent" : THEME.background};
     font-family: "DejaVu Sans", sans-serif;
     color: ${THEME.text};
     position: relative;
+  }
+  .headline-scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, rgba(4, 9, 18, 0.72), rgba(4, 9, 18, 0.18) 55%, rgba(4, 9, 18, 0));
   }
   .glow-a, .glow-b { position: absolute; border-radius: 50%; filter: blur(${Math.round(safeWidth / 16)}px); }
   .glow-a { width: ${Math.round(safeWidth * 0.42)}px; height: ${Math.round(safeWidth * 0.42)}px; left: -${Math.round(safeWidth * 0.12)}px; top: -${Math.round(safeWidth * 0.1)}px; background: rgba(45, 212, 191, 0.16); }
@@ -210,12 +219,12 @@ export function buildSceneMarkup({
 </style>
 </head>
 <body>
-  <svg class="backdrop" width="${safeWidth}" height="${safeHeight}" viewBox="0 0 ${safeWidth} ${safeHeight}" xmlns="http://www.w3.org/2000/svg">
+${isOverlay ? '  <div class="headline-scrim"></div>' : `  <svg class="backdrop" width="${safeWidth}" height="${safeHeight}" viewBox="0 0 ${safeWidth} ${safeHeight}" xmlns="http://www.w3.org/2000/svg">
     ${starField({ seed: numericSeed + index, width: safeWidth, height: safeHeight })}
     ${gridFloor({ width: safeWidth, height: safeHeight })}
   </svg>
   <div class="glow-a"></div>
-  <div class="glow-b"></div>
+  <div class="glow-b"></div>`}
   <div class="chrome-bar">
     <div class="brand">
       <div class="brand-mark">H</div>
