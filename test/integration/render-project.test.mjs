@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
+import { buildComposedVideoRenderArgs } from "../../src/media/ffmpeg-args.js";
+import { runMediaTool } from "../../src/media/process-runner.js";
 import { renderProject } from "../../src/media/render-project.js";
 
 const execFileAsync = promisify(execFile);
@@ -246,5 +248,81 @@ test("music bed is ducked under narration by sidechaincompress", {
   assert.ok(
     openRms - duckedRms >= 6,
     `music must be ducked under narration by >=6 dB (open ${openRms}, ducked ${duckedRms})`
+  );
+});
+
+test("composed render applies runnable Ken Burns drift to static backgrounds", {
+  timeout: 180000
+}, async t => {
+  const workDir = await mkdtemp(path.join(os.tmpdir(), "hermest-board-kenburns-"));
+  t.after(() => rm(workDir, { recursive: true, force: true }));
+  const backgroundFile = path.join(workDir, "bg-001.png");
+  const frameFiles = [path.join(workDir, "scene-001.png"), path.join(workDir, "scene-002.png")];
+  const narrationFile = path.join(workDir, "narration.wav");
+  const subtitleFile = path.join(workDir, "narration.srt");
+
+  await execFileAsync("/usr/bin/ffmpeg", [
+    "-hide_banner", "-loglevel", "error",
+    "-f", "lavfi", "-i", "gradients=s=640x360:n=3:seed=7:d=1",
+    "-frames:v", "1", backgroundFile
+  ]);
+  for (const frameFile of frameFiles) {
+    await execFileAsync("/usr/bin/ffmpeg", [
+      "-hide_banner", "-loglevel", "error",
+      "-f", "lavfi", "-i", "color=c=black@0.0:s=640x360,format=rgba",
+      "-frames:v", "1", frameFile
+    ]);
+  }
+  // Не anullsrc: на идеальной цифровой тишине loudnorm получает −∞ LUFS,
+  // уходит в NaN и валит AAC-энкодер. Синус ведёт себя как реальная озвучка.
+  await execFileAsync("/usr/bin/ffmpeg", [
+    "-hide_banner", "-loglevel", "error",
+    "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+    "-t", "2.4", "-af", "volume=-20dB", "-c:a", "pcm_s16le", narrationFile
+  ]);
+  await writeFile(subtitleFile, "1\n00:00:00,000 --> 00:00:01,000\nKen Burns\n", "utf8");
+
+  const recipe = {
+    width: 640,
+    height: 360,
+    fps: 30,
+    videoCodec: "libx264",
+    audioCodec: "aac",
+    pixelFormat: "yuv420p",
+    audioSampleRate: 48000,
+    audioChannels: 2,
+    safeZones: { bottom: 48 },
+    loudnessTargetLufs: -16
+  };
+  const renderOnce = async label => {
+    const outputFile = path.join(workDir, `${label}.mp4`);
+    const args = buildComposedVideoRenderArgs({
+      sceneFrames: [
+        { path: frameFiles[0], durationSeconds: 1.2, backgroundImagePath: backgroundFile },
+        { path: frameFiles[1], durationSeconds: 1.2 }
+      ],
+      audioFile: narrationFile,
+      subtitleFile,
+      outputFile,
+      durationSeconds: 2.4,
+      recipe
+    });
+    await runMediaTool("ffmpeg", args, { timeoutMs: 120000 });
+    return outputFile;
+  };
+
+  const firstRender = await renderOnce("kenburns-first");
+  const probe = await independentFfprobe(firstRender);
+  const videoStream = probe.streams.find(stream => stream.codec_type === "video");
+  assert.equal(videoStream.codec_name, "h264");
+  assert.equal(Number(videoStream.width), 640);
+  assert.equal(Number(videoStream.height), 360);
+  assert.ok(Math.abs(Number(probe.format.duration) - 2.4) <= 0.2);
+
+  const secondRender = await renderOnce("kenburns-second");
+  const [firstBytes, secondBytes] = await Promise.all([readFile(firstRender), readFile(secondRender)]);
+  assert.equal(
+    createHash("sha256").update(firstBytes).digest("hex"),
+    createHash("sha256").update(secondBytes).digest("hex")
   );
 });

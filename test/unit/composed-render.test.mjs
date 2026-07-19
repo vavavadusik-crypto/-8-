@@ -194,7 +194,7 @@ test("composed render args support generated background image scenes", () => {
   });
   assert.ok(args.includes("/tmp/run/bg-002.png"));
   const filterComplex = args[args.indexOf("-filter_complex") + 1];
-  assert.match(filterComplex, /\[1:v\]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,fps=30,eq=/);
+  assert.match(filterComplex, /\[1:v\]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,zoompan=z='1\.080':x='\(iw-iw\/zoom\)\*on\/152'/);
   assert.match(filterComplex, /\[b1\]\[f1\]overlay=0:0,format=yuv420p\[v1\]/);
   assert.ok(args.includes("3:a:0"));
   const manifest = manifestWith([{ id: "render-composed", tool: "ffmpeg", argv: args }]);
@@ -202,6 +202,75 @@ test("composed render args support generated background image scenes", () => {
   assert.throws(() => buildArgs({
     sceneFrames: [{ path: "/tmp/run/s.png", durationSeconds: 2, backgroundImagePath: "../bg.png" }]
   }), TypeError);
+});
+
+test("static background scenes get deterministic Ken Burns drift cycling by scene index", () => {
+  const backgrounds = [1, 2, 3, 4].map(index => ({
+    path: `/tmp/run/scene-00${index}.png`,
+    durationSeconds: 4,
+    backgroundImagePath: `/tmp/run/bg-00${index}.png`
+  }));
+  const args = buildArgs({ sceneFrames: backgrounds, durationSeconds: 16 });
+  const filterComplex = args[args.indexOf("-filter_complex") + 1];
+  const segments = filterComplex.split(";");
+
+  const drifted = segments.filter(segment => segment.includes("zoompan="));
+  assert.equal(drifted.length, 4);
+  // 4 фиксированных пресета по индексу сцены: zoom-in, пан вправо, zoom-out, пан влево
+  assert.match(drifted[0], /zoompan=z='1\+0\.080\*on\/119':x='\(iw-iw\/zoom\)\/2':y='\(ih-ih\/zoom\)\/2':d=1:s=1920x1080:fps=30/);
+  assert.match(drifted[1], /zoompan=z='1\.080':x='\(iw-iw\/zoom\)\*on\/119':y='\(ih-ih\/zoom\)\/2':d=1:s=1920x1080:fps=30/);
+  assert.match(drifted[2], /zoompan=z='1\.080-0\.080\*on\/119':x='\(iw-iw\/zoom\)\/2':y='\(ih-ih\/zoom\)\/2':d=1:s=1920x1080:fps=30/);
+  assert.match(drifted[3], /zoompan=z='1\.080':x='\(iw-iw\/zoom\)\*\(1-on\/119\)':y='\(ih-ih\/zoom\)\/2':d=1:s=1920x1080:fps=30/);
+  for (const segment of drifted) {
+    assert.match(segment, /,eq=brightness=-0\.18:saturation=0\.85,setsar=1\[b\d+\]$/);
+  }
+
+  const manifest = manifestWith([{ id: "render-composed", tool: "ffmpeg", argv: args }]);
+  assert.equal(manifest.commands[0].id, "render-composed");
+
+  const repeated = buildArgs({ sceneFrames: backgrounds, durationSeconds: 16 });
+  assert.deepEqual(repeated, args);
+});
+
+test("Ken Burns drift stays on backgrounds only and out of b-roll and plain frames", () => {
+  const args = buildArgs({
+    sceneFrames: [
+      { path: "/tmp/run/scene-001.png", durationSeconds: 4.2 },
+      { path: "/tmp/run/scene-002.png", durationSeconds: 5.1, brollPath: "/tmp/run/broll-002.mp4" },
+      { path: "/tmp/run/scene-003.png", durationSeconds: 3, backgroundImagePath: "/tmp/run/bg-003.png" }
+    ]
+  });
+  const filterComplex = args[args.indexOf("-filter_complex") + 1];
+  const segments = filterComplex.split(";");
+  assert.equal(segments.filter(segment => segment.includes("zoompan=")).length, 1);
+  assert.doesNotMatch(segments.find(segment => segment.startsWith("[0:v]scale=1920:1080,")), /zoompan/);
+  assert.match(filterComplex, /\[1:v\]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,fps=30,eq=/);
+  assert.match(filterComplex, /\[3:v\]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,zoompan=/);
+});
+
+test("manifest rejects tampered Ken Burns expressions", () => {
+  const args = buildArgs({
+    sceneFrames: [
+      { path: "/tmp/run/scene-001.png", durationSeconds: 4, backgroundImagePath: "/tmp/run/bg-001.png" },
+      { path: "/tmp/run/scene-002.png", durationSeconds: 4 }
+    ],
+    durationSeconds: 8
+  });
+  const filterIndex = args.indexOf("-filter_complex") + 1;
+  for (const [from, to] of [
+    ["zoompan=z='1+0.080*on/119'", "zoompan=z='9+0.080*on/119'"],
+    ["y='(ih-ih/zoom)/2'", "y='sin(on)'"],
+    ["d=1:s=1920x1080:fps=30", "d=1:s=1920x1080:fps=30,drawtext=text=x"]
+  ]) {
+    const tampered = [...args];
+    tampered[filterIndex] = tampered[filterIndex].replace(from, to);
+    assert.notEqual(tampered[filterIndex], args[filterIndex]);
+    assert.throws(() => manifestWith([{
+      id: "render-composed",
+      tool: "ffmpeg",
+      argv: tampered
+    }]), /schema mismatch/);
+  }
 });
 
 test("footage records keep generated-image lineage", () => {

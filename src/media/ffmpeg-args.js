@@ -120,6 +120,27 @@ export function buildVideoRenderArgs({
   ];
 }
 
+const KEN_BURNS_ZOOM_SPAN = "0.080";
+const KEN_BURNS_MAX_ZOOM = "1.080";
+
+// Детерминированный Ken Burns: 4 фиксированных пресета дрейфа, выбираемые
+// индексом сцены — одинаковый вход всегда даёт одинаковый filter graph.
+function kenBurnsDrift({ sceneIndex, durationSeconds, fps }) {
+  const lastFrame = Math.max(Math.round(durationSeconds * fps) - 1, 1);
+  const centerX = "(iw-iw/zoom)/2";
+  const centerY = "(ih-ih/zoom)/2";
+  switch (sceneIndex % 4) {
+    case 0:
+      return { z: `1+${KEN_BURNS_ZOOM_SPAN}*on/${lastFrame}`, x: centerX, y: centerY };
+    case 1:
+      return { z: KEN_BURNS_MAX_ZOOM, x: `(iw-iw/zoom)*on/${lastFrame}`, y: centerY };
+    case 2:
+      return { z: `${KEN_BURNS_MAX_ZOOM}-${KEN_BURNS_ZOOM_SPAN}*on/${lastFrame}`, x: centerX, y: centerY };
+    default:
+      return { z: KEN_BURNS_MAX_ZOOM, x: `(iw-iw/zoom)*(1-on/${lastFrame})`, y: centerY };
+  }
+}
+
 export function buildComposedVideoRenderArgs({
   sceneFrames,
   audioFile,
@@ -201,8 +222,9 @@ export function buildComposedVideoRenderArgs({
         "-framerate", String(fps),
         "-i", framePath
       );
+      const drift = kenBurnsDrift({ sceneIndex: index, durationSeconds: frameDuration, fps });
       filterSegments.push(
-        `[${backgroundInput}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},fps=${fps},eq=brightness=-0.18:saturation=0.85,setsar=1[b${index}]`,
+        `[${backgroundInput}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},zoompan=z='${drift.z}':x='${drift.x}':y='${drift.y}':d=1:s=${width}x${height}:fps=${fps},eq=brightness=-0.18:saturation=0.85,setsar=1[b${index}]`,
         `[${overlayInput}:v]setsar=1[f${index}]`,
         `[b${index}][f${index}]overlay=0:0,format=yuv420p[v${index}]`
       );

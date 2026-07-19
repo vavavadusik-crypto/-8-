@@ -431,14 +431,25 @@ function cursorIndex(cursor) {
   return cursor.position();
 }
 
+const KEN_BURNS_ZOOM_EXPRESSION =
+  "(?:1\\+0\\.080\\*on\\/\\d+|1\\.080-0\\.080\\*on\\/\\d+|1\\.080)";
+const KEN_BURNS_X_EXPRESSION =
+  "(?:\\(iw-iw\\/zoom\\)\\/2|\\(iw-iw\\/zoom\\)\\*on\\/\\d+|\\(iw-iw\\/zoom\\)\\*\\(1-on\\/\\d+\\))";
 const FILTER_SEGMENT_PATTERNS = Object.freeze([
   /^\[\d+:v\]scale=\d+:\d+,setsar=1,format=yuv420p\[v\d+\]$/,
   /^\[\d+:v\]scale=\d+:\d+:force_original_aspect_ratio=increase,crop=\d+:\d+,fps=\d+,eq=brightness=-?\d+(?:\.\d+)?:saturation=\d+(?:\.\d+)?,setsar=1\[b\d+\]$/,
   /^\[\d+:v\]setsar=1\[f\d+\]$/,
   /^\[b\d+\]\[f\d+\]overlay=0:0,format=yuv420p\[v\d+\]$/,
   /^(?:\[v\d+\])+concat=n=\d+:v=1:a=0\[vc\]$/,
-  /^\[vc\]subtitles=filename=\/[A-Za-z0-9_./-]+:force_style='[A-Za-z0-9 =,]+'\[vout\]$/
+  /^\[vc\]subtitles=filename=\/[A-Za-z0-9_./-]+:force_style='[A-Za-z0-9 =,]+'\[vout\]$/,
+  new RegExp(
+    "^\\[\\d+:v\\]scale=\\d+:\\d+:force_original_aspect_ratio=increase,crop=\\d+:\\d+," +
+    `zoompan=z='${KEN_BURNS_ZOOM_EXPRESSION}':x='${KEN_BURNS_X_EXPRESSION}':y='\\(ih-ih\\/zoom\\)\\/2'` +
+    ":d=1:s=\\d+x\\d+:fps=\\d+," +
+    "eq=brightness=-?\\d+(?:\\.\\d+)?:saturation=\\d+(?:\\.\\d+)?,setsar=1\\[b\\d+\\]$"
+  )
 ]);
+const SCENE_SEGMENT_PATTERN_INDICES = Object.freeze([0, 1, 2, 3, 6]);
 
 const MUSIC_SEGMENT_PATTERNS = Object.freeze([
   /^\[\d+:a\]aformat=sample_rates=\d+:channel_layouts=stereo,asetnsamples=n=1024:p=0,asplit=2\[nv\]\[nsc\]$/,
@@ -469,7 +480,9 @@ function validateComposedFilterGraph(filterComplex, { hasMusic = false } = {}) {
   if (!FILTER_SEGMENT_PATTERNS[5].test(finalSegment)) throw new TypeError("invalid subtitles segment");
   if (!FILTER_SEGMENT_PATTERNS[4].test(concatSegment)) throw new TypeError("invalid concat segment");
   for (const segment of segments.slice(0, -2)) {
-    const matches = FILTER_SEGMENT_PATTERNS.slice(0, 4).some(pattern => pattern.test(segment));
+    const matches = SCENE_SEGMENT_PATTERN_INDICES.some(
+      patternIndex => FILTER_SEGMENT_PATTERNS[patternIndex].test(segment)
+    );
     if (!matches) throw new TypeError("invalid scene filter segment");
   }
 }
