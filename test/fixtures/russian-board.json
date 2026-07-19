@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "title": "Краткая история искусственного интеллекта",
+  "brief": {
+    "topic": "История искусственного интеллекта",
+    "audience": "широкая аудитория",
+    "language": "ru",
+    "voice": "ru_RU-dmitri-medium",
+    "tone": "документальный",
+    "platforms": ["youtube_video", "youtube_shorts"]
+  },
+  "cards": [
+    {
+      "id": "opening",
+      "x": 80,
+      "y": 80,
+      "title": "Первый вопрос",
+      "text": "Может ли машина имитировать человеческое рассуждение?",
+      "sourceRefs": ["source-turing"]
+    },
+    {
+      "id": "learning",
+      "x": 500,
+      "y": 80,
+      "title": "Обучение на данных",
+      "text": "Машинное обучение сместило фокус с жёстких правил на закономерности в примерах.",
+      "sourceRefs": ["source-ml"]
+    },
+    {
+      "id": "today",
+      "x": 920,
+      "y": 80,
+      "title": "Текущая глава",
+      "text": "Современные системы работают с языком, изображениями, аудио и видео.",
+      "sourceRefs": ["source-modern"]
+    }
+  ],
+  "sources": [
+    { "id": "source-turing", "title": "Computing Machinery and Intelligence" },
+    { "id": "source-ml", "title": "Справочная фикстура о машинном обучении" },
+    { "id": "source-modern", "title": "Справочная фикстура о мультимодальных системах" }
+  ]
+}

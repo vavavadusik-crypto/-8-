@@ -118,6 +118,8 @@ test("render manifest allowlists tool metadata and removes secret-shaped fields"
 
   assert.equal(manifest.tools.ffmpeg, "ffmpeg version 8.0.1");
   assert.equal(manifest.tools.tts.provider, "ffmpeg-flite");
+  assert.equal(manifest.tools.tts.language, "en");
+  assert.equal(manifest.tools.tts.voice, "slt");
   assert.equal("apiToken" in manifest.tools, false);
   assert.equal("apiToken" in manifest.tools.tts, false);
   assert.doesNotMatch(serialized, /secret-value|must-not-survive/);

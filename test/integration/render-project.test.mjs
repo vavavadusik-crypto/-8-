@@ -11,31 +11,48 @@ import { renderProject } from "../../src/media/render-project.js";
 
 const execFileAsync = promisify(execFile);
 
-const fixture = path.resolve("test/fixtures/minimal-board.json");
+const enFixture = path.resolve("test/fixtures/minimal-board.json");
+const ruFixture = path.resolve("test/fixtures/russian-board.json");
 
 for (const expected of [
   {
+    label: "english youtube_video",
+    fixture: enFixture,
     platform: "youtube_video",
     recipeId: "youtube-16x9-1080p",
     width: 1920,
     height: 1080,
-    repeat: true
+    repeat: true,
+    narration: { provider: "piper", language: "en", voice: "en_US-lessac-medium" }
   },
   {
+    label: "english youtube_shorts",
+    fixture: enFixture,
     platform: "youtube_shorts",
     recipeId: "shorts-9x16-1080p",
     width: 1080,
     height: 1920,
-    repeat: true
+    repeat: true,
+    narration: { provider: "piper", language: "en", voice: "en_US-lessac-medium" }
+  },
+  {
+    label: "russian youtube_video",
+    fixture: ruFixture,
+    platform: "youtube_video",
+    recipeId: "youtube-16x9-1080p",
+    width: 1920,
+    height: 1080,
+    repeat: false,
+    narration: { provider: "piper", language: "ru", voice: "ru_RU-dmitri-medium" }
   }
 ]) {
-  test(`renderProject creates verified ${expected.platform} MP4 with real audio`, {
+  test(`renderProject creates verified ${expected.label} MP4 with real audio`, {
     timeout: 300000
   }, async t => {
     const outputRoot = await mkdtemp(path.join(os.tmpdir(), `hermest-board-${expected.platform}-root-`));
     t.after(() => rm(outputRoot, { recursive: true, force: true }));
     const result = await renderProject({
-      inputPath: fixture,
+      inputPath: expected.fixture,
       outputDir: outputRoot,
       platform: expected.platform
     });
@@ -57,6 +74,9 @@ for (const expected of [
     assert.equal(video.probe.video.width, expected.width);
     assert.equal(video.probe.video.height, expected.height);
     assert.ok(video.probe.durationSeconds > 0);
+    assert.equal(diskManifest.tools.tts.provider, expected.narration.provider);
+    assert.equal(diskManifest.tools.tts.language, expected.narration.language);
+    assert.equal(diskManifest.tools.tts.voice, expected.narration.voice);
     assert.ok(diskManifest.qc.checks.includes("audio_loudness_measured"));
     assert.ok(Number.isFinite(diskManifest.qc.loudness.integratedLufs));
     assert.ok(Number.isFinite(diskManifest.qc.loudness.truePeakDbtp));
@@ -95,7 +115,7 @@ for (const expected of [
       const secondRoot = await mkdtemp(path.join(os.tmpdir(), "hermest-board-repro-root-"));
       t.after(() => rm(secondRoot, { recursive: true, force: true }));
       const repeated = await renderProject({
-        inputPath: fixture,
+        inputPath: expected.fixture,
         outputDir: secondRoot,
         platform: expected.platform
       });
