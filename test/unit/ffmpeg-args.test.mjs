@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildFliteAudioArgs,
+  buildNarrationCanonicalizeArgs,
   buildVideoRenderArgs
 } from "../../src/media/ffmpeg-args.js";
 
@@ -17,6 +18,27 @@ test("flite args keep narration text out of argv and use generated safe paths", 
   assert.ok(args.includes("flite=textfile=/tmp/hermest-board-run/narration.txt:voice=slt"));
   assert.equal(args.at(-1), "/tmp/hermest-board-run/narration.wav");
   assert.equal(args.join(" ").includes("secret narration"), false);
+});
+
+test("narration canonicalize args resample provider audio to the 48k mono contract", () => {
+  const args = buildNarrationCanonicalizeArgs({
+    inputFile: "/tmp/hermest-board-run/narration.raw.wav",
+    outputFile: "/tmp/hermest-board-run/narration.partial.wav"
+  });
+
+  assert.deepEqual(args, [
+    "-hide_banner", "-loglevel", "error", "-n",
+    "-i", "/tmp/hermest-board-run/narration.raw.wav",
+    "-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le",
+    "/tmp/hermest-board-run/narration.partial.wav"
+  ]);
+  assert.throws(
+    () => buildNarrationCanonicalizeArgs({
+      inputFile: "/tmp/run/in.wav:evil=1",
+      outputFile: "/tmp/run/out.wav"
+    }),
+    /safe generated path/
+  );
 });
 
 test("video args map a generated color stream and narration to H.264/AAC MP4", () => {

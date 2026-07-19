@@ -22,6 +22,7 @@ const CREDENTIAL_URL = /[a-z][a-z0-9+.-]*:\/\/[^/\s"'<>]*(?:@|%40)/i;
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 const ALLOWED_COMMAND_TOOLS = Object.freeze({
   tts: Object.freeze(["ffmpeg", "piper"]),
+  "narration-canonicalize": Object.freeze(["ffmpeg"]),
   render: Object.freeze(["ffmpeg"])
 });
 const MAX_COMMAND_ARGUMENTS = 512;
@@ -161,6 +162,7 @@ function validateCommandArgv(id, tool, argv, commandIndex) {
   try {
     if (id === "tts" && tool === "piper") validatePiperTtsArgv(argv);
     else if (id === "tts") validateTtsArgv(argv);
+    else if (id === "narration-canonicalize" && tool === "ffmpeg") validateNarrationCanonicalizeArgv(argv);
     else if (id === "render") validateRenderArgv(argv);
     else throw new TypeError("unsupported schema");
   } catch {
@@ -193,6 +195,15 @@ function validateTtsArgv(argv) {
   if (!match || !isSafeGeneratedPath(match[1])) throw new TypeError("invalid flite source");
   cursor.expect("-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le");
   if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid TTS output");
+  cursor.finish();
+}
+
+function validateNarrationCanonicalizeArgv(argv) {
+  const cursor = argvCursor(argv);
+  cursor.expect("-hide_banner", "-loglevel", "error", "-n", "-i");
+  if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid canonicalize input");
+  cursor.expect("-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le");
+  if (!isSafeGeneratedPath(cursor.take())) throw new TypeError("invalid canonicalize output");
   cursor.finish();
 }
 

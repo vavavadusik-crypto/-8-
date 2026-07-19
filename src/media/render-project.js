@@ -17,7 +17,11 @@ import {
   reconcileStoryboardDuration
 } from "../domain/content-pipeline.js";
 import { getPlatformRecipe } from "../domain/platform-recipes.js";
-import { buildVideoRenderArgs, assertSafeGeneratedPath } from "./ffmpeg-args.js";
+import {
+  buildNarrationCanonicalizeArgs,
+  buildVideoRenderArgs,
+  assertSafeGeneratedPath
+} from "./ffmpeg-args.js";
 import { assertVideoProbe } from "./ffprobe.js";
 import { buildRenderManifest, hashJson } from "./manifest.js";
 import {
@@ -55,6 +59,7 @@ export async function renderProject({
   let completed = false;
 
   try {
+    const narrationRawFile = path.join(runDir, "narration.raw.wav");
     const narrationPartial = path.join(runDir, "narration.partial.wav");
     const narrationAudioFile = path.join(runDir, "narration.wav");
     const narrationLanguage = project?.brief?.language || "en";
@@ -70,9 +75,22 @@ export async function renderProject({
       text: narration,
       language: narrationLanguage,
       voice: narrationVoice,
-      outputPath: narrationPartial,
+      outputPath: narrationRawFile,
       signal
     });
+    const canonicalizeCommand = {
+      id: "narration-canonicalize",
+      tool: "ffmpeg",
+      argv: buildNarrationCanonicalizeArgs({
+        inputFile: narrationRawFile,
+        outputFile: narrationPartial
+      })
+    };
+    await runMediaTool(canonicalizeCommand.tool, canonicalizeCommand.argv, {
+      timeoutMs: 300000,
+      signal
+    });
+    await rm(narrationRawFile, { force: true });
     const narrationProbe = await probeMediaFile(narrationPartial, { signal });
     if (!narrationProbe.audio) throw new TypeError("Narration output does not contain an audio stream");
     await chmod(narrationPartial, PRIVATE_FILE_MODE);
@@ -158,7 +176,7 @@ export async function renderProject({
       })
     ]);
 
-    const commands = [tts.command, renderCommand].filter(Boolean);
+    const commands = [tts.command, canonicalizeCommand, renderCommand].filter(Boolean);
     const manifest = buildRenderManifest({
       project,
       storyboard,

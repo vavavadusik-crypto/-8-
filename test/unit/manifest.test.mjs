@@ -187,6 +187,52 @@ const validPiperCommand = {
   ]
 };
 
+const validCanonicalizeCommand = {
+  id: "narration-canonicalize",
+  tool: "ffmpeg",
+  argv: [
+    "-hide_banner", "-loglevel", "error", "-n",
+    "-i", "/tmp/private-run/narration.raw.wav",
+    "-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le",
+    "/tmp/private-run/narration.partial.wav"
+  ]
+};
+
+test("render manifest accepts narration canonicalization command evidence", () => {
+  const manifest = build({
+    commands: [validPiperCommand, validCanonicalizeCommand, validRenderCommand]
+  });
+  const canonicalize = manifest.commands.find(command => command.id === "narration-canonicalize");
+  assert.equal(canonicalize.tool, "ffmpeg");
+  assert.equal(canonicalize.argv.at(-1), "<run>/narration.partial.wav");
+});
+
+test("render manifest rejects canonicalization argv that changes the audio contract", () => {
+  assert.throws(
+    () => build({
+      commands: [
+        validPiperCommand,
+        {
+          ...validCanonicalizeCommand,
+          argv: validCanonicalizeCommand.argv.map(arg => (arg === "48000" ? "44100" : arg))
+        },
+        validRenderCommand
+      ]
+    }),
+    TypeError
+  );
+  assert.throws(
+    () => build({
+      commands: [
+        validPiperCommand,
+        { ...validCanonicalizeCommand, argv: [...validCanonicalizeCommand.argv, "-y"] },
+        validRenderCommand
+      ]
+    }),
+    TypeError
+  );
+});
+
 test("render manifest accepts Piper narration command evidence", () => {
   const manifest = build({ commands: [validPiperCommand, validRenderCommand] });
   const ttsCommand = manifest.commands.find(command => command.tool === "piper");

@@ -19,6 +19,21 @@ export function buildFliteAudioArgs({ textFile, outputFile, voice = "slt" }) {
   ];
 }
 
+// Every narration provider may emit its native sample rate (Piper: 22050 Hz);
+// the pipeline contract for the narration artifact is fixed 48 kHz mono PCM.
+export function buildNarrationCanonicalizeArgs({ inputFile, outputFile }) {
+  const safeInputFile = assertSafeGeneratedPath(inputFile);
+  const safeOutputFile = assertSafeGeneratedPath(outputFile);
+  return [
+    "-hide_banner", "-loglevel", "error", "-n",
+    "-i", safeInputFile,
+    "-ar", "48000",
+    "-ac", "1",
+    "-c:a", "pcm_s16le",
+    safeOutputFile
+  ];
+}
+
 export function buildVideoRenderArgs({
   audioFile,
   subtitleFile,
