@@ -3,6 +3,7 @@ import { chmod, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { assertSafeGeneratedPath } from "./ffmpeg-args.js";
+import { readBoundedBytes, readBoundedJson } from "./bounded-body.js";
 
 const PRIVATE_FILE_MODE = 0o600;
 const PEXELS_SEARCH_URL = "https://api.pexels.com/videos/search";
@@ -52,8 +53,8 @@ export function createPexelsBrollAdapter({ env = process.env, fetchImpl = fetch 
       if (!searchResponse.ok) {
         throw new RangeError(`Pexels search failed with status ${searchResponse.status}`);
       }
-      const body = await readBoundedText(searchResponse, MAX_RESPONSE_BYTES);
-      const selected = selectPexelsClip(parseJson(body), {
+      const body = await readBoundedJson(searchResponse, MAX_RESPONSE_BYTES, "Pexels response");
+      const selected = selectPexelsClip(body, {
         orientation: safeOrientation,
         minDurationSeconds: minDuration
       });
@@ -63,8 +64,8 @@ export function createPexelsBrollAdapter({ env = process.env, fetchImpl = fetch 
       if (!clipResponse.ok) {
         throw new RangeError(`Pexels clip download failed with status ${clipResponse.status}`);
       }
-      const clipBytes = Buffer.from(await clipResponse.arrayBuffer());
-      if (clipBytes.length === 0 || clipBytes.length > MAX_CLIP_BYTES) {
+      const clipBytes = await readBoundedBytes(clipResponse, MAX_CLIP_BYTES, "Pexels clip");
+      if (clipBytes.length === 0) {
         throw new RangeError("Pexels clip size is outside the allowed range");
       }
       await writeFile(safeOutputPath, clipBytes, { flag: "wx", mode: PRIVATE_FILE_MODE });
@@ -150,18 +151,3 @@ async function fetchWithTimeout(fetchImpl, url, options, timeoutMs) {
   }
 }
 
-async function readBoundedText(response, limit) {
-  const text = await response.text();
-  if (Buffer.byteLength(text, "utf8") > limit) {
-    throw new RangeError("Pexels response exceeds the allowed size");
-  }
-  return text;
-}
-
-function parseJson(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new RangeError("Pexels response is not valid JSON");
-  }
-}

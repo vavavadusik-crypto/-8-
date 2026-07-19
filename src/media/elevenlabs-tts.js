@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 
 import { assertSafeGeneratedPath } from "./ffmpeg-args.js";
+import { readBoundedBytes } from "./bounded-body.js";
 import { probeMediaFile } from "./process-runner.js";
 import { normalizeNarrationLanguage, normalizeNarrationScript } from "./tts.js";
 
@@ -108,11 +109,8 @@ async function requestSynthesis({ fetchImpl, apiKey, voiceId, requestBody, sleep
     signal?.throwIfAborted();
     const response = await fetchWithTimeout({ fetchImpl, url, apiKey, requestBody, signal });
     if (response.ok) {
-      const payload = Buffer.from(await response.arrayBuffer());
+      const payload = await readBoundedBytes(response, MAX_AUDIO_BYTES, "ElevenLabs audio payload");
       if (payload.length === 0) throw new TypeError("ElevenLabs returned an empty audio payload");
-      if (payload.length > MAX_AUDIO_BYTES) {
-        throw new RangeError("ElevenLabs audio payload exceeds the size limit");
-      }
       return payload;
     }
     const status = Number(response.status);

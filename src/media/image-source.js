@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { chmod, writeFile } from "node:fs/promises";
 
 import { assertSafeGeneratedPath } from "./ffmpeg-args.js";
+import { readBoundedBytes, readBoundedJson } from "./bounded-body.js";
 
 const PRIVATE_FILE_MODE = 0o600;
 const FAL_SYNC_URL = "https://fal.run/fal-ai/flux/schnell";
@@ -66,7 +67,7 @@ export function createFalImageAdapter({ env = process.env, fetchImpl = fetch } =
       if (!response.ok) {
         throw new RangeError(`FAL generation failed with status ${response.status}`);
       }
-      const payload = parseJson(await readBoundedText(response, MAX_RESPONSE_BYTES));
+      const payload = await readBoundedJson(response, MAX_RESPONSE_BYTES, "FAL response");
       const image = Array.isArray(payload?.images) ? payload.images[0] : null;
       if (!image) throw new RangeError("FAL returned no image");
       const imageUrl = typeof image.url === "string" ? image.url : "";
@@ -76,8 +77,8 @@ export function createFalImageAdapter({ env = process.env, fetchImpl = fetch } =
       if (!imageResponse.ok) {
         throw new RangeError(`FAL image download failed with status ${imageResponse.status}`);
       }
-      const imageBytes = Buffer.from(await imageResponse.arrayBuffer());
-      if (imageBytes.length === 0 || imageBytes.length > MAX_IMAGE_BYTES) {
+      const imageBytes = await readBoundedBytes(imageResponse, MAX_IMAGE_BYTES, "FAL image");
+      if (imageBytes.length === 0) {
         throw new RangeError("FAL image size is outside the allowed range");
       }
       if (!hasImageMagic(imageBytes)) {
@@ -146,18 +147,3 @@ async function fetchWithTimeout(fetchImpl, url, options, timeoutMs) {
   }
 }
 
-async function readBoundedText(response, limit) {
-  const text = await response.text();
-  if (Buffer.byteLength(text, "utf8") > limit) {
-    throw new RangeError("FAL response exceeds the allowed size");
-  }
-  return text;
-}
-
-function parseJson(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new RangeError("FAL response is not valid JSON");
-  }
-}

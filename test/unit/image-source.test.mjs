@@ -12,13 +12,12 @@ const PNG_BYTES = Buffer.concat([
 ]);
 
 function jsonResponse(body, { status = 200 } = {}) {
+  const bytes = Buffer.from(JSON.stringify(body), "utf8");
   return {
     ok: status >= 200 && status < 300,
     status,
-    text: async () => JSON.stringify(body),
-    arrayBuffer: async () => {
-      throw new Error("json response has no binary body");
-    }
+    text: async () => bytes.toString("utf8"),
+    arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
   };
 }
 

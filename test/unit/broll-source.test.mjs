@@ -57,10 +57,12 @@ test("adapter downloads the selected clip with hash and provenance", async () =>
     const fetchImpl = async (url, options) => {
       requests.push({ url: String(url), headers: options?.headers });
       if (String(url).startsWith("https://api.pexels.com/")) {
+        const bytes = Buffer.from(JSON.stringify(searchPayload), "utf8");
         return {
           ok: true,
           status: 200,
-          text: async () => JSON.stringify(searchPayload)
+          text: async () => bytes.toString("utf8"),
+          arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
         };
       }
       return {
@@ -110,7 +112,15 @@ test("adapter fails closed on auth errors and oversized responses", async () => 
   );
   const oversized = createPexelsBrollAdapter({
     env: { HERMEST_PEXELS_API_KEY: "k" },
-    fetchImpl: async () => ({ ok: true, status: 200, text: async () => `{"videos": ["${"x".repeat(600000)}"]}` })
+    fetchImpl: async () => {
+      const bytes = Buffer.from(`{"videos": ["${"x".repeat(600000)}"]}`, "utf8");
+      return {
+        ok: true,
+        status: 200,
+        text: async () => bytes.toString("utf8"),
+        arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+      };
+    }
   });
   await assert.rejects(
     oversized.fetchClip({
