@@ -10,7 +10,7 @@ ACTIVE PHASE: P1→P2 переход
 ACTIVE TASK: P2.1 ADR image-провайдеров; параллельно в фоне — адверсариальное ревью P1-диффа (43bd6c8..266efd6)
 STATUS: IN_PROGRESS
 LAST COMMIT: см. git log — P1 закрыта кодом; P1.3 live-smoke ElevenLabs ЗАКРЫТ живым ключом (3 продуктовых рендера RU-фикстуры: George/Alice/Aterna, ffprobe-valid, утечек ключа 0, квота 750/10000)
-NEXT ACTION: P2.1 — docs/adr/ADR-002-image-providers.md (FAL FLUX schnell/dev = основной BYOK; Stability/Replicate = fallback; Wikimedia Commons + Openverse/Pexels = бесплатный сток) → затем P2.2 FAL-адаптер в capability router (style-пресет проекта, B3) по TDD; при завершении фонового ревью — все confirmed-находки фиксятся RED→GREEN до мержа P2-кода
+NEXT ACTION: P2.2 — image-порт `src/media/image-source.js` (контракт из ADR-002: request → PNG/JPEG + metadata + sha256 + license) и FAL-адаптер `src/media/fal-image.js` (FLUX schnell/dev, HERMEST_FAL_API_KEY, бюджет до платного вызова, style-пресет+seed проекта) по mock-TDD, стиль как у piper-tts/elevenlabs-tts; P2.1 ADR-002 ЗАКРЫТ (e035ced); при завершении фонового ревью P1 — все confirmed-находки фиксятся RED→GREEN до мержа P2-кода
 UNCOMMITTED: none
 BLOCKERS: (1) ГЛАВНЫЙ: Вадим забраковал Piper-голоса («отстой») — Piper остаётся free/offline-уровнем, релизный голос = ElevenLabs; ждём прослушку ~/Видео/hermest-board-voice-samples/elevenlabs-{george,alice,aterna}-ru.mp4 и выбор голосов «Дмитрий»/«Светлана»; (2) ключ ElevenLabs есть (free 10k символов/мес, ~/.secrets/env.sh: ELEVENLABS_API_KEY → адаптеру нужен HERMEST_ELEVENLABS_API_KEY); (3) ключ FAL.ai (~$5–10) понадобится для live-smoke P2.2, mock-TDD не блокирован
 
