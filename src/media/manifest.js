@@ -117,6 +117,7 @@ function normalizeFootage(footage) {
     const provenance = clip.provenance && typeof clip.provenance === "object" && !Array.isArray(clip.provenance)
       ? clip.provenance
       : {};
+    const promptSha256 = String(provenance.promptSha256 || "");
     return {
       sceneIndex,
       license,
@@ -124,7 +125,9 @@ function normalizeFootage(footage) {
       source: safeText(provenance.source) || "unknown",
       provider: safeText(provenance.provider) || "unknown",
       author: safeText(provenance.author),
-      url: sanitizeFootageUrl(provenance.url)
+      url: sanitizeFootageUrl(provenance.url),
+      model: safeText(provenance.model),
+      promptSha256: SHA256_PATTERN.test(promptSha256) ? promptSha256 : ""
     };
   });
 }

@@ -27,6 +27,10 @@ import {
 } from "./ffmpeg-args.js";
 import { composeSceneFrames, describeSceneComposerAvailability } from "./scene-frames.js";
 import { createPexelsBrollAdapter, describeBrollAvailability } from "./broll-source.js";
+import { createFalImageAdapter, describeImageSourceAvailability } from "./image-source.js";
+
+const DEFAULT_STYLE_PRESET = "cinematic dark tech aesthetic, deep blue and teal palette, volumetric light, high detail, no text, no watermark";
+const MAX_GENERATED_BACKGROUNDS = 8;
 import { loadMusicLibrary, selectMusicTrack } from "./music-library.js";
 import { assertVideoProbe } from "./ffprobe.js";
 import { buildRenderManifest, hashJson } from "./manifest.js";
@@ -201,6 +205,53 @@ export async function renderProject({
       } else {
         footageWarnings.push(brollAvailability.reason);
       }
+      const backgroundImages = [];
+      const scenesWithoutFootage = storyboard.scenes.filter(
+        (_scene, sceneIndex) => sceneIndex > 0 && !brollClips[sceneIndex]
+      ).length;
+      if (scenesWithoutFootage > 0) {
+        const imageAvailability = describeImageSourceAvailability();
+        if (imageAvailability.status === "executable") {
+          const imageAdapter = createFalImageAdapter();
+          const projectSeed = Number.parseInt(hashJson(project).slice(0, 8), 16);
+          const stylePreset = typeof project?.brief?.stylePreset === "string" && project.brief.stylePreset.trim()
+            ? project.brief.stylePreset.trim()
+            : DEFAULT_STYLE_PRESET;
+          let generatedCount = 0;
+          for (const [sceneIndex, scene] of storyboard.scenes.entries()) {
+            if (sceneIndex === 0 || brollClips[sceneIndex]) continue;
+            if (generatedCount >= MAX_GENERATED_BACKGROUNDS) {
+              footageWarnings.push(`generated background budget of ${MAX_GENERATED_BACKGROUNDS} reached`);
+              break;
+            }
+            const backgroundFile = path.join(runDir, `bg-${String(sceneIndex + 1).padStart(3, "0")}.png`);
+            try {
+              const image = await imageAdapter.generateImage({
+                prompt: [project?.brief?.topic, scene.title, scene.narration.split(/(?<=[.!?…])\s+/)[0]]
+                  .filter(Boolean).join(". "),
+                stylePreset,
+                width: recipe.width,
+                height: recipe.height,
+                seed: projectSeed + sceneIndex,
+                outputPath: backgroundFile,
+                signal
+              });
+              backgroundImages[sceneIndex] = image;
+              generatedCount += 1;
+              footage.push({
+                sceneIndex,
+                license: image.license,
+                sha256: image.sha256,
+                provenance: image.provenance
+              });
+            } catch (error) {
+              footageWarnings.push(`background generation failed for scene ${sceneIndex + 1}: ${error.message}`);
+            }
+          }
+        } else {
+          footageWarnings.push(imageAvailability.reason);
+        }
+      }
       const musicPreference = typeof project?.brief?.music === "string" ? project.brief.music.trim() : "";
       if (musicPreference !== "off") {
         try {
@@ -221,6 +272,7 @@ export async function renderProject({
         runDir,
         seed: Number.parseInt(hashJson(project).slice(0, 8), 16),
         brollClips,
+        backgroundImages,
         signal
       });
       sceneFrameCommands = composition.commands;
@@ -246,6 +298,7 @@ export async function renderProject({
       } finally {
         await Promise.all(composition.frames.map(frame => rm(frame.path, { force: true })));
         await Promise.all(brollClips.filter(Boolean).map(clip => rm(clip.path, { force: true })));
+        await Promise.all(backgroundImages.filter(Boolean).map(image => rm(image.path, { force: true })));
       }
     } else {
       let sceneCursorMs = 0;

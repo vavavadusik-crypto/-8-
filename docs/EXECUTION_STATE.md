@@ -7,12 +7,12 @@
 
 UPDATED: 2026-07-19 (Claude Fable 5, пятая сессия)
 ACTIVE PHASE: P2 — визуалы + звук
-ACTIVE TASK: P2.2 FAL-адаптер — IN_PROGRESS, шаг 1: src/media/image-source.js (mock-TDD, sync endpoint fal.run/fal-ai/flux/schnell) + тесты; дальше style-пресет (B3) → интеграция в render-project → кэш (P2.3) → live-smoke
+ACTIVE TASK: P2.2 КОД ЗАВЕРШЁН: FAL-адаптер (шаг 1, оборванный лимитом — дочищен и закоммичен 86afa0c) + интеграция в render-project (шаг 2): сцены без Pexels-клипа получают генерированный FLUX-фон со style-пресетом проекта (B3, дефолт в DEFAULT_STYLE_PRESET), бюджет 8 изображений/job, footage-провенанс (model+promptSha256 в манифесте), фолбэк-цепочка честная: broll видео → FAL фон → opaque кадр
 STATUS: IN_PROGRESS
 LAST COMMIT: см. git log — fix transparent scene-frame schema; гейт 189/189 unit + 4/4 media
-NEXT ACTION: P2.2 FAL-адаптер (ключ ЕСТЬ, разблокирована): адаптер по контракту capability router, style-пресет проекта (B3), live-smoke FLUX schnell (~$0.01, бюджет Вадима подтверждён передачей ключа); референс-голоса: George JBFqnCBsd6RMkjVDRZzb · Alice Xb7hH8MSUJpSbSDYk0k2 · Aterna UX4FA7ZvSPh1ma6rI8P9 (кастомный Вадима)
+NEXT ACTION: P2.5 Ken Burns-дрейф статичных фонов/кадров (zoompan/crop-пан в composed-графе) ИЛИ P2.10 BYOK-UX (ключи через UI → локальный worker, запрос Вадима «чтобы люди сами вставляли API»); FAL live-smoke — как только Вадим пополнит баланс fal.ai (~$5): команда smoke уже отработана, код не трогать. ГРАБЛЯ: значения в ~/.secrets/env.sh в ОДИНАРНЫХ кавычках — только `source`, НЕ cut/tr (кавычка уезжает в ключ → ложный 401); референс-голоса: George JBFqnCBsd6RMkjVDRZzb · Alice Xb7hH8MSUJpSbSDYk0k2 · Aterna UX4FA7ZvSPh1ma6rI8P9 (кастомный Вадима)
 UNCOMMITTED: none
-BLOCKERS: (1) Вадим слушает ru-fullstack-{aterna,george}.mp4 и выбирает release-голос (Piper отвергнут ранее — сэмплы ТОЛЬКО ElevenLabs); (2) прослушивание музыкальной подложки (процедурный ambient — можно докинуть CC0-треки в assets/music); ключи Pexels/FAL — ЗАКРЫТЫ
+BLOCKERS: (1) Вадим слушает ru-fullstack-{aterna,george}.mp4 и выбирает release-голос (Piper отвергнут ранее — сэмплы ТОЛЬКО ElevenLabs); (2) FAL live-smoke: аккаунт fal.ai ЗАБЛОКИРОВАН — «Exhausted balance», пополнить на fal.ai/dashboard/billing (~$5) — сам ключ валиден (аутентификация проходит), код готов и ждёт; (3) прослушивание музыкальной подложки (процедурный ambient — можно докинуть CC0-треки в assets/music)
 
 ## Дорожная карта (кратко; полностью — MASTER_PLAN)
 

@@ -187,6 +187,26 @@ export function buildComposedVideoRenderArgs({
         `[b${index}][f${index}]overlay=0:0,format=yuv420p[v${index}]`
       );
       inputIndex += 2;
+    } else if (frame?.backgroundImagePath !== undefined) {
+      const backgroundPath = assertSafeGeneratedPath(frame.backgroundImagePath);
+      const backgroundInput = inputIndex;
+      const overlayInput = inputIndex + 1;
+      frameInputs.push(
+        "-loop", "1",
+        "-t", durationArg,
+        "-framerate", String(fps),
+        "-i", backgroundPath,
+        "-loop", "1",
+        "-t", durationArg,
+        "-framerate", String(fps),
+        "-i", framePath
+      );
+      filterSegments.push(
+        `[${backgroundInput}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},fps=${fps},eq=brightness=-0.18:saturation=0.85,setsar=1[b${index}]`,
+        `[${overlayInput}:v]setsar=1[f${index}]`,
+        `[b${index}][f${index}]overlay=0:0,format=yuv420p[v${index}]`
+      );
+      inputIndex += 2;
     } else {
       frameInputs.push(
         "-loop", "1",

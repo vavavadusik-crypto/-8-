@@ -185,6 +185,51 @@ test("composed render args support b-roll overlay scenes", () => {
   }), TypeError);
 });
 
+test("composed render args support generated background image scenes", () => {
+  const args = buildArgs({
+    sceneFrames: [
+      { path: "/tmp/run/scene-001.png", durationSeconds: 4.2 },
+      { path: "/tmp/run/scene-002.png", durationSeconds: 5.1, backgroundImagePath: "/tmp/run/bg-002.png" }
+    ]
+  });
+  assert.ok(args.includes("/tmp/run/bg-002.png"));
+  const filterComplex = args[args.indexOf("-filter_complex") + 1];
+  assert.match(filterComplex, /\[1:v\]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,fps=30,eq=/);
+  assert.match(filterComplex, /\[b1\]\[f1\]overlay=0:0,format=yuv420p\[v1\]/);
+  assert.ok(args.includes("3:a:0"));
+  const manifest = manifestWith([{ id: "render-composed", tool: "ffmpeg", argv: args }]);
+  assert.equal(manifest.commands[0].id, "render-composed");
+  assert.throws(() => buildArgs({
+    sceneFrames: [{ path: "/tmp/run/s.png", durationSeconds: 2, backgroundImagePath: "../bg.png" }]
+  }), TypeError);
+});
+
+test("footage records keep generated-image lineage", () => {
+  const manifest = manifestWith([]);
+  assert.deepEqual(manifest.footage, []);
+  const generated = buildRenderManifest({
+    project: { cards: [] },
+    storyboard: { schemaVersion: 1, scenes: [] },
+    recipe: { id: "r", platformId: "p" },
+    tools: {},
+    commands: [],
+    qc: {},
+    blockers: [],
+    warnings: [],
+    lineage: {},
+    footage: [{
+      sceneIndex: 2,
+      license: "fal-generated",
+      sha256: "c".repeat(64),
+      provenance: { source: "generated", provider: "fal", model: "fal-ai/flux/schnell", promptSha256: "d".repeat(64) }
+    }],
+    artifacts: [{ name: "a.mp4", type: "video/mp4", bytes: 10, sha256: "a".repeat(64) }]
+  });
+  assert.equal(generated.footage[0].model, "fal-ai/flux/schnell");
+  assert.equal(generated.footage[0].promptSha256, "d".repeat(64));
+  assert.equal(generated.footage[0].source, "generated");
+});
+
 test("manifest accepts the b-roll composed schema and footage provenance", () => {
   const args = buildArgs({
     sceneFrames: [

@@ -61,6 +61,7 @@ export async function composeSceneFrames({
   seed,
   signal,
   brollClips = [],
+  backgroundImages = [],
   runner = runMediaTool
 } = {}) {
   const scenes = storyboard?.scenes;
@@ -80,6 +81,8 @@ export async function composeSceneFrames({
     const markupFile = path.join(safeRunDir, `scene-${sceneTag}.html`);
     const frameFile = path.join(safeRunDir, `scene-${sceneTag}.png`);
     const brollClip = brollClips[sceneIndex] || null;
+    const backgroundImage = brollClip ? null : backgroundImages[sceneIndex] || null;
+    const hasMovingBackground = Boolean(brollClip || backgroundImage);
     const markup = buildSceneMarkup({
       scene,
       sceneIndex,
@@ -88,7 +91,7 @@ export async function composeSceneFrames({
       width,
       height,
       seed,
-      mode: brollClip ? "overlay" : "opaque"
+      mode: hasMovingBackground ? "overlay" : "opaque"
     });
     await writeFile(markupFile, markup, { encoding: "utf8", flag: "wx", mode: PRIVATE_FILE_MODE });
     const command = {
@@ -100,7 +103,7 @@ export async function composeSceneFrames({
         height,
         outputFile: frameFile,
         inputFile: markupFile,
-        transparent: Boolean(brollClip)
+        transparent: hasMovingBackground
       })
     };
     await runner(command.tool, command.argv, { timeoutMs: SCREENSHOT_TIMEOUT_MS, signal });
@@ -115,7 +118,8 @@ export async function composeSceneFrames({
       durationSeconds: Number(scene.durationMs) / 1000,
       markupSha256: createHash("sha256").update(markup).digest("hex"),
       frameSha256: createHash("sha256").update(frameBytes).digest("hex"),
-      ...(brollClip ? { brollPath: brollClip.path } : {})
+      ...(brollClip ? { brollPath: brollClip.path } : {}),
+      ...(backgroundImage ? { backgroundImagePath: backgroundImage.path } : {})
     });
     await rm(markupFile, { force: true });
   }
