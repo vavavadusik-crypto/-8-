@@ -27,7 +27,7 @@ import {
   runMediaTool
 } from "./process-runner.js";
 import { buildSubtitleCues, formatSrt } from "./subtitles.js";
-import { createFliteNarrationAdapter } from "./tts.js";
+import { selectNarrationAdapter } from "./narration.js";
 import { validateJsonStructure } from "./structural-preflight.js";
 
 const MAX_BOARD_INPUT_BYTES = 2 * 1024 * 1024;
@@ -39,7 +39,7 @@ export async function renderProject({
   project: projectInput,
   outputDir,
   platform = "youtube_video",
-  ttsAdapter = createFliteNarrationAdapter(),
+  ttsAdapter = null,
   signal
 }) {
   signal?.throwIfAborted();
@@ -57,10 +57,19 @@ export async function renderProject({
   try {
     const narrationPartial = path.join(runDir, "narration.partial.wav");
     const narrationAudioFile = path.join(runDir, "narration.wav");
-    const tts = await ttsAdapter.synthesize({
+    const narrationLanguage = project?.brief?.language || "en";
+    const narrationVoice = typeof project?.brief?.voice === "string" && project.brief.voice
+      ? project.brief.voice
+      : undefined;
+    const narrationAdapter = ttsAdapter || await selectNarrationAdapter({
+      language: narrationLanguage,
+      voice: narrationVoice,
+      provider: project?.brief?.narrationProvider
+    });
+    const tts = await narrationAdapter.synthesize({
       text: narration,
-      language: project?.brief?.language || "en",
-      voice: project?.brief?.voice || "slt",
+      language: narrationLanguage,
+      voice: narrationVoice,
       outputPath: narrationPartial,
       signal
     });
