@@ -2,8 +2,10 @@
 // как OpenAI-совместимый бэкенд. Ключей нет — «ключом» служит живая
 // залогиненная вкладка Chrome на стороне моста.
 
+import { request as httpRequest } from "node:http";
+
 const DEFAULT_BRIDGE_URL = "http://127.0.0.1:8788/v1";
-const REQUEST_TIMEOUT_MS = 300000; // веб-чат отвечает медленно — это осознанная цена
+const REQUEST_TIMEOUT_MS = 480000; // reasoning-веб-чаты думают минутами — осознанная цена
 const MAX_RESPONSE_BYTES = 1024 * 1024;
 
 function bridgeBaseUrl(env) {
@@ -37,7 +39,7 @@ export async function describeBridgeAvailability({ env = process.env, fetchImpl 
   }
 }
 
-export function createBridgeTextModel({ env = process.env, fetchImpl = fetch } = {}) {
+export function createBridgeTextModel({ env = process.env, postImpl = postJsonOverHttp } = {}) {
   const baseUrl = bridgeBaseUrl(env);
   const model = typeof env.HERMEST_BRIDGE_MODEL === "string" && env.HERMEST_BRIDGE_MODEL.trim()
     ? env.HERMEST_BRIDGE_MODEL.trim()
@@ -51,16 +53,19 @@ export function createBridgeTextModel({ env = process.env, fetchImpl = fetch } =
       const messages = [];
       if (system) messages.push({ role: "system", content: String(system) });
       messages.push({ role: "user", content: text });
-      const response = await fetchWithTimeout(fetchImpl, `${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model, messages }),
-        signal
-      }, REQUEST_TIMEOUT_MS);
+      // stableTicks/requireJson: reasoning-модели прячут стоп-кнопку в паузах —
+      // финал подтверждается только распарсенным JSON, а не «стабильной» тишиной.
+      // Транспорт — node:http: встроенный fetch (undici) рвёт ожидание заголовков
+      // на ~300s, а reasoning-веб-чат легально думает дольше.
+      const response = await postImpl(`${baseUrl}/chat/completions`, {
+        model,
+        messages,
+        options: { stableTicks: 8, timeoutMs: 420000, requireJson: true }
+      }, { timeoutMs: REQUEST_TIMEOUT_MS, signal });
       if (!response.ok) {
         throw new RangeError(`browser bridge completion failed with status ${response.status}`);
       }
-      const body = await response.text();
+      const body = response.body;
       if (Buffer.byteLength(body, "utf8") > MAX_RESPONSE_BYTES) {
         throw new RangeError("browser bridge response exceeds the allowed size");
       }
@@ -77,6 +82,50 @@ export function createBridgeTextModel({ env = process.env, fetchImpl = fetch } =
       return content;
     }
   };
+}
+
+function postJsonOverHttp(url, payload, { timeoutMs, signal }) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(payload);
+    const request = httpRequest(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(body)
+      }
+    }, response => {
+      const chunks = [];
+      let received = 0;
+      response.on("data", chunk => {
+        received += chunk.length;
+        if (received > MAX_RESPONSE_BYTES) {
+          request.destroy(new RangeError("browser bridge response exceeds the allowed size"));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.on("end", () => resolve({
+        ok: response.statusCode >= 200 && response.statusCode < 300,
+        status: response.statusCode,
+        body: Buffer.concat(chunks).toString("utf8")
+      }));
+      response.on("error", reject);
+    });
+    const timer = setTimeout(() => {
+      request.destroy(new RangeError(`browser bridge completion timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    const onAbort = () => request.destroy(new RangeError("browser bridge completion aborted"));
+    if (signal) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener("abort", onAbort, { once: true });
+    }
+    request.on("close", () => {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener("abort", onAbort);
+    });
+    request.on("error", reject);
+    request.end(body);
+  });
 }
 
 async function fetchWithTimeout(fetchImpl, url, options, timeoutMs) {

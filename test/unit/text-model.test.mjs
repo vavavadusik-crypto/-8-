@@ -11,34 +11,44 @@ function jsonResponse(body, { status = 200 } = {}) {
   };
 }
 
+function postResponse(body, { status = 200 } = {}) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    body: JSON.stringify(body)
+  };
+}
+
 test("bridge text model posts openai-compatible messages and returns content", async () => {
   const calls = [];
   const model = createBridgeTextModel({
     env: { HERMEST_BRIDGE_MODEL: "chatgpt" },
-    fetchImpl: async (url, options) => {
-      calls.push({ url: String(url), options });
-      return jsonResponse({ choices: [{ message: { role: "assistant", content: "ответ модели" } }] });
+    postImpl: async (url, payload) => {
+      calls.push({ url: String(url), payload });
+      return postResponse({ choices: [{ message: { role: "assistant", content: "ответ модели" } }] });
     }
   });
   const text = await model.complete({ system: "только JSON", prompt: "тема" });
   assert.equal(text, "ответ модели");
   assert.equal(calls[0].url, "http://127.0.0.1:8788/v1/chat/completions");
-  const body = JSON.parse(calls[0].options.body);
+  const body = calls[0].payload;
   assert.equal(body.model, "chatgpt");
   assert.equal(body.messages[0].role, "system");
   assert.equal(body.messages[1].content, "тема");
+  assert.equal(body.options.requireJson, true);
+  assert.equal(body.options.stableTicks, 8);
 });
 
 test("bridge text model fails closed on bad responses and remote urls", async () => {
   const failing = createBridgeTextModel({
     env: {},
-    fetchImpl: async () => jsonResponse({}, { status: 502 })
+    postImpl: async () => postResponse({}, { status: 502 })
   });
   await assert.rejects(failing.complete({ prompt: "x" }), /status 502/);
 
   const empty = createBridgeTextModel({
     env: {},
-    fetchImpl: async () => jsonResponse({ choices: [{ message: { content: "" } }] })
+    postImpl: async () => postResponse({ choices: [{ message: { content: "" } }] })
   });
   await assert.rejects(empty.complete({ prompt: "x" }), /empty completion/);
 
