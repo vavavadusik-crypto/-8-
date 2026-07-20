@@ -99,3 +99,46 @@ test("director prompt pins language, scene count and contract", () => {
   assert.match(prompt, /4/);
   assert.match(prompt, /"cards"/);
 });
+
+const RESEARCH_SOURCES = Object.freeze([
+  Object.freeze({ id: "src-wikipedia-1", source: "wikipedia", title: "Quantum computing", url: "https://en.wikipedia.org/wiki/Quantum_computing", snippet: "Computation using quantum phenomena." }),
+  Object.freeze({ id: "src-arxiv-1", source: "arxiv", title: "Quantum supremacy", url: "https://arxiv.org/abs/1910.11333", year: 2019 })
+]);
+
+test("director prompt carries research sources and demands sourceRefs", () => {
+  const prompt = buildDirectorPrompt({
+    topic: "Квантовые компьютеры",
+    sceneCount: 3,
+    sources: RESEARCH_SOURCES
+  });
+  assert.match(prompt, /src-wikipedia-1/);
+  assert.match(prompt, /en\.wikipedia\.org/);
+  assert.match(prompt, /sourceRefs/);
+  assert.match(prompt, /ТОЛЬКО/i);
+});
+
+test("drafted cards keep verified sourceRefs and the board carries sources", async () => {
+  const reply = JSON.stringify({
+    title: "Квантовые компьютеры простыми словами",
+    cards: [
+      { title: "Что это", text: "Компьютер на кубитах.", sourceRefs: ["src-wikipedia-1"] },
+      { title: "Прорыв", text: "Квантовое превосходство показано в 2019.", sourceRefs: ["src-arxiv-1", "src-fake-99"] },
+      { title: "Итог", text: "Технология взрослеет.", sourceRefs: ["src-fake-99"] }
+    ]
+  });
+  const board = await draftBoardFromTopic({
+    topic: "Квантовые компьютеры",
+    sceneCount: 3,
+    textModel: mockModel([reply]),
+    sources: RESEARCH_SOURCES
+  });
+
+  assert.deepEqual(board.cards[0].sourceRefs, ["src-wikipedia-1"]);
+  assert.deepEqual(board.cards[1].sourceRefs, ["src-arxiv-1"], "unknown refs are dropped");
+  assert.deepEqual(board.cards[2].sourceRefs, [], "fully unknown refs leave an honest empty list");
+  assert.equal(board.sources.length, 2);
+  assert.equal(board.sources[0].id, "src-wikipedia-1");
+  assert.equal(board.sources[0].url, "https://en.wikipedia.org/wiki/Quantum_computing");
+  const withCitations = board.cards.filter(card => card.sourceRefs.length > 0).length;
+  assert.ok(withCitations >= 2, "topic must yield cards with working citations");
+});
