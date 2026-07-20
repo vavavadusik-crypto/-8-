@@ -27,7 +27,7 @@ import {
 } from "./ffmpeg-args.js";
 import { composeSceneFrames, describeSceneComposerAvailability } from "./scene-frames.js";
 import { createPexelsBrollAdapter, describeBrollAvailability } from "./broll-source.js";
-import { createFalImageAdapter, describeImageSourceAvailability } from "./image-source.js";
+import { createDefaultImageSourceCascade, describeImageSourceAvailability } from "./image-source.js";
 import { createCachedImageAdapter } from "./asset-cache.js";
 
 const DEFAULT_STYLE_PRESET = "cinematic dark tech aesthetic, deep blue and teal palette, volumetric light, high detail, no text, no watermark";
@@ -214,7 +214,9 @@ export async function renderProject({
         const imageAvailability = describeImageSourceAvailability();
         if (imageAvailability.status === "executable") {
           const imageAdapter = createCachedImageAdapter({
-            adapter: createFalImageAdapter(),
+            adapter: createDefaultImageSourceCascade({
+              onWarning: message => footageWarnings.push(message)
+            }),
             onWarning: message => footageWarnings.push(message)
           });
           const projectSeed = Number.parseInt(hashJson(project).slice(0, 8), 16);

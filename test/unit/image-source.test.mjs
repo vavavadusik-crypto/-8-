@@ -225,3 +225,25 @@ test("image source cascade falls through failing adapters with warnings", async 
   const allFail = createImageSourceCascade([failing], {});
   await assert.rejects(allFail.generateImage({ prompt: "p", width: 100, height: 100, outputPath: "/tmp/x.png" }), /Exhausted balance/);
 });
+
+test("image source availability accepts any configured provider of the cascade", () => {
+  assert.equal(describeImageSourceAvailability({ env: {} }).status, "missing");
+  const pexelsOnly = describeImageSourceAvailability({ env: { HERMEST_PEXELS_API_KEY: "p" } });
+  assert.equal(pexelsOnly.status, "executable");
+  assert.deepEqual(pexelsOnly.providers, ["pexels-photos"]);
+  const both = describeImageSourceAvailability({
+    env: { HERMEST_FAL_API_KEY: "f", HERMEST_PEXELS_API_KEY: "p" }
+  });
+  assert.deepEqual(both.providers, ["fal", "pexels-photos"]);
+});
+
+test("default image cascade is built from configured providers in paid-first order", async () => {
+  const { createDefaultImageSourceCascade } = await import("../../src/media/image-source.js");
+  const both = createDefaultImageSourceCascade({
+    env: { HERMEST_FAL_API_KEY: "f", HERMEST_PEXELS_API_KEY: "p" }
+  });
+  assert.equal(both.provider, "fal+pexels-photos");
+  const pexelsOnly = createDefaultImageSourceCascade({ env: { HERMEST_PEXELS_API_KEY: "p" } });
+  assert.equal(pexelsOnly.provider, "pexels-photos");
+  assert.throws(() => createDefaultImageSourceCascade({ env: {} }), RangeError);
+});

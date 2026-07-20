@@ -17,15 +17,26 @@ const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
 
 export function describeImageSourceAvailability({ env = process.env } = {}) {
-  const key = readFalKey(env);
-  if (!key) {
+  const providers = [];
+  if (readFalKey(env)) providers.push("fal");
+  if (readPexelsKey(env)) providers.push("pexels-photos");
+  if (providers.length === 0) {
     return {
       status: "missing",
-      provider: "fal",
-      reason: "FAL API key is not configured; scenes render without generated visuals"
+      providers,
+      reason: "no image source key is configured (FAL or Pexels); scenes render without generated visuals"
     };
   }
-  return { status: "executable", provider: "fal" };
+  return { status: "executable", providers };
+}
+
+// Каскад по умолчанию: платная генерация первой (если ключ есть), бесплатный
+// сток следом; каждый источник fail-open к следующему с честным warning.
+export function createDefaultImageSourceCascade({ env = process.env, fetchImpl = fetch, onWarning } = {}) {
+  const adapters = [];
+  if (readFalKey(env)) adapters.push(createFalImageAdapter({ env, fetchImpl }));
+  if (readPexelsKey(env)) adapters.push(createPexelsImageAdapter({ env, fetchImpl }));
+  return createImageSourceCascade(adapters, { onWarning });
 }
 
 export function createFalImageAdapter({ env = process.env, fetchImpl = fetch } = {}) {
@@ -235,6 +246,10 @@ function hasImageMagic(bytes) {
 
 function readFalKey(env) {
   return typeof env.HERMEST_FAL_API_KEY === "string" ? env.HERMEST_FAL_API_KEY.trim() : "";
+}
+
+function readPexelsKey(env) {
+  return typeof env.HERMEST_PEXELS_API_KEY === "string" ? env.HERMEST_PEXELS_API_KEY.trim() : "";
 }
 
 async function fetchWithTimeout(fetchImpl, url, options, timeoutMs) {
