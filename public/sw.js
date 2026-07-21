@@ -1,10 +1,11 @@
 // Service worker Hermest Board.
 // Стратегия обновляемости (критично для приложения на N устройств):
-//  - навигации и index.html — network-first: свежий UI всегда, кэш лишь офлайн;
 //  - хэшированные ассеты Vite (/assets/*) иммутабельны — cache-first, дёшево и офлайн;
-//  - /api/* — динамика, не кэшируется вовсе (иначе устаревают провайдеры/джобы);
+//  - ВСЁ остальное (index.html, навигации, любые не-/assets файлы) — network-first:
+//    свежий UI всегда, кэш только офлайн (иначе стабильные URL отдают старую версию);
+//  - /api/* и сторонние (мост) — мимо кэша вовсе (иначе устаревают провайдеры/джобы);
 //  - skipWaiting + clients.claim: новая версия SW берёт управление сразу, без «сброса вручную».
-const CACHE_NAME = "hermest-board-v2";
+const CACHE_NAME = "hermest-board-v3";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -36,10 +37,9 @@ self.addEventListener("fetch", event => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
 
-  const isNavigation = request.mode === "navigate"
-    || url.pathname === "/"
-    || url.pathname.endsWith("/index.html");
-  event.respondWith(isNavigation ? networkFirst(request) : cacheFirst(request));
+  // Только хэшированные ассеты Vite иммутабельны — их и кэшируем агрессивно.
+  const isImmutableAsset = url.pathname.startsWith("/assets/");
+  event.respondWith(isImmutableAsset ? cacheFirst(request) : networkFirst(request));
 });
 
 async function networkFirst(request) {
