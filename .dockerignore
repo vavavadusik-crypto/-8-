@@ -1,0 +1,16 @@
+node_modules
+dist
+.git
+.gitignore
+tmp
+test
+docs
+db
+scripts
+*.log
+*.md
+.env
+.env.*
+.claude
+.vercel
+coverage
