@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import os from "node:os";
 import test from "node:test";
 
 import {
@@ -51,6 +52,41 @@ test("Piper binary and voices directory resolution honors env and rejects unsafe
     () => resolvePiperVoicesDirectory({ env: { HERMEST_PIPER_VOICES_DIR: "bad dir" }, homeDirectory: HOME }),
     RangeError
   );
+});
+
+test("Piper remains executable when an agent profile scopes HOME", { concurrency: false }, async () => {
+  const originalHome = process.env.HOME;
+  const accountHome = os.userInfo().homedir;
+  const accountBinary = `${accountHome}/.local/opt/piper/piper`;
+  const accountModel = `${accountHome}/.local/share/piper/voices/ru_RU-dmitri-medium.onnx`;
+  const events = [];
+
+  process.env.HOME = "/tmp/hermes-profile-home";
+  try {
+    const adapter = await selectNarrationAdapter({
+      language: "ru",
+      dependencies: {
+        env: {},
+        fileExists: existsCatalog([accountBinary, accountModel]),
+        runTool: async (tool, args) => events.push([tool, args]),
+        probeFile: async () => ({
+          durationSeconds: 1,
+          audio: { codec: "pcm_s16le", sampleRate: 22050, channels: 1 }
+        })
+      }
+    });
+    assert.equal(adapter.id, "piper");
+    await adapter.synthesize({
+      text: "Проверка профиля.",
+      language: "ru",
+      outputPath: "/tmp/hermest-board-run/narration.wav"
+    });
+    assert.equal(events[0][0], "piper");
+    assert.equal(events[0][1][1], accountModel);
+  } finally {
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+  }
 });
 
 test("Piper availability reports missing binary, missing voice and executable states", async () => {

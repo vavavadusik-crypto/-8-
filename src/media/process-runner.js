@@ -26,7 +26,7 @@ const MAX_STDIN_BYTES = 1024 * 1024;
 
 const SAFE_ABSOLUTE_PATH = /^\/[A-Za-z0-9_./-]+$/;
 
-export function resolvePiperBinaryPath({ env = process.env, homeDirectory = os.homedir() } = {}) {
+export function resolvePiperBinaryPath({ env = process.env, homeDirectory = os.userInfo().homedir } = {}) {
   const configured = typeof env.HERMEST_PIPER_PATH === "string" ? env.HERMEST_PIPER_PATH.trim() : "";
   if (configured) {
     if (!SAFE_ABSOLUTE_PATH.test(configured)) {

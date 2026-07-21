@@ -29,7 +29,7 @@ export function getPiperVoiceCatalog() {
   return PIPER_VOICE_CATALOG;
 }
 
-export function resolvePiperVoicesDirectory({ env = process.env, homeDirectory = os.homedir() } = {}) {
+export function resolvePiperVoicesDirectory({ env = process.env, homeDirectory = os.userInfo().homedir } = {}) {
   const configured = typeof env.HERMEST_PIPER_VOICES_DIR === "string" ? env.HERMEST_PIPER_VOICES_DIR.trim() : "";
   if (configured) {
     if (!SAFE_ABSOLUTE_PATH.test(configured)) {
@@ -59,7 +59,7 @@ export async function describePiperAvailability({
   language,
   voice,
   env = process.env,
-  homeDirectory = os.homedir(),
+  homeDirectory = os.userInfo().homedir,
   fileExists = defaultFileExists
 } = {}) {
   let binaryPath = null;
@@ -88,7 +88,7 @@ export function createPiperNarrationAdapter(dependencies = {}) {
   const runTool = dependencies.runTool || runMediaTool;
   const probeFile = dependencies.probeFile || probeMediaFile;
   const env = dependencies.env || process.env;
-  const homeDirectory = dependencies.homeDirectory || os.homedir();
+  const homeDirectory = dependencies.homeDirectory || os.userInfo().homedir;
   const fileExists = dependencies.fileExists || defaultFileExists;
 
   return Object.freeze({
