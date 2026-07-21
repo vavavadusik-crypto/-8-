@@ -7,6 +7,8 @@ import { request as httpRequest } from "node:http";
 const DEFAULT_BRIDGE_URL = "http://127.0.0.1:8788/v1";
 const REQUEST_TIMEOUT_MS = 480000; // reasoning-веб-чаты думают минутами — осознанная цена
 const MAX_RESPONSE_BYTES = 1024 * 1024;
+const MAX_HEALTH_BYTES = 64 * 1024;
+const BRIDGE_MODEL_PATTERN = /^[a-z0-9-]{1,32}$/;
 
 function bridgeBaseUrl(env) {
   const configured = typeof env.HERMEST_BRIDGE_URL === "string" ? env.HERMEST_BRIDGE_URL.trim() : "";
@@ -22,31 +24,37 @@ export async function describeBridgeAvailability({ env = process.env, fetchImpl 
   try {
     baseUrl = bridgeBaseUrl(env);
   } catch (error) {
-    return { status: "missing", provider: "browser-bridge", reason: error.message };
+    return { status: "missing", provider: "browser-bridge", reason: error.message, providers: [] };
   }
   try {
     const response = await fetchWithTimeout(fetchImpl, `${new URL(baseUrl).origin}/health`, {}, 5000);
     if (!response.ok) {
-      return { status: "missing", provider: "browser-bridge", reason: `bridge health returned ${response.status}` };
+      return {
+        status: "missing",
+        provider: "browser-bridge",
+        reason: `bridge health returned ${response.status}`,
+        providers: []
+      };
     }
-    return { status: "executable", provider: "browser-bridge" };
+    // Список провайдеров — подсказка для UI, а не условие доступности:
+    // мост жив по HTTP 200, даже если тело нечитаемо.
+    return { status: "executable", provider: "browser-bridge", providers: await readHealthProviders(response) };
   } catch {
     return {
       status: "missing",
       provider: "browser-bridge",
-      reason: "browser-ai-bridge is not running; start it in workspace/browser-ai-bridge (npm start)"
+      reason: "browser-ai-bridge is not running; start it in workspace/browser-ai-bridge (npm start)",
+      providers: []
     };
   }
 }
 
-export function createBridgeTextModel({ env = process.env, postImpl = postJsonOverHttp } = {}) {
+export function createBridgeTextModel({ env = process.env, model, postImpl = postJsonOverHttp } = {}) {
   const baseUrl = bridgeBaseUrl(env);
-  const model = typeof env.HERMEST_BRIDGE_MODEL === "string" && env.HERMEST_BRIDGE_MODEL.trim()
-    ? env.HERMEST_BRIDGE_MODEL.trim()
-    : "chatgpt";
+  const resolvedModel = resolveBridgeModel(env, model);
   return {
     provider: "browser-bridge",
-    model,
+    model: resolvedModel,
     async complete({ system, prompt, signal } = {}) {
       const text = String(prompt ?? "").trim();
       if (!text) throw new RangeError("Text model prompt is required");
@@ -58,7 +66,7 @@ export function createBridgeTextModel({ env = process.env, postImpl = postJsonOv
       // Транспорт — node:http: встроенный fetch (undici) рвёт ожидание заголовков
       // на ~300s, а reasoning-веб-чат легально думает дольше.
       const response = await postImpl(`${baseUrl}/chat/completions`, {
-        model,
+        model: resolvedModel,
         messages,
         options: { stableTicks: 8, timeoutMs: 420000, requireJson: true }
       }, { timeoutMs: REQUEST_TIMEOUT_MS, signal });
@@ -82,6 +90,34 @@ export function createBridgeTextModel({ env = process.env, postImpl = postJsonOv
       return content;
     }
   };
+}
+
+// Провайдера валидирует сам мост, но произвольная строка из UI не должна
+// попадать в тело запроса: пускаем только короткий kebab-case идентификатор.
+function resolveBridgeModel(env, explicitModel) {
+  const fromEnv = typeof env.HERMEST_BRIDGE_MODEL === "string" ? env.HERMEST_BRIDGE_MODEL.trim() : "";
+  const requested = typeof explicitModel === "string" && explicitModel.trim()
+    ? explicitModel.trim()
+    : fromEnv || "chatgpt";
+  const normalized = requested.toLowerCase();
+  if (!BRIDGE_MODEL_PATTERN.test(normalized)) {
+    throw new RangeError("invalid bridge model");
+  }
+  return normalized;
+}
+
+async function readHealthProviders(response) {
+  const declaredBytes = Number(response.headers?.get?.("content-length"));
+  if (Number.isFinite(declaredBytes) && declaredBytes > MAX_HEALTH_BYTES) return [];
+  try {
+    const body = await response.text();
+    if (Buffer.byteLength(body, "utf8") > MAX_HEALTH_BYTES) return [];
+    const providers = JSON.parse(body)?.providers;
+    if (!Array.isArray(providers) || providers.some(item => typeof item !== "string")) return [];
+    return providers;
+  } catch {
+    return [];
+  }
 }
 
 function postJsonOverHttp(url, payload, { timeoutMs, signal }) {

@@ -131,6 +131,42 @@ test("local media HTTP boundary rejects oversized JSON bodies", async t => {
   assert.equal(response.status, 413);
 });
 
+test("local media HTTP boundary forwards the chosen bridge model and reports bridge state", async t => {
+  const submitted = [];
+  const draftManager = {
+    submit(params) {
+      submitted.push(params);
+      return { id: "draft_test", status: "queued", board: null, warnings: [], error: null };
+    },
+    get: () => null,
+    cancel: () => false
+  };
+  const manager = createLocalMediaJobManager({ executeRender: async () => ({}) });
+  const server = createServer(createLocalMediaRequestHandler({ manager, draftManager }));
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const origin = `http://127.0.0.1:${address.port}`;
+  t.after(() => new Promise(resolve => server.close(resolve)));
+
+  const drafted = await fetch(`${origin}/api/local-media/draft`, {
+    method: "POST",
+    headers: { origin, "content-type": "application/json", "x-hermest-local-media": "1" },
+    body: JSON.stringify({ topic: "Тема", model: "deepseek", research: false })
+  });
+  assert.equal(drafted.status, 202);
+  assert.equal(submitted[0].model, "deepseek");
+  assert.equal(submitted[0].research, false);
+
+  // Роут read-only: без mutation-header он обязан отвечать, а не падать в 403.
+  const bridge = await fetch(`${origin}/api/local-media/bridge`, { headers: { origin } });
+  assert.equal(bridge.status, 200);
+  const bridgeBody = await bridge.json();
+  assert.equal(bridgeBody.ok, true);
+  assert.equal(typeof bridgeBody.available, "boolean");
+  assert.ok(Array.isArray(bridgeBody.providers));
+  assert.ok(bridgeBody.reason === null || typeof bridgeBody.reason === "string");
+});
+
 test("local media HTTP boundary manages BYOK provider keys without leaking values", async t => {
   const workerEnv = { HERMEST_PEXELS_API_KEY: "environment-key-123" };
   const manager = createLocalMediaJobManager({ executeRender: async () => ({}) });

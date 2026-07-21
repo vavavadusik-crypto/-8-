@@ -72,6 +72,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     const wizardSceneCountInput = document.getElementById("wizardSceneCount");
     const wizardResearchInput = document.getElementById("wizardResearch");
     const wizardDraftButton = document.getElementById("wizardDraft");
+    const wizardModelSelect = document.getElementById("wizardModel");
     const wizardStatus = document.getElementById("wizardStatus");
     const narrationLanguageSelect = document.getElementById("narrationLanguage");
     const narrationVoiceSelect = document.getElementById("narrationVoice");
@@ -963,6 +964,33 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     renderLocalVideoButton.addEventListener("click", renderLocalVideo);
     cancelLocalRenderButton.addEventListener("click", cancelLocalRender);
     wizardDraftButton.addEventListener("click", draftFromTopic);
+    void loadBridgeModels();
+
+    // Заполняет селект моделей живым списком провайдеров моста; deepseek — дефолт
+    // (сейчас самый надёжный для JSON-драфта), см. docs/EXECUTION_STATE грабли.
+    async function loadBridgeModels() {
+      const labels = {
+        deepseek: "DeepSeek (бесплатно)",
+        chatgpt: "ChatGPT (бесплатно)",
+        gemini: "Gemini (бесплатно)",
+        perplexity: "Perplexity (бесплатно)"
+      };
+      try {
+        const data = await fetchJson("/api/local-media/bridge");
+        const providers = Array.isArray(data.providers) ? data.providers : [];
+        if (!data.available || providers.length === 0) {
+          wizardModelSelect.replaceChildren(new Option("Мост недоступен — запусти browser-ai-bridge", ""));
+          wizardModelSelect.disabled = true;
+          return;
+        }
+        wizardModelSelect.replaceChildren(...providers.map(id => new Option(labels[id] || id, id)));
+        wizardModelSelect.disabled = false;
+        wizardModelSelect.value = providers.includes("deepseek") ? "deepseek" : providers[0];
+      } catch {
+        wizardModelSelect.replaceChildren(new Option("Мост недоступен", ""));
+        wizardModelSelect.disabled = true;
+      }
+    }
 
     async function draftFromTopic() {
       const topic = wizardTopicInput.value.trim();
@@ -983,6 +1011,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
             topic,
             sceneCount,
             research: wizardResearchInput.checked,
+            model: wizardModelSelect.value || undefined,
             language: state.brief?.language || "ru",
             voice: state.brief?.voice || "",
             narrationProvider: state.brief?.narrationProvider || ""

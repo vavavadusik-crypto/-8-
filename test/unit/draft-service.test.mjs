@@ -140,6 +140,21 @@ test("draft service rejects an empty topic before touching any provider", async 
   assert.equal(research.calls, 0);
 });
 
+// Валидация модели живёт в createBridgeTextModel; здесь проверяем только то,
+// что выбранный в UI провайдер вообще доезжает до фабрики модели.
+test("draft service passes the selected bridge model down to the text model factory", async () => {
+  await assert.rejects(
+    draftBoardService({
+      topic: "Выбор провайдера",
+      sceneCount: 2,
+      research: false,
+      model: "../evil",
+      availabilityCheck: executableBridge()
+    }),
+    /invalid bridge model/
+  );
+});
+
 test("draft service clamps the scene count into the renderable range", async () => {
   const textModel = mockTextModel();
 

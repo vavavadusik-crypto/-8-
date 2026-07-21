@@ -3,6 +3,7 @@ import { stat, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { renderProject } from "../media/render-project.js";
+import { describeBridgeAvailability } from "../media/text-model.js";
 import { createDraftJobManager } from "./draft-job-manager.js";
 import { draftBoardService } from "./draft-service.js";
 import { createLocalMediaJobManager } from "./job-manager.js";
@@ -111,6 +112,19 @@ async function routeRequest(request, response, manager, draftManager, maxBodyByt
     return;
   }
 
+  // Состояние моста читаемо без mutation-header: UI показывает список
+  // браузерных провайдеров ещё до первого драфта.
+  if (request.method === "GET" && pathname === `${API_PREFIX}/bridge`) {
+    const availability = await describeBridgeAvailability();
+    sendJson(response, 200, {
+      ok: true,
+      available: availability.status === "executable",
+      providers: Array.isArray(availability.providers) ? availability.providers : [],
+      reason: availability.reason || null
+    });
+    return;
+  }
+
   const providerMatch = pathname.match(new RegExp(`^${API_PREFIX}/providers/([a-z0-9-]+)/key$`));
   if (providerMatch && request.method === "POST") {
     requireMutationRequest(request);
@@ -145,7 +159,8 @@ async function routeRequest(request, response, manager, draftManager, maxBodyByt
       sceneCount: body.sceneCount,
       voice: body.voice,
       narrationProvider: body.narrationProvider,
-      research: body.research !== false
+      research: body.research !== false,
+      model: body.model
     });
     sendJson(response, 202, { ok: true, job });
     return;

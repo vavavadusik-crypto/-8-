@@ -18,6 +18,7 @@ export async function draftBoardService({
   voice = "",
   narrationProvider = "",
   research = true,
+  model,
   signal,
   textModel,
   researchSearch = null,
@@ -54,7 +55,7 @@ export async function draftBoardService({
     sceneCount: scenes,
     voice,
     narrationProvider,
-    textModel: textModel || createBridgeTextModel(),
+    textModel: textModel || createBridgeTextModel({ model }),
     sources,
     signal
   });
