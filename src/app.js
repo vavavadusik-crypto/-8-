@@ -973,9 +973,10 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       }
       const sceneCount = Math.min(Math.max(Number(wizardSceneCountInput.value) || 6, 2), 12);
       wizardDraftButton.disabled = true;
-      wizardStatus.textContent = "Браузерная ИИ-модель исследует тему и пишет карточки… (может занять минуту)";
+      wizardStatus.textContent = "Ставлю задачу браузерной ИИ-модели… (reasoning-чат думает минутами — не закрывай)";
       try {
-        const data = await fetchJson("/api/local-media/draft", {
+        // Draft асинхронный: reasoning-чат думает минутами, синхронный HTTP рвался в 504.
+        const submitted = await fetchJson("/api/local-media/draft", {
           method: "POST",
           headers: { "content-type": "application/json", "x-hermest-local-media": "1" },
           body: JSON.stringify({
@@ -987,10 +988,14 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
             narrationProvider: state.brief?.narrationProvider || ""
           })
         });
-        applyProjectDocument(data.board);
+        const job = await pollDraftJob(submitted.job.id);
+        if (job.status !== "completed" || !job.board) {
+          throw new Error(job.error || `черновик не собран (${job.status})`);
+        }
+        applyProjectDocument(job.board);
         render();
         saveState("Черновик собран из темы");
-        const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean) : [];
+        const warnings = Array.isArray(job.warnings) ? job.warnings.filter(Boolean) : [];
         wizardStatus.textContent = [
           `Готово: ${state.cards.length} карточек на доске.`,
           warnings.length ? `Предупреждения: ${warnings.join("; ")}` : ""
@@ -1004,6 +1009,16 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       } finally {
         wizardDraftButton.disabled = false;
       }
+    }
+
+    async function pollDraftJob(jobId) {
+      const deadline = Date.now() + 8 * 60 * 1000;
+      while (Date.now() < deadline) {
+        const data = await fetchJson(`/api/local-media/draft/${encodeURIComponent(jobId)}`);
+        if (["completed", "failed", "cancelled"].includes(data.job.status)) return data.job;
+        await wait(1500);
+      }
+      throw new Error("draft_poll_timeout");
     }
 
     const byokProviders = document.getElementById("byokProviders");

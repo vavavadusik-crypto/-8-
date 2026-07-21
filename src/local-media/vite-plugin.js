@@ -3,6 +3,7 @@ import { stat, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { renderProject } from "../media/render-project.js";
+import { createDraftJobManager } from "./draft-job-manager.js";
 import { draftBoardService } from "./draft-service.js";
 import { createLocalMediaJobManager } from "./job-manager.js";
 import { createProviderKeyStore } from "./provider-keys.js";
@@ -11,7 +12,13 @@ const DEFAULT_MAX_BODY_BYTES = 2 * 1024 * 1024;
 const MUTATION_HEADER = "x-hermest-local-media";
 const API_PREFIX = "/api/local-media";
 
-export function createLocalMediaVitePlugin({ manager, maxBodyBytes, persistVerifiedCandidate = null, providerKeys } = {}) {
+export function createLocalMediaVitePlugin({
+  manager,
+  draftManager,
+  maxBodyBytes,
+  persistVerifiedCandidate = null,
+  providerKeys
+} = {}) {
   const activeManager = manager || createLocalMediaJobManager({
     executeRender: ({ project, platform, signal }) => renderProject({
       project,
@@ -22,8 +29,12 @@ export function createLocalMediaVitePlugin({ manager, maxBodyBytes, persistVerif
     persistVerifiedCandidate,
     cleanupRender: ({ outputDir }) => rm(outputDir, { recursive: true, force: true })
   });
+  const activeDraftManager = draftManager || createDraftJobManager({
+    runDraft: params => draftBoardService(params)
+  });
   const handler = createLocalMediaRequestHandler({
     manager: activeManager,
+    draftManager: activeDraftManager,
     maxBodyBytes,
     providerKeys: providerKeys || createProviderKeyStore()
   });
@@ -40,18 +51,22 @@ export function createLocalMediaVitePlugin({ manager, maxBodyBytes, persistVerif
 
 export function createLocalMediaRequestHandler({
   manager,
+  draftManager = createDraftJobManager({ runDraft: params => draftBoardService(params) }),
   maxBodyBytes = DEFAULT_MAX_BODY_BYTES,
   providerKeys = createProviderKeyStore()
 } = {}) {
   if (!manager || typeof manager.submit !== "function") {
     throw new TypeError("A local media job manager is required");
   }
+  if (!draftManager || typeof draftManager.submit !== "function") {
+    throw new TypeError("A draft job manager is required");
+  }
   if (!Number.isSafeInteger(maxBodyBytes) || maxBodyBytes < 64 || maxBodyBytes > DEFAULT_MAX_BODY_BYTES) {
     throw new RangeError(`maxBodyBytes must be within 64..${DEFAULT_MAX_BODY_BYTES}`);
   }
 
   return function localMediaHandler(request, response, next) {
-    void routeRequest(request, response, manager, maxBodyBytes, providerKeys, next).catch(error => {
+    void routeRequest(request, response, manager, draftManager, maxBodyBytes, providerKeys, next).catch(error => {
       if (response.headersSent) {
         response.destroy(error);
         return;
@@ -65,7 +80,7 @@ export function createLocalMediaRequestHandler({
   };
 }
 
-async function routeRequest(request, response, manager, maxBodyBytes, providerKeys, next) {
+async function routeRequest(request, response, manager, draftManager, maxBodyBytes, providerKeys, next) {
   const host = String(request.headers.host || "");
   if (!isLoopbackHost(host) || !isAllowedOrigin(request.headers.origin, host)) {
     throw new HttpError(403, "local_media_origin_forbidden");
@@ -119,10 +134,12 @@ async function routeRequest(request, response, manager, maxBodyBytes, providerKe
     return;
   }
 
+  // Драфт идёт через мост, который думает минутами: отдаём job и опрашиваем,
+  // иначе прокси рвёт синхронный запрос по таймауту.
   if (request.method === "POST" && pathname === `${API_PREFIX}/draft`) {
     requireMutationRequest(request);
     const body = await readJsonBody(request, maxBodyBytes);
-    const result = await draftBoardService({
+    const job = draftManager.submit({
       topic: body.topic,
       language: body.language,
       sceneCount: body.sceneCount,
@@ -130,7 +147,21 @@ async function routeRequest(request, response, manager, maxBodyBytes, providerKe
       narrationProvider: body.narrationProvider,
       research: body.research !== false
     });
-    sendJson(response, 200, { ok: true, board: result.board, warnings: result.warnings });
+    sendJson(response, 202, { ok: true, job });
+    return;
+  }
+
+  const draftJobMatch = pathname.match(new RegExp(`^${API_PREFIX}/draft/(draft_[A-Za-z0-9-]+)$`));
+  if (draftJobMatch && request.method === "GET") {
+    const job = draftManager.get(draftJobMatch[1]);
+    if (!job) throw new HttpError(404, "draft_job_not_found");
+    sendJson(response, 200, { ok: true, job });
+    return;
+  }
+  if (draftJobMatch && request.method === "DELETE") {
+    requireMutationRequest(request);
+    if (!draftManager.cancel(draftJobMatch[1])) throw new HttpError(409, "draft_job_not_cancellable");
+    sendJson(response, 202, { ok: true, job: draftManager.get(draftJobMatch[1]) });
     return;
   }
 
