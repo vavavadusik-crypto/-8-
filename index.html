@@ -751,6 +751,25 @@
         <div class="panel-row wide">
           <button id="recordVideo" title="Записать WebM через выбор окна Chrome">Записать WebM</button>
         </div>
+        <div class="panel-section topic-wizard-panel">
+          <h2>Тема → видео</h2>
+          <div class="mini-note">Браузерная ИИ-модель (через локальный мост, без API-ключа) исследует тему и собирает карточки прямо на доску. Дальше — обычный рендер.</div>
+          <div class="field">
+            <label><span>Тема ролика</span></label>
+            <input id="wizardTopic" type="text" maxlength="300" placeholder="Например: Квантовые компьютеры простыми словами" autocomplete="off">
+          </div>
+          <div class="panel-row two">
+            <div class="field">
+              <label><span>Сцен</span></label>
+              <input id="wizardSceneCount" type="number" min="2" max="12" value="6">
+            </div>
+            <label class="check-item"><input id="wizardResearch" type="checkbox" checked> Искать источники</label>
+          </div>
+          <div class="panel-row wide">
+            <button id="wizardDraft" title="Собрать карточки из темы браузерной ИИ-моделью">Собрать из темы</button>
+          </div>
+          <div class="auth-status" id="wizardStatus">Готово. Введи тему и нажми «Собрать из темы».</div>
+        </div>
         <div class="panel-section local-render-panel">
           <h2>Настоящий локальный MP4</h2>
           <div class="mini-note">Работает только через локальный `npm run dev`: Board ставит job в приватный FFmpeg worker, проверяет MP4/WAV и возвращает manifest. Публикация не выполняется.</div>

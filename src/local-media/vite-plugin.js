@@ -3,6 +3,7 @@ import { stat, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { renderProject } from "../media/render-project.js";
+import { draftBoardService } from "./draft-service.js";
 import { createLocalMediaJobManager } from "./job-manager.js";
 import { createProviderKeyStore } from "./provider-keys.js";
 
@@ -115,6 +116,21 @@ async function routeRequest(request, response, manager, maxBodyBytes, providerKe
     const body = await readJsonBody(request, maxBodyBytes);
     const job = manager.submit({ project: body.project, projectId: body.projectId, platform: body.platform });
     sendJson(response, 202, { ok: true, job: decorateJob(job) });
+    return;
+  }
+
+  if (request.method === "POST" && pathname === `${API_PREFIX}/draft`) {
+    requireMutationRequest(request);
+    const body = await readJsonBody(request, maxBodyBytes);
+    const result = await draftBoardService({
+      topic: body.topic,
+      language: body.language,
+      sceneCount: body.sceneCount,
+      voice: body.voice,
+      narrationProvider: body.narrationProvider,
+      research: body.research !== false
+    });
+    sendJson(response, 200, { ok: true, board: result.board, warnings: result.warnings });
     return;
   }
 

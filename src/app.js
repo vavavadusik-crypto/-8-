@@ -68,6 +68,11 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     const localRenderArtifacts = document.getElementById("localRenderArtifacts");
     const renderLocalVideoButton = document.getElementById("renderLocalVideo");
     const cancelLocalRenderButton = document.getElementById("cancelLocalRender");
+    const wizardTopicInput = document.getElementById("wizardTopic");
+    const wizardSceneCountInput = document.getElementById("wizardSceneCount");
+    const wizardResearchInput = document.getElementById("wizardResearch");
+    const wizardDraftButton = document.getElementById("wizardDraft");
+    const wizardStatus = document.getElementById("wizardStatus");
     const narrationLanguageSelect = document.getElementById("narrationLanguage");
     const narrationVoiceSelect = document.getElementById("narrationVoice");
     const narrationProviderSelect = document.getElementById("narrationProvider");
@@ -957,6 +962,49 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     document.getElementById("recordVideo").addEventListener("click", recordVideo);
     renderLocalVideoButton.addEventListener("click", renderLocalVideo);
     cancelLocalRenderButton.addEventListener("click", cancelLocalRender);
+    wizardDraftButton.addEventListener("click", draftFromTopic);
+
+    async function draftFromTopic() {
+      const topic = wizardTopicInput.value.trim();
+      if (!topic) {
+        wizardStatus.textContent = "Сначала введи тему ролика.";
+        wizardTopicInput.focus();
+        return;
+      }
+      const sceneCount = Math.min(Math.max(Number(wizardSceneCountInput.value) || 6, 2), 12);
+      wizardDraftButton.disabled = true;
+      wizardStatus.textContent = "Браузерная ИИ-модель исследует тему и пишет карточки… (может занять минуту)";
+      try {
+        const data = await fetchJson("/api/local-media/draft", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-hermest-local-media": "1" },
+          body: JSON.stringify({
+            topic,
+            sceneCount,
+            research: wizardResearchInput.checked,
+            language: state.brief?.language || "ru",
+            voice: state.brief?.voice || "",
+            narrationProvider: state.brief?.narrationProvider || ""
+          })
+        });
+        applyProjectDocument(data.board);
+        render();
+        saveState("Черновик собран из темы");
+        const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean) : [];
+        wizardStatus.textContent = [
+          `Готово: ${state.cards.length} карточек на доске.`,
+          warnings.length ? `Предупреждения: ${warnings.join("; ")}` : ""
+        ].filter(Boolean).join(" ");
+      } catch (error) {
+        wizardStatus.textContent = [
+          "Не удалось собрать черновик.",
+          `Ошибка: ${error.message || "unknown"}`,
+          "Проверь, что мост browser-ai-bridge запущен (:8788) и провайдер залогинен."
+        ].join(" ");
+      } finally {
+        wizardDraftButton.disabled = false;
+      }
+    }
 
     const byokProviders = document.getElementById("byokProviders");
 

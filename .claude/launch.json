@@ -5,7 +5,10 @@
       "name": "hermest-board-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 5173
+      "port": 5173,
+      "env": {
+        "HERMEST_BRIDGE_MODEL": "deepseek"
+      }
     }
   ]
 }
