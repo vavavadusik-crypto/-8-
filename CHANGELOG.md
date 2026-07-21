@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+- Added a "topic → video" wizard with async submit/poll orchestration.
+- Added a browser-bridge director across four providers plus any OpenAI-compatible API (presets or custom URL, including free local Ollama).
+- Added free opt-in Pollinations background generation with a FAL/Pexels fallback cascade.
+- Added multilingual narration via Piper and ElevenLabs.
+- Added premium animation, Ken Burns motion, b-roll and background music.
+- Switched the service worker to a network-first strategy.
+- Hardened the Docker image with reproducible `npm ci` and a `.dockerignore`.
+- Added a SHA-256 release manifest and `RELEASE_STATUS` reporting.
+- Refreshed the README for shipped features and pinned `engines.node`.
+
 ## Unreleased — R1 local media tracer
 
 - Locked Hermest Board's product North Star around the full topic-to-video-to-publishing conveyor.
