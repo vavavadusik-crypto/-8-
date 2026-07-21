@@ -1,113 +1,173 @@
 # Hermest Board
 
-AI-конвейер контента: исследование и карточки → сценарий/раскадровка → озвучка → настоящее видео → варианты платформ → approval/publishing.
+AI-студия контента: **тема → исследование → карточки-источники → сценарий/раскадровка →
+живая озвучка → настоящий MP4 (16:9 + 9:16) → пакет для публикации**. Локальная доска
+остаётся творческим control plane; media-worker детерминированно собирает реальные видео
+через FFmpeg, а браузерные и BYOK ИИ-модели пишут сценарий и рисуют визуалы.
 
-Локальный browser board остаётся творческим control plane; R1 media worker уже умеет детерминированно собирать реальные MP4 через FFmpeg.
+Один проект = одна доска. Данные живут в браузере (`localStorage`); экспорт/импорт — JSON.
 
-Открытие:
+---
 
-```bash
-xdg-open /home/architect/ai-dev-station/workspace/hermest-board/index.html
-```
+## Быстрый старт
 
-Локальный dev-сервер:
+Нужен **Node.js 20.11+** (проверено на 22) и `ffmpeg`/`ffprobe` в системе (для рендера видео).
 
 ```bash
 npm install
-npm run dev
+npm run dev          # локальный dev-сервер + media-worker на 127.0.0.1:5173
 ```
 
-Проверка перед checkpoint/deploy (включает реальный FFmpeg render integration):
+Открой напечатанный адрес в браузере. Именно `npm run dev` (а не открытие `index.html`
+файлом) поднимает локальный worker, без которого не работают рендер видео и wizard
+«тема → видео».
+
+Полная проверка перед коммитом/деплоем (включает реальный FFmpeg-рендер):
 
 ```bash
-npm run check
+npm run check        # validate · unit · smoke:api · media (2 реальных MP4) · build · render smoke
 ```
 
-Локальная сборка настоящего видео из board JSON:
+---
+
+## Что умеет
+
+### Доска
+Перетаскивание/поворот/масштаб карточек, связи между узлами, фото на карточку, редактирование
+текста на месте, план и roadmap проекта, авто-тур с озвучкой, автосохранение и экспорт/импорт JSON.
+
+### Wizard «тема → видео»
+Панель **«Тема → видео»**: вводишь тему → ИИ-модель исследует источники и раскладывает карточки
+прямо на доску. Драфт **асинхронный** (ставится в очередь и опрашивается — долгие reasoning-чаты
+не вешают интерфейс), с отменой. Модель выбирается в панели:
+
+- **браузерный мост** (без API-ключа) — ChatGPT / Gemini / DeepSeek / Perplexity через локальный
+  `browser-ai-bridge`, где «ключом» служит залогиненная вкладка Chrome;
+- **любой OpenAI-совместимый API** — пресеты OpenRouter / Groq / Together / DeepSeek / Mistral /
+  Hugging Face / OpenAI / **Ollama (локально, бесплатно)** или свой URL + ключ.
+
+### Озвучка (мультиязычная)
+Провайдер-нейтральный TTS-порт: **Piper** (локально, бесплатно, RU/EN/ES/DE/FR) и **ElevenLabs**
+(BYOK, 29+ языков). Язык — параметр проекта, не хардкод. Тайминг сцен и SRT считаются от реально
+измеренной длительности озвучки; громкость нормализуется (loudnorm, замер в manifest).
+
+### Визуалы
+- **Бесплатная генерация фонов** через Pollinations (без ключа) — включается тумблером
+  «Генерировать фоны» в панели рендера;
+- **FAL** (BYOK) — премиум-качество, если задан ключ;
+- **Pexels** — стоковые фото/видео (BYOK);
+- каскад honest fail-open: FAL → Pollinations → Pexels, каждый источник уступает следующему с
+  предупреждением в manifest. Без ключей и без тумблера рендер детерминирован и офлайн.
+- Премиум-композиция: брендированные motion-кадры (собираются на глазах — каскад появления,
+  прорисовка связей схемы), Ken Burns-дрейф статичных фонов, b-roll под прозрачным оверлеем,
+  музыкальная подложка с auto-ducking под голос.
+
+### Рендер
+Детерминированный FFmpeg → H.264/AAC MP4 (1920×1080 и 1080×1920), SRT, обложки, `storyboard.json`,
+manifest с хешами/провенансом и SHA-256 sidecar. Каждый рендер идёт в приватный каталог под
+физическим `/tmp`. Worker намеренно отсутствует на публичном Vercel и ничего не публикует.
+
+### BYOK и настройки
+Кнопка настроек: ключи провайдеров (ElevenLabs / FAL / Pexels) живут только в памяти локального
+worker (в `process.env` процесса) — не попадают в проект, `localStorage` или manifest. Отдельный
+BYOK AI-ассистент (OpenAI-совместимые провайдеры) для запросов по текущему борду.
+
+---
+
+## Как работают запросы к ИИ
+
+| Путь | Ключ | Где выполняется |
+|---|---|---|
+| Браузерный мост (wizard) | не нужен (залогиненная вкладка) | локальный `browser-ai-bridge` :8788 |
+| OpenAI-совместимый API (wizard) | свой или бесплатный (Ollama) | локальный worker → провайдер |
+| BYOK AI-ассистент | свой | `/api/ai` (Vercel serverless) → провайдер |
+
+Сбой одного провайдера не рушит приложение: каскад визуалов уступает следующему источнику,
+драфт возвращает статус `failed` с понятным сообщением, ошибки провайдеров не раскрывают ключи.
+
+### Локальный мост (опционально, для wizard без ключей)
+```bash
+cd ../browser-ai-bridge
+node scripts/login.mjs chatgpt   # войти в открывшемся Chrome (один раз на провайдера)
+node src/bridge-server.mjs       # мост на 127.0.0.1:8788
+```
+Модель по умолчанию для драфта задаётся `HERMEST_BRIDGE_MODEL` (напр. `deepseek`).
+
+---
+
+## Конфигурация (переменные окружения worker/сервера)
+
+Все — опциональны; без них работает бесплатный путь (Piper-голос, Pollinations-фоны, мост/Ollama).
+
+| Переменная | Назначение |
+|---|---|
+| `HERMEST_ELEVENLABS_API_KEY` | премиум-голос ElevenLabs (BYOK) |
+| `HERMEST_FAL_API_KEY` | премиум-генерация изображений FAL (BYOK) |
+| `HERMEST_PEXELS_API_KEY` | стоковые фото/видео Pexels (BYOK) |
+| `HERMEST_BRIDGE_URL` / `HERMEST_BRIDGE_MODEL` | адрес и модель браузерного моста |
+| `HERMEST_PIPER_PATH` / `HERMEST_PIPER_VOICES_DIR` | путь к бинарю и голосам Piper |
+| `HERMEST_CHROME_PATH` | Chrome для сборки motion-кадров сцен |
+| `HERMEST_ACCOUNT_AUTH` / `HERMEST_SESSION_SECRET` | включают account-auth роуты (по умолчанию выкл.) |
+
+Секреты — только в окружении/секрет-хранилище, никогда в коде, логах или коммитах.
+
+---
+
+## Состояние и восстановление
+
+Состояние доски (карточки, план, roadmap, brief, настройки) автосохраняется в `localStorage`
+браузера и восстанавливается при перезагрузке. Перенос между устройствами/браузерами — кнопкой
+экспорта JSON и импортом. Service worker — network-first: обновления UI доходят на все устройства
+(агрессивно кэшируются только хэшированные `/assets/`).
+
+---
+
+## Тесты и качество
 
 ```bash
-npm run render:project -- \
-  --input test/fixtures/minimal-board.json \
-  --platform youtube_video
-
-npm run render:project -- \
-  --input test/fixtures/minimal-board.json \
-  --platform youtube_shorts
+npm run test:unit    # быстрые unit-тесты
+npm run test:media   # интеграция: 2 реальных FFmpeg-рендера + детерминизм
+npm run check        # полный гейт (перед коммитом/релизом)
 ```
 
-Каждый CLI-запуск создаёт приватный уникальный каталог под физическим системным `/tmp` и возвращает MP4 H.264/AAC, `narration.wav`, SRT, `storyboard.json`, детерминированный manifest и SHA-256 sidecar. `--output` принимается только для уже существующего физического каталога внутри `/tmp`; repository `tmp` и symlink roots намеренно не считаются доверенными. Встроенный Flite — только no-key/offline smoke voice; для качественной русской озвучки нужен следующий provider adapter.
+Инварианты: детерминизм (одинаковый вход → одинаковый manifest/хеши; генерация фиксируется
+провенансом), fail-closed на отсутствие QC/прав, секреты только в окружении.
 
-При `npm run dev` тот же renderer доступен прямо в панели «План / Roadmap / Видео»: выбери platform recipe и нажми «Создать настоящий MP4». Board отправляет текущий snapshot loopback-only worker, показывает queue/running/completed и даёт ссылки на MP4/WAV/SRT/storyboard/manifest. Кнопка отмены передаёт AbortSignal в media subprocess. Этот worker намеренно отсутствует на публичном Vercel и ничего не публикует.
+---
 
-Возможности:
+## Деплой
 
-- перетаскивание карточек;
-- изменение размера карточек;
-- прикрепление фото к каждой карточке;
-- редактирование текста прямо в карточке;
-- поворот карточек;
-- масштаб и панорамирование всей сцены;
-- связи между карточками;
-- удаление карточки прямо с карточки;
-- встроенные тематические визуалы для стартовых карточек;
-- прикрепление плана проекта и roadmap;
-- загрузка плана и roadmap из `.md`, `.txt` или `.json`;
-- сборка сценария из борда, плана и roadmap;
-- preview-озвучка сценария голосом браузера;
-- детерминированная локальная R1-озвучка в WAV через TTS adapter (Flite offline smoke fallback);
-- настоящий FFmpeg render в H.264/AAC MP4 с SRT, storyboard, manifest и SHA-256;
-- реальные 16:9 и 9:16 output recipes; semantic short editing честно остаётся blocker следующего среза;
-- авто-тур по карточкам;
-- legacy browser screen recording WebM для демонстраций, не считающееся media renderer;
-- подготовка publish pack для TikTok, YouTube, YouTube Shorts и Instagram Reels;
-- очередь агента после генерации видео: парсер, переводчик, медиа-поиск, медиа-генерация, проверка прав, публикация и отчёт;
-- экспорт публикационного пакета в JSON;
-- Vercel API skeleton: health, connector status, publish-pack validation;
-- public/free research API: Wikipedia, Wikidata, Wikimedia Commons, Crossref, arXiv, Open Library, GitHub public search, optional OpenAlex;
-- backend storage API contract: projects, assets, jobs, audit log, storage status;
-- guarded Postgres JSONB adapter foundation for future durable storage;
-- signed-session verification and owner-token bootstrap issuer foundation;
-- account-auth foundation with signup/login/logout routes, scrypt password hashing, and httpOnly signed session cookies when explicitly enabled by server env;
-- backend production preflight route for readiness gates and blockers;
-- in-board `1.0 статус` report powered by backend preflight gates/blockers;
-- backend agent plan preview that shows blockers before autopublishing;
-- human approval record endpoint for publish jobs;
-- Settings button inside the board for user-owned OpenAI keys and future local parser/media/translation/workflow keys;
-- API provider catalog with 40+ AI, search, media, speech, social, automation, storage, email, and payment providers;
-- BYOK AI response proxy and AI-answer cards for OpenAI plus OpenAI-compatible providers such as Groq, Mistral, OpenRouter, DeepSeek, and Together AI;
-- per-user OAuth start skeleton for YouTube, TikTok, Instagram;
-- signed OAuth state validation before connector token exchange;
-- encrypted connector token vault with redacted API responses;
-- режим записи;
-- автосохранение в браузере;
-- экспорт и импорт JSON.
+- **Статический фронтенд** — `npm run build` → `dist/`. Docker-образ (`Dockerfile`) отдаёт `dist`
+  через nginx. Образ содержит ТОЛЬКО SPA: media-worker (рендер) и `/api`-функции в него не входят.
+- **`/api`-функции** (health, research, AI-прокси, connector/OAuth skeleton, storage-контракт) —
+  Vercel serverless (см. `docs/DEPLOYMENT.md`).
+- **Media-worker** (рендер видео, wizard-драфт) — только локально через `npm run dev`; намеренно
+  не публичен.
 
-Данные сохраняются в `localStorage` браузера. Для переноса используй кнопку экспорта JSON.
+Подробности и матрица хостингов — `docs/DEPLOYMENT.md`.
 
-Автопубликация требует подключённых аккаунтов, постоянного backend-хранилища и OAuth/API-доступов. Пока коннекторы не подключены, борд готовит структурированный пакет публикации, backend-план агента и очередь действий.
+---
 
-Документы:
+## Документация
 
-- `docs/PRODUCT_NORTH_STAR.md` - каноническое определение продукта и минимальный доказательный релиз;
-- `docs/DELIVERY_MASTER_PLAN.md` - текущий порядок вертикальных релизов и Definition of Done;
-- `docs/CONTENT_PIPELINE_SPEC.md` - pipeline, cards, storyboard, assets и quality gates;
-- `docs/MEDIA_RENDERING_ARCHITECTURE.md` - реальная TTS/FFmpeg/worker граница;
-- `docs/AGENT_ORCHESTRATION.md` - scopes, checkpoints, Claude Code и review policy;
-- `docs/MODEL_ROUTING.md` - role-based модели, fallback, quota и eval policy;
-- `docs/TECHNOLOGY_RADAR.md` - adopt/adapter/study/reject решения по open-source компонентам;
-- `docs/RELEASE_READINESS.md` - текущий доказательный release ledger;
-- `docs/NEXT_AGENT_HANDOFF.md` - точный текущий checkpoint, следующий TDD-срез и recovery-команды;
-- `docs/KIMI_OLLAMA_HANDOFF.md` - запуск Kimi K2.7 Code через Ollama Cloud + OpenCode;
-- `docs/DEPLOYMENT.md` - Vercel, Netlify, Docker, static hosting;
-- `docs/ARCHITECTURE.md` - текущая архитектура и backend boundary;
-- `docs/CONNECTORS.md` - что нужно для TikTok, YouTube, Shorts, Instagram;
-- `docs/PUBLIC_APIS.md` - публичные/free API и правила безопасности;
-- `docs/STORAGE_AND_AGENT_API.md` - проекты, assets, jobs, audit и backend agent plan;
-- `docs/DATABASE_SCHEMA_DRAFT.md` - черновик Postgres-схемы для durable storage;
-- `db/postgres-schema.sql` - SQL-черновик той же схемы;
-- `docs/SECURITY_REVIEW.md` - текущий security baseline и блокеры до production writes/autopublishing;
-- `docs/FABLE_ULTRACODE_MAXIMUM_UPGRADE_MANDATE.md` - professional maximum-upgrade brief for Fable 5 Ultracode;
-- `docs/PRODUCT_READINESS.md` - что готово и что нужно до beta/launch.
-- `SECURITY.md` - политика секретов, OAuth/API-ключей и production safety;
-- `CHANGELOG.md` - история публичных изменений;
-- `LICENSE` - текущий статус лицензии: all rights reserved до отдельного решения владельца.
+Полный релиз-статус — `docs/RELEASE_READINESS.md`; актуальный checkpoint и recovery —
+`docs/EXECUTION_STATE.md` и `docs/NEXT_AGENT_HANDOFF.md`. Прочее:
+
+- `docs/PRODUCT_NORTH_STAR.md` — определение продукта · `docs/ARCHITECTURE.md` — архитектура и
+  backend boundary · `docs/CONTENT_PIPELINE_SPEC.md` — pipeline/cards/storyboard;
+- `docs/MEDIA_RENDERING_ARCHITECTURE.md` — граница TTS/FFmpeg/worker · `docs/CONNECTORS.md` —
+  требования площадок · `docs/PUBLIC_APIS.md` — публичные/free API и правила безопасности;
+- `docs/STORAGE_AND_AGENT_API.md`, `docs/DATABASE_SCHEMA_DRAFT.md`, `db/postgres-schema.sql` —
+  storage-контракт и черновик Postgres · `docs/SECURITY_REVIEW.md`, `SECURITY.md` — безопасность;
+- `CHANGELOG.md` — история изменений · `LICENSE` — all rights reserved до решения владельца.
+
+---
+
+## Что намеренно НЕ включено (честные границы)
+
+- **Автопубликация в соцсети** (OAuth token exchange) — skeleton есть, обмен токенов не реализован:
+  требует durable-хранилища, шифрованных токенов и platform review. Борд готовит пакет публикации и
+  очередь действий; сама публикация — после подключения аккаунтов.
+- **Durable-хранилище/мультитенант-auth** — есть guarded Postgres-фундамент и account-auth роуты
+  (по умолчанию выключены); полноценное SaaS-ядро — отдельный этап.
+- **Semantic shorts** — вертикальный рендер по aspect ratio есть; смысловой перемонтаж — следующий срез.
