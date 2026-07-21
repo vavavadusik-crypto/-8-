@@ -96,6 +96,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     const narrationVoiceSelect = document.getElementById("narrationVoice");
     const narrationProviderSelect = document.getElementById("narrationProvider");
     const musicBedSelect = document.getElementById("musicBed");
+    const generateVisualsToggle = document.getElementById("generateVisualsToggle");
     const narrationHint = document.getElementById("narrationHint");
 
     const NARRATION_LANGUAGES = [
@@ -174,7 +175,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         schemaVersion: CONTENT_VERSION,
         title: "Hermest: оболочка над ИИ-агентами",
         view: { x: -120, y: -120, zoom: 1 },
-        brief: { language: "ru", voice: "", narrationProvider: "", music: "" },
+        brief: { language: "ru", voice: "", narrationProvider: "", music: "", generateVisuals: false },
         plan: [
           "1. Объяснить проблему: один чат быстро превращается в хаос, если в нем смешаны роли, память, инструменты и задачи.",
           "2. Показать Hermest как оболочку: один управляемый слой над агентами, файлами, API, памятью и логами.",
@@ -463,7 +464,10 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         : typeof source.music === "string"
           ? source.music.trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24)
           : (fallback.music === "off" ? "off" : fallback.music || "");
-      return { language, voice, narrationProvider, music };
+      const generateVisuals = typeof source.generateVisuals === "boolean"
+        ? source.generateVisuals
+        : Boolean(fallback.generateVisuals);
+      return { language, voice, narrationProvider, music, generateVisuals };
     }
 
     function normalizeServer(input, fallback) {
@@ -1209,6 +1213,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
           : "Язык вне матрицы Piper — доступно через ElevenLabs (BYOK), нужен свой API-ключ.")
         : "Piper синтезирует локально и бесплатно. Языку соответствует свой каталог голосов.";
       musicBedSelect.value = state.brief.music === "off" ? "off" : "";
+      generateVisualsToggle.checked = state.brief.generateVisuals === true;
     }
 
     narrationLanguageSelect.addEventListener("change", () => {
@@ -1254,6 +1259,13 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       );
       syncNarrationControls();
       saveState("Настройка музыки сохранена");
+    });
+    generateVisualsToggle.addEventListener("change", () => {
+      state.brief = normalizeBrief(
+        { ...state.brief, generateVisuals: generateVisualsToggle.checked },
+        state.brief
+      );
+      saveState(generateVisualsToggle.checked ? "Генерация фонов включена" : "Генерация фонов выключена");
     });
     syncNarrationControls();
     document.getElementById("buildMediaBrief").addEventListener("click", () => {
