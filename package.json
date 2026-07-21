@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
+    "release:manifest": "node scripts/build-release.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "validate": "node scripts/validate.mjs",
     "audit:secrets": "node scripts/audit-secrets-file.mjs",

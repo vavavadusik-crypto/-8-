@@ -1,5 +1,18 @@
 # Hermest Board — Release Readiness Ledger
 
+## Release update (v0.2.0)
+
+Все медиа-пути имеют **бесплатный И BYOK** вариант: текст-директор (любой
+OpenAI-совместимый API — Ollama/OpenRouter/… — или свой ключ), картинки
+(Pollinations без ключа + FAL BYOK), голос (Piper offline + ElevenLabs BYOK),
+музыка (процедурная + свои CC0). Wizard «тема → видео» работает async
+(submit → poll, отмена). Service Worker — network-first (cache-first только для
+`/assets/`). Docker-образ статики собран и проверен (HTTP 200, отдаёт SPA).
+Гейт **272 unit + 5 media (реальный FFmpeg)** зелёный. Полный статус и матрица
+11 критериев — `docs/RELEASE_STATUS.md`. Ledger ниже — история эпох R1–R4.
+
+---
+
 Observed: 2026-07-13
 Status vocabulary: VERIFIED / PARTIAL / MOCKED / MISSING / BLOCKED / TARGET
 

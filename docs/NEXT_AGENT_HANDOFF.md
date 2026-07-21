@@ -1,5 +1,32 @@
 # Hermest Board — next agent handoff
 
+## RELEASE HANDOFF (актуально)
+
+Версия `0.2.0`. Гейт зелёный (272 unit + 5 media реальный FFmpeg + build + smoke).
+Полный статус готовности и матрица 11 критериев — `docs/RELEASE_STATUS.md`.
+Где мы сейчас — `docs/EXECUTION_STATE.md` (читать первым).
+
+```bash
+# установить (нужен ffmpeg в системе)
+npm install
+
+# запустить локально (127.0.0.1)
+npm run dev
+
+# проверить всё (validate · unit · smoke:api · media · build · render smoke)
+npm run check
+
+# собрать релиз + SHA-256 manifest готового билда
+npm run build && npm run release:manifest   # → dist/RELEASE_MANIFEST.sha256
+
+# деплой: Docker отдаёт статику (SPA), Vercel — api/
+docker build -t hermest-board . && docker run --rm -p 8080:80 hermest-board
+```
+
+`dist/` и `dist/RELEASE_MANIFEST.sha256` — в `.gitignore` (артефакт сборки, не коммитим); manifest детерминирован и воспроизводим из идентичного `dist/`. Намеренные границы (OAuth token exchange · durable-хранилище/auth · semantic shorts) — см. `docs/RELEASE_STATUS.md`.
+
+---
+
 Updated: 2026-07-19 (evening, Claude Fable 5 session 5)
 Owner: Вадим. Порядок работ: `docs/MASTER_PLAN_2026-07-19.md`. Где мы: `docs/EXECUTION_STATE.md` (читать ПЕРВЫМ).
 
