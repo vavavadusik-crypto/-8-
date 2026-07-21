@@ -7,6 +7,9 @@ import { readBoundedBytes, readBoundedJson } from "./bounded-body.js";
 const PRIVATE_FILE_MODE = 0o600;
 const FAL_SYNC_URL = "https://fal.run/fal-ai/flux/schnell";
 const FAL_MODEL = "fal-ai/flux/schnell";
+const POLLINATIONS_BASE = "https://image.pollinations.ai/prompt";
+const POLLINATIONS_MODEL = "flux";
+const MAX_POLLINATIONS_PROMPT_CHARS = 800;
 const MAX_RESPONSE_BYTES = 512 * 1024;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_PROMPT_CHARS = 1200;
@@ -17,24 +20,29 @@ const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
 
 export function describeImageSourceAvailability({ env = process.env } = {}) {
+  // Pollinations — бесплатная генерация без ключа, поэтому источник картинок
+  // доступен всегда; платные fal/pexels лишь расширяют список провайдеров.
   const providers = [];
   if (readFalKey(env)) providers.push("fal");
+  providers.push("pollinations");
   if (readPexelsKey(env)) providers.push("pexels-photos");
-  if (providers.length === 0) {
-    return {
-      status: "missing",
-      providers,
-      reason: "no image source key is configured (FAL or Pexels); scenes render without generated visuals"
-    };
-  }
   return { status: "executable", providers };
 }
 
-// Каскад по умолчанию: платная генерация первой (если ключ есть), бесплатный
-// сток следом; каждый источник fail-open к следующему с честным warning.
+// Каскад по умолчанию: платная генерация первой (если ключ есть), бесплатная
+// генерация Pollinations всегда следом как надёжный fallback, сток последним;
+// каждый источник fail-open к следующему с честным warning.
+// Настроен ли платный источник картинок (FAL/Pexels). Бесплатный Pollinations
+// сюда не входит: он всегда доступен, но включается только явным opt-in проекта,
+// чтобы рендеры по умолчанию оставались детерминированными и без сети.
+export function hasKeyedImageProvider(env = process.env) {
+  return Boolean(readFalKey(env) || readPexelsKey(env));
+}
+
 export function createDefaultImageSourceCascade({ env = process.env, fetchImpl = fetch, onWarning } = {}) {
   const adapters = [];
   if (readFalKey(env)) adapters.push(createFalImageAdapter({ env, fetchImpl }));
+  adapters.push(createPollinationsImageAdapter({ fetchImpl }));
   if (readPexelsKey(env)) adapters.push(createPexelsImageAdapter({ env, fetchImpl }));
   return createImageSourceCascade(adapters, { onWarning });
 }
@@ -110,6 +118,63 @@ export function createFalImageAdapter({ env = process.env, fetchImpl = fetch } =
           model: FAL_MODEL,
           promptSha256: createHash("sha256").update(fullPrompt).digest("hex"),
           ...(requestBody.seed !== undefined ? { seed: requestBody.seed } : {})
+        }
+      };
+    }
+  };
+}
+
+// Бесплатная генерация без ключа: главная ценность — доступна всегда, поэтому
+// стоит в каскаде между платным FAL и стоковым Pexels как надёжный fallback.
+export function createPollinationsImageAdapter({ fetchImpl = fetch } = {}) {
+  return {
+    provider: "pollinations",
+    model: POLLINATIONS_MODEL,
+    async generateImage({ prompt, stylePreset, width, height, seed, outputPath, signal }) {
+      const fullPrompt = composePrompt(prompt, stylePreset);
+      const safeWidth = imageDimension(width, "width");
+      const safeHeight = imageDimension(height, "height");
+      const safeOutputPath = assertSafeGeneratedPath(outputPath);
+      // Промпт идёт в путь URL — без encodeURIComponent это инъекция пути.
+      const promptSegment = encodeURIComponent(fullPrompt.slice(0, MAX_POLLINATIONS_PROMPT_CHARS));
+
+      const url = new URL(`${POLLINATIONS_BASE}/${promptSegment}`);
+      url.searchParams.set("width", String(safeWidth));
+      url.searchParams.set("height", String(safeHeight));
+      url.searchParams.set("nologo", "true");
+      url.searchParams.set("model", POLLINATIONS_MODEL);
+      let safeSeed;
+      if (seed !== undefined) {
+        safeSeed = Number(seed);
+        if (!Number.isSafeInteger(safeSeed) || safeSeed < 0) {
+          throw new RangeError("seed must be a non-negative integer");
+        }
+        url.searchParams.set("seed", String(safeSeed));
+      }
+
+      const response = await fetchWithTimeout(fetchImpl, url.href, { signal }, DOWNLOAD_TIMEOUT_MS);
+      if (!response.ok) {
+        throw new RangeError(`Pollinations generation failed with status ${response.status}`);
+      }
+      const imageBytes = await readBoundedBytes(response, MAX_IMAGE_BYTES, "Pollinations image");
+      if (imageBytes.length === 0 || !hasImageMagic(imageBytes)) {
+        throw new RangeError("Pollinations response is not a supported image format");
+      }
+      await writeFile(safeOutputPath, imageBytes, { flag: "wx", mode: PRIVATE_FILE_MODE });
+      await chmod(safeOutputPath, PRIVATE_FILE_MODE);
+      return {
+        path: safeOutputPath,
+        sha256: createHash("sha256").update(imageBytes).digest("hex"),
+        bytes: imageBytes.length,
+        width: safeWidth,
+        height: safeHeight,
+        license: "pollinations-generated",
+        provenance: {
+          source: "generated",
+          provider: "pollinations",
+          model: POLLINATIONS_MODEL,
+          promptSha256: createHash("sha256").update(fullPrompt).digest("hex"),
+          ...(seed !== undefined ? { seed: safeSeed } : {})
         }
       };
     }

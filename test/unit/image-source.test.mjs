@@ -11,6 +11,11 @@ const PNG_BYTES = Buffer.concat([
   Buffer.alloc(64, 7)
 ]);
 
+const JPEG_BYTES = Buffer.concat([
+  Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+  Buffer.alloc(64, 9)
+]);
+
 function jsonResponse(body, { status = 200 } = {}) {
   const bytes = Buffer.from(JSON.stringify(body), "utf8");
   return {
@@ -43,8 +48,10 @@ function adapterWith(responses, env = { HERMEST_FAL_API_KEY: "fal-test-key" }) {
   return { adapter: createFalImageAdapter({ env, fetchImpl }), calls };
 }
 
-test("describeImageSourceAvailability reports missing key honestly", () => {
-  assert.equal(describeImageSourceAvailability({ env: {} }).status, "missing");
+test("describeImageSourceAvailability is executable without keys thanks to Pollinations", () => {
+  const noKeys = describeImageSourceAvailability({ env: {} });
+  assert.equal(noKeys.status, "executable");
+  assert.ok(noKeys.providers.includes("pollinations"));
   assert.equal(
     describeImageSourceAvailability({ env: { HERMEST_FAL_API_KEY: "k" } }).status,
     "executable"
@@ -206,6 +213,68 @@ test("pexels image adapter fails closed without key, photos or safe urls", async
   }
 });
 
+test("pollinations adapter generates a keyless image with encoded prompt and provenance", async () => {
+  const { createPollinationsImageAdapter } = await import("../../src/media/image-source.js");
+  const outputDir = await mkdtemp(path.join(tmpdir(), "pollinations-image-"));
+  try {
+    const outputPath = path.join(outputDir, "scene.png");
+    const calls = [];
+    const fetchImpl = async (url, options = {}) => {
+      calls.push({ url: String(url), options });
+      return binaryResponse(JPEG_BYTES);
+    };
+    const adapter = createPollinationsImageAdapter({ fetchImpl });
+    const image = await adapter.generateImage({
+      prompt: "квантовый компьютер в лаборатории",
+      stylePreset: "cinematic dark tech",
+      width: 1024,
+      height: 576,
+      seed: 7,
+      outputPath
+    });
+    const requested = calls[0].url;
+    assert.ok(requested.startsWith("https://image.pollinations.ai/prompt/"));
+    assert.ok(
+      requested.includes(encodeURIComponent("cinematic dark tech, квантовый компьютер в лаборатории"))
+    );
+    assert.match(requested, /width=1024/);
+    assert.match(requested, /height=576/);
+    assert.match(requested, /seed=7/);
+    assert.match(requested, /model=flux/);
+    assert.match(requested, /nologo=true/);
+    assert.ok(image.bytes > 0);
+    assert.equal(image.provenance.provider, "pollinations");
+    assert.equal(image.provenance.source, "generated");
+    assert.equal(image.provenance.seed, 7);
+    assert.match(image.provenance.promptSha256, /^[0-9a-f]{64}$/);
+    assert.equal(image.license, "pollinations-generated");
+    const written = await readFile(outputPath);
+    assert.equal(written.length, JPEG_BYTES.length);
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("pollinations adapter fails closed on non-2xx and non-image responses", async () => {
+  const { createPollinationsImageAdapter } = await import("../../src/media/image-source.js");
+  const outputDir = await mkdtemp(path.join(tmpdir(), "pollinations-image-"));
+  try {
+    const base = { prompt: "a red apple", width: 512, height: 512, outputPath: path.join(outputDir, "x.png") };
+    const failed = createPollinationsImageAdapter({ fetchImpl: async () => binaryResponse(JPEG_BYTES, { status: 502 }) });
+    await assert.rejects(failed.generateImage(base), /failed with status 502/);
+    const notImage = createPollinationsImageAdapter({
+      fetchImpl: async () => binaryResponse(Buffer.from("this is not an image"))
+    });
+    await assert.rejects(notImage.generateImage(base), /image format/i);
+    const badSeed = createPollinationsImageAdapter({ fetchImpl: async () => binaryResponse(JPEG_BYTES) });
+    await assert.rejects(badSeed.generateImage({ ...base, seed: -1 }), /seed/i);
+    const noPrompt = createPollinationsImageAdapter({ fetchImpl: async () => binaryResponse(JPEG_BYTES) });
+    await assert.rejects(noPrompt.generateImage({ ...base, prompt: "   " }), /prompt/i);
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
 test("image source cascade falls through failing adapters with warnings", async () => {
   const { createImageSourceCascade } = await import("../../src/media/image-source.js");
   const warnings = [];
@@ -226,24 +295,26 @@ test("image source cascade falls through failing adapters with warnings", async 
   await assert.rejects(allFail.generateImage({ prompt: "p", width: 100, height: 100, outputPath: "/tmp/x.png" }), /Exhausted balance/);
 });
 
-test("image source availability accepts any configured provider of the cascade", () => {
-  assert.equal(describeImageSourceAvailability({ env: {} }).status, "missing");
+test("image source availability lists Pollinations always and keyed providers when present", () => {
+  assert.deepEqual(describeImageSourceAvailability({ env: {} }).providers, ["pollinations"]);
   const pexelsOnly = describeImageSourceAvailability({ env: { HERMEST_PEXELS_API_KEY: "p" } });
   assert.equal(pexelsOnly.status, "executable");
-  assert.deepEqual(pexelsOnly.providers, ["pexels-photos"]);
+  assert.deepEqual(pexelsOnly.providers, ["pollinations", "pexels-photos"]);
   const both = describeImageSourceAvailability({
     env: { HERMEST_FAL_API_KEY: "f", HERMEST_PEXELS_API_KEY: "p" }
   });
-  assert.deepEqual(both.providers, ["fal", "pexels-photos"]);
+  assert.deepEqual(both.providers, ["fal", "pollinations", "pexels-photos"]);
 });
 
-test("default image cascade is built from configured providers in paid-first order", async () => {
+test("default image cascade always includes Pollinations between paid FAL and stock Pexels", async () => {
   const { createDefaultImageSourceCascade } = await import("../../src/media/image-source.js");
   const both = createDefaultImageSourceCascade({
     env: { HERMEST_FAL_API_KEY: "f", HERMEST_PEXELS_API_KEY: "p" }
   });
-  assert.equal(both.provider, "fal+pexels-photos");
+  assert.equal(both.provider, "fal+pollinations+pexels-photos");
   const pexelsOnly = createDefaultImageSourceCascade({ env: { HERMEST_PEXELS_API_KEY: "p" } });
-  assert.equal(pexelsOnly.provider, "pexels-photos");
-  assert.throws(() => createDefaultImageSourceCascade({ env: {} }), RangeError);
+  assert.equal(pexelsOnly.provider, "pollinations+pexels-photos");
+  // Без единого ключа каскад всё равно строится — Pollinations бесплатен.
+  const free = createDefaultImageSourceCascade({ env: {} });
+  assert.ok(free.provider.includes("pollinations"));
 });

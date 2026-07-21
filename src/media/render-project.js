@@ -27,7 +27,7 @@ import {
 } from "./ffmpeg-args.js";
 import { composeSceneFrames, describeSceneComposerAvailability } from "./scene-frames.js";
 import { createPexelsBrollAdapter, describeBrollAvailability } from "./broll-source.js";
-import { createDefaultImageSourceCascade, describeImageSourceAvailability } from "./image-source.js";
+import { createDefaultImageSourceCascade, hasKeyedImageProvider } from "./image-source.js";
 import { createCachedImageAdapter } from "./asset-cache.js";
 
 const DEFAULT_STYLE_PRESET = "cinematic dark tech aesthetic, deep blue and teal palette, volumetric light, high detail, no text, no watermark";
@@ -210,9 +210,11 @@ export async function renderProject({
       const scenesWithoutFootage = storyboard.scenes.filter(
         (_scene, sceneIndex) => sceneIndex > 0 && !brollClips[sceneIndex]
       ).length;
-      if (scenesWithoutFootage > 0) {
-        const imageAvailability = describeImageSourceAvailability();
-        if (imageAvailability.status === "executable") {
+      // Генерация фонов — opt-in: явный флаг проекта (бесплатный Pollinations)
+      // ИЛИ настроенный платный ключ. По умолчанию рендер детерминирован и без сети.
+      const generateVisuals = project?.brief?.generateVisuals === true || hasKeyedImageProvider();
+      if (scenesWithoutFootage > 0 && generateVisuals) {
+        {
           const imageAdapter = createCachedImageAdapter({
             adapter: createDefaultImageSourceCascade({
               onWarning: message => footageWarnings.push(message)
@@ -254,8 +256,6 @@ export async function renderProject({
               footageWarnings.push(`background generation failed for scene ${sceneIndex + 1}: ${error.message}`);
             }
           }
-        } else {
-          footageWarnings.push(imageAvailability.reason);
         }
       }
       const musicPreference = typeof project?.brief?.music === "string" ? project.brief.music.trim() : "";
