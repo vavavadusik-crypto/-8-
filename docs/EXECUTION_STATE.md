@@ -5,13 +5,14 @@
 > Протокол непрерывности: `docs/MASTER_PLAN_2026-07-19.md`, раздел 8.6.
 > Обновляется в начале каждой задачи и после каждого коммита. Это часть Definition of Done.
 
-UPDATED: 2026-07-20 (Claude Fable 5, седьмая сессия)
-ACTIVE PHASE: P2+ — премиум-моушн (директива Вадима «оживи существующий дизайн», приоритет над P3)
-ACTIVE TASK: P3.2 ЗАКРЫТА живым E2E (тема → crossref-источники → DeepSeek-директор → 6/6 карточек с цитатами). Следующее: P3.5 wizard UI
+UPDATED: 2026-07-21 (Claude Opus 4.8, восьмая сессия — Fable бережём, механику делает терминальный claude соло)
+ACTIVE PHASE: P3 / UX — браузерные модели удобно в Hermest Board (директива Вадима 2026-07-21)
+ACTIVE TASK: P3.5 wizard «тема → видео» — ЗАКРЫТ КОДОМ (коммит c9ac973). UI-панель «Тема → видео» на доске + серверный роут POST /api/local-media/draft → src/local-media/draft-service.js (мост fail-closed, research fail-open). Бэкенд написал терминальный claude (opus, соло, --disallowed-tools Task), отревьюен мной. Гейт 246/246 unit + 5/5 media + build + smoke; панель рендерится в превью без ошибок. Живой E2E через deepseek — проверялся (см. NOTES).
 STATUS: IN_PROGRESS
-LAST COMMIT: см. git log — research-sources (headless claude второго аккаунта, отревьюено) + research-обогащение директора (sourceRefs только из канона) + устойчивый транспорт: мост requireJson (reasoning-чаты прячут stop-кнопку в паузах мышления — «стабильный» огрызок ≠ финал), /v1 несёт system+options, node:http вместо undici-fetch (рвал ожидание на ~300s). Гейты: board 240/240 + 5/5, bridge 20/20
-NEXT ACTION: P3.5 wizard UI: «тема → видео» одной кнопкой из борда (поле темы → draft через мост → карточки на доску → рендер). ГРАБЛИ ДЛЯ ДРАФТА: рабочая драфт-модель СЕЙЧАС — HERMEST_BRIDGE_MODEL=deepseek (DeepThink думает минутами — таймауты подняты до 420/480s); chatgpt (gpt-5-6-thinking) стабильно ОБРЫВАЕТСЯ на длинных ответах через мост — расследовать отдельно (вероятно SSE-обрыв на нестабильной сети); gemini прячет код-ответ ВНЕ .markdown (нужен селектор код-виджета). Мост: :8788, 4 провайдера, git локальный (remote = решение Вадима)
-UNCOMMITTED: none
+LAST COMMIT: c9ac973 wizard тема→board. До него: research-sources, research-обогащение директора, устойчивый транспорт моста.
+NEXT ACTION: UX-1 — браузерный мост как ВЫБИРАЕМЫЙ AI-провайдер в UI рядом с BYOK-ключами (сейчас модель зашита env HERMEST_BRIDGE_MODEL; вынести выбор chatgpt/gemini/deepseek в панель, показывать /health моста). Затем UX-2 BYOK-маркетплейс коннекторов (ключи+коннекторы генерации медиа), UX-3 оболочка (заставка/меню/Google-регистрация → это P5 SaaS-ядро).
+ГРАБЛИ WIZARD/МОСТ: (1) draft синхронный — reasoning-чаты (deepseek DeepThink, gpt-thinking) думают МИНУТАМИ, HTTP висит; кандидат на async-job как /render. (2) Дефолт модели в text-model.js = "chatgpt" (флаки, обрывается на длинных) — рабочая СЕЙЧАС deepseek; .claude/launch.json ставит HERMEST_BRIDGE_MODEL=deepseek, НО preview-харнесс env НЕ подхватил (для реального npm run dev — выставить env вручную). (3) Мост иногда залипает (провайдер «думает» и держит lock) — лечится рестартом: `pkill -f bridge-server; setsid nohup node src/bridge-server.mjs &`. Мост :8788, 4 провайдера.
+UNCOMMITTED: none (docs — этот коммит)
 NOTES: (а) бесплатный timeline-аудит (deepseek): на fps=30 дрейф кадров 16 сцен ≈1мс — безопасно; НО fps=24-рецепт дал бы ~276мс рассинхрона — при добавлении 24fps-рецепта обязателен guard-тест; (б) бесплатный docs-аудит (nemotron): в docs/RELEASE_READINESS.md накопился дрейф эпохи R1-R2 (строки ~16-18, 55-56, 68 vs 93) — кандидат на чистку бесплатным агентом под присмотром, не приоритет
 BLOCKERS: (1) Вадим слушает ru-fullstack-{aterna,george}.mp4 и выбирает release-голос (Piper отвергнут ранее — сэмплы ТОЛЬКО ElevenLabs); (2) FAL live-smoke: аккаунт fal.ai ЗАБЛОКИРОВАН — «Exhausted balance», пополнить на fal.ai/dashboard/billing (~$5) — сам ключ валиден (аутентификация проходит), код готов и ждёт; (3) прослушивание музыкальной подложки (процедурный ambient — можно докинуть CC0-треки в assets/music)
 
