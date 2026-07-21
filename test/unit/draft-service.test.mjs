@@ -155,6 +155,42 @@ test("draft service passes the selected bridge model down to the text model fact
   );
 });
 
+// Прямой OpenAI-совместимый провайдер не должен зависеть от браузерного моста:
+// проверка моста в этом режиме не выполняется вовсе.
+test("draft service skips the bridge availability check for an openai endpoint", async () => {
+  let availabilityCalls = 0;
+  const textModel = mockTextModel();
+
+  const result = await draftBoardService({
+    topic: "Свой ключ вместо моста",
+    sceneCount: 2,
+    research: false,
+    endpoint: { kind: "openai", baseUrl: "https://x.example/v1", model: "m" },
+    textModel,
+    availabilityCheck: async () => {
+      availabilityCalls += 1;
+      return { status: "missing", reason: "bridge is down" };
+    }
+  });
+
+  assert.equal(availabilityCalls, 0, "openai endpoint must not depend on the browser bridge");
+  assert.ok(result.board.cards.length >= 2);
+  assert.equal(textModel.calls.length, 1);
+});
+
+test("draft service builds the openai text model from the endpoint, not the bridge", async () => {
+  await assert.rejects(
+    draftBoardService({
+      topic: "Небезопасный baseUrl",
+      sceneCount: 2,
+      research: false,
+      endpoint: { kind: "openai", baseUrl: "http://169.254.169.254/v1", model: "m" },
+      availabilityCheck: executableBridge()
+    }),
+    /baseUrl is allowed only for/
+  );
+});
+
 test("draft service clamps the scene count into the renderable range", async () => {
   const textModel = mockTextModel();
 

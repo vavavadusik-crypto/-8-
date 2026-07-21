@@ -766,8 +766,23 @@
             <label class="check-item"><input id="wizardResearch" type="checkbox" checked> Искать источники</label>
           </div>
           <div class="field">
-            <label><span>ИИ-модель (через мост, без ключа)</span></label>
+            <label><span>ИИ-модель</span></label>
             <select id="wizardModel"></select>
+          </div>
+          <div id="wizardByokConfig" class="byok-config" hidden>
+            <div class="field">
+              <label><span>Base URL (OpenAI-совместимый /v1)</span></label>
+              <input id="wizardByokBaseUrl" type="text" autocomplete="off" spellcheck="false" placeholder="https://openrouter.ai/api/v1">
+            </div>
+            <div class="field">
+              <label><span>Модель</span></label>
+              <input id="wizardByokModel" type="text" autocomplete="off" spellcheck="false" placeholder="напр. meta-llama/llama-3.3-70b-instruct">
+            </div>
+            <div class="field">
+              <label><span>API-ключ (пусто для Ollama)</span></label>
+              <input id="wizardByokKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-...">
+            </div>
+            <div class="mini-note">Свой или бесплатный API (Ollama, OpenRouter, Hugging Face…). Ключ уходит на локальный worker только на время запроса и не попадает в проект, localStorage и manifest.</div>
           </div>
           <div class="panel-row wide">
             <button id="wizardDraft" title="Собрать карточки из темы браузерной ИИ-моделью">Собрать из темы</button>

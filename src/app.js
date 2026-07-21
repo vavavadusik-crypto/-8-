@@ -73,7 +73,25 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     const wizardResearchInput = document.getElementById("wizardResearch");
     const wizardDraftButton = document.getElementById("wizardDraft");
     const wizardModelSelect = document.getElementById("wizardModel");
+    const wizardByokConfig = document.getElementById("wizardByokConfig");
+    const wizardByokBaseUrl = document.getElementById("wizardByokBaseUrl");
+    const wizardByokModel = document.getElementById("wizardByokModel");
+    const wizardByokKey = document.getElementById("wizardByokKey");
     const wizardStatus = document.getElementById("wizardStatus");
+
+    // OpenAI-совместимые провайдеры: свой ключ ИЛИ бесплатный. baseUrl совпадает
+    // с OPENAI_COMPATIBLE_PRESETS на сервере; "" = свой URL (пользователь вводит).
+    const WIZARD_BYOK_PRESETS = [
+      { id: "openrouter", label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1" },
+      { id: "groq", label: "Groq", baseUrl: "https://api.groq.com/openai/v1" },
+      { id: "together", label: "Together AI", baseUrl: "https://api.together.xyz/v1" },
+      { id: "deepseek-api", label: "DeepSeek API", baseUrl: "https://api.deepseek.com" },
+      { id: "mistral", label: "Mistral AI", baseUrl: "https://api.mistral.ai/v1" },
+      { id: "huggingface", label: "Hugging Face", baseUrl: "https://router.huggingface.co/v1" },
+      { id: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1" },
+      { id: "ollama", label: "Ollama (локально)", baseUrl: "http://127.0.0.1:11434/v1" },
+      { id: "custom", label: "Свой URL…", baseUrl: "" }
+    ];
     const narrationLanguageSelect = document.getElementById("narrationLanguage");
     const narrationVoiceSelect = document.getElementById("narrationVoice");
     const narrationProviderSelect = document.getElementById("narrationProvider");
@@ -983,14 +1001,39 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
           wizardModelSelect.disabled = true;
           return;
         }
-        wizardModelSelect.replaceChildren(...providers.map(id => new Option(labels[id] || id, id)));
+        const bridgeOptions = providers.map(id => new Option(labels[id] || id, id));
+        wizardModelSelect.replaceChildren(...bridgeOptions, buildByokOptGroup());
         wizardModelSelect.disabled = false;
         wizardModelSelect.value = providers.includes("deepseek") ? "deepseek" : providers[0];
       } catch {
-        wizardModelSelect.replaceChildren(new Option("Мост недоступен", ""));
-        wizardModelSelect.disabled = true;
+        wizardModelSelect.replaceChildren(new Option("Мост недоступен", ""), buildByokOptGroup());
+        wizardModelSelect.disabled = false;
       }
+      syncWizardByokConfig();
     }
+
+    function buildByokOptGroup() {
+      const group = document.createElement("optgroup");
+      group.label = "Свой API (OpenAI-совместимый)";
+      group.append(...WIZARD_BYOK_PRESETS.map(preset => new Option(preset.label, `byok:${preset.id}`)));
+      return group;
+    }
+
+    function selectedByokPreset() {
+      const value = wizardModelSelect.value || "";
+      if (!value.startsWith("byok:")) return null;
+      const id = value.slice("byok:".length);
+      return WIZARD_BYOK_PRESETS.find(preset => preset.id === id) || null;
+    }
+
+    function syncWizardByokConfig() {
+      const preset = selectedByokPreset();
+      wizardByokConfig.hidden = !preset;
+      // Пресет с известным URL подставляет его; "Свой URL…" оставляет поле пользователю.
+      if (preset && preset.id !== "custom") wizardByokBaseUrl.value = preset.baseUrl;
+    }
+
+    wizardModelSelect.addEventListener("change", syncWizardByokConfig);
 
     async function draftFromTopic() {
       const topic = wizardTopicInput.value.trim();
@@ -1000,8 +1043,23 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         return;
       }
       const sceneCount = Math.min(Math.max(Number(wizardSceneCountInput.value) || 6, 2), 12);
+      const byokPreset = selectedByokPreset();
+      let endpoint;
+      let model = wizardModelSelect.value || undefined;
+      if (byokPreset) {
+        const byokModel = wizardByokModel.value.trim();
+        const baseUrl = wizardByokBaseUrl.value.trim();
+        if (!baseUrl || !byokModel) {
+          wizardStatus.textContent = "Укажи Base URL и модель для своего API.";
+          return;
+        }
+        endpoint = { kind: "openai", baseUrl, apiKey: wizardByokKey.value, model: byokModel };
+        model = undefined;
+      }
       wizardDraftButton.disabled = true;
-      wizardStatus.textContent = "Ставлю задачу браузерной ИИ-модели… (reasoning-чат думает минутами — не закрывай)";
+      wizardStatus.textContent = byokPreset
+        ? "Собираю через ваш API…"
+        : "Ставлю задачу браузерной ИИ-модели… (reasoning-чат думает минутами — не закрывай)";
       try {
         // Draft асинхронный: reasoning-чат думает минутами, синхронный HTTP рвался в 504.
         const submitted = await fetchJson("/api/local-media/draft", {
@@ -1011,7 +1069,8 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
             topic,
             sceneCount,
             research: wizardResearchInput.checked,
-            model: wizardModelSelect.value || undefined,
+            model,
+            endpoint,
             language: state.brief?.language || "ru",
             voice: state.brief?.voice || "",
             narrationProvider: state.brief?.narrationProvider || ""

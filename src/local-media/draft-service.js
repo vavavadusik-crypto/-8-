@@ -3,6 +3,7 @@
 // не будет), fail-open по research (источники — усиление, а не условие).
 
 import { draftBoardFromTopic } from "../domain/ai-director.js";
+import { createOpenAiTextModel } from "../media/openai-text-model.js";
 import { searchResearchSources } from "../media/research-sources.js";
 import { createBridgeTextModel, describeBridgeAvailability } from "../media/text-model.js";
 
@@ -19,6 +20,7 @@ export async function draftBoardService({
   narrationProvider = "",
   research = true,
   model,
+  endpoint,
   signal,
   textModel,
   researchSearch = null,
@@ -28,10 +30,14 @@ export async function draftBoardService({
   if (!cleanTopic) throw new TypeError("draft topic is required");
   const scenes = clampSceneCount(sceneCount);
 
-  const availability = await (availabilityCheck || describeBridgeAvailability)();
-  if (availability?.status !== "executable") {
-    const reason = availability?.reason || "text model bridge is not available";
-    throw Object.assign(new Error(reason), { statusCode: 503 });
+  // Прямой OpenAI-совместимый провайдер не зависит от браузерного моста:
+  // проверять мост в этом режиме значит блокировать драфт без причины.
+  if (!isOpenAiEndpoint(endpoint)) {
+    const availability = await (availabilityCheck || describeBridgeAvailability)();
+    if (availability?.status !== "executable") {
+      const reason = availability?.reason || "text model bridge is not available";
+      throw Object.assign(new Error(reason), { statusCode: 503 });
+    }
   }
 
   const warnings = [];
@@ -55,12 +61,27 @@ export async function draftBoardService({
     sceneCount: scenes,
     voice,
     narrationProvider,
-    textModel: textModel || createBridgeTextModel({ model }),
+    textModel: textModel || createDraftTextModel({ endpoint, model }),
     sources,
     signal
   });
 
   return { board, sources, warnings };
+}
+
+function isOpenAiEndpoint(endpoint) {
+  return endpoint?.kind === "openai";
+}
+
+function createDraftTextModel({ endpoint, model }) {
+  if (isOpenAiEndpoint(endpoint)) {
+    return createOpenAiTextModel({
+      baseUrl: endpoint.baseUrl,
+      apiKey: endpoint.apiKey,
+      model: endpoint.model || model
+    });
+  }
+  return createBridgeTextModel({ model });
 }
 
 function clampSceneCount(value) {

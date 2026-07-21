@@ -160,7 +160,8 @@ async function routeRequest(request, response, manager, draftManager, maxBodyByt
       voice: body.voice,
       narrationProvider: body.narrationProvider,
       research: body.research !== false,
-      model: body.model
+      model: body.model,
+      endpoint: sanitizeDraftEndpoint(body.endpoint)
     });
     sendJson(response, 202, { ok: true, job });
     return;
@@ -258,6 +259,21 @@ async function readJsonBody(request, maxBodyBytes) {
   } catch {
     throw new HttpError(400, "invalid_local_media_json");
   }
+}
+
+// Роут только приводит форму: значения baseUrl/apiKey/model валидирует сам
+// адаптер, а ключ дальше живёт исключительно в замыкании джобы.
+function sanitizeDraftEndpoint(raw) {
+  if (!raw || typeof raw !== "object") return undefined;
+  if (raw.kind === "openai") {
+    return {
+      kind: "openai",
+      baseUrl: String(raw.baseUrl || ""),
+      apiKey: String(raw.apiKey || ""),
+      model: String(raw.model || "")
+    };
+  }
+  return { kind: "bridge" };
 }
 
 function decorateJob(job) {
