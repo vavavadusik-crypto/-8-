@@ -1001,14 +1001,15 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         const data = await fetchJson("/api/local-media/bridge");
         const providers = Array.isArray(data.providers) ? data.providers : [];
         if (!data.available || providers.length === 0) {
-          wizardModelSelect.replaceChildren(new Option("Мост недоступен — запусти browser-ai-bridge", ""));
-          wizardModelSelect.disabled = true;
-          return;
+          // Мост не отдаёт провайдеров, но BYOK (свой/бесплатный OpenAI-совместимый ключ) работает и без моста.
+          wizardModelSelect.replaceChildren(new Option("Мост недоступен — выбери свой API ниже", ""), buildByokOptGroup());
+          wizardModelSelect.disabled = false;
+        } else {
+          const bridgeOptions = providers.map(id => new Option(labels[id] || id, id));
+          wizardModelSelect.replaceChildren(...bridgeOptions, buildByokOptGroup());
+          wizardModelSelect.disabled = false;
+          wizardModelSelect.value = providers.includes("deepseek") ? "deepseek" : providers[0];
         }
-        const bridgeOptions = providers.map(id => new Option(labels[id] || id, id));
-        wizardModelSelect.replaceChildren(...bridgeOptions, buildByokOptGroup());
-        wizardModelSelect.disabled = false;
-        wizardModelSelect.value = providers.includes("deepseek") ? "deepseek" : providers[0];
       } catch {
         wizardModelSelect.replaceChildren(new Option("Мост недоступен", ""), buildByokOptGroup());
         wizardModelSelect.disabled = false;
