@@ -3215,8 +3215,16 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       if (topicInput) topicInput.addEventListener("keydown", event => {
         if (event.key === "Enter" && startCta) { event.preventDefault(); startCta.click(); }
       });
+      // Модалка удерживает фокус: Escape закрывает, Tab циклится внутри (a11y).
+      const focusables = [topicInput, startCta, skipCta].filter(Boolean);
       overlay.addEventListener("keydown", event => {
-        if (event.key === "Escape") { event.preventDefault(); dismiss(); }
+        if (event.key === "Escape") { event.preventDefault(); dismiss(); return; }
+        if (event.key === "Tab" && focusables.length) {
+          const first = focusables[0];
+          const last = focusables[focusables.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
       });
     }
 
