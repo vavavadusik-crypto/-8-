@@ -226,9 +226,24 @@ async function routeRequest(request, response, context, next) {
   }
   if (jobMatch && request.method === "DELETE") {
     requireMutationRequest(request);
-    if (!manager.cancel(jobMatch[1])) throw new HttpError(409, "local_media_job_not_cancellable");
-    sendJson(response, 202, { ok: true, job: decorateJob(manager.get(jobMatch[1])) });
-    return;
+    // Контракт отмены (docs/RENDER_CANCEL_MILESTONE_HANDOFF.md): queued/running
+    // и повторная отмена → 202 идемпотентно; терминальные completed/failed →
+    // детерминированный 409; неизвестный id → 404. Состояние job никогда
+    // не превращается в 500.
+    const cancelResult = manager.cancel(jobMatch[1]) || {};
+    switch (cancelResult.outcome) {
+      case "cancelled":
+        sendJson(response, 202, { ok: true, job: decorateJob(cancelResult.job) });
+        return;
+      case "not_cancellable":
+        throw new HttpError(409, "local_media_job_not_cancellable");
+      case "not_found":
+        throw new HttpError(404, "local_media_job_not_found");
+      default:
+        // Менеджер нарушил собственный контракт исходов — честный 500 через
+        // общий error-envelope; fail-closed обработчик не даёт упасть middleware.
+        throw new HttpError(500, "local_media_cancel_failed");
+    }
   }
 
   const artifactMatch = pathname.match(

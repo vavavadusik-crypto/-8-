@@ -82,18 +82,33 @@ export function createLocalMediaJobManager({
     return record ? publicJob(record) : null;
   }
 
+  // Контракт отмены (docs/RENDER_CANCEL_MILESTONE_HANDOFF.md, «Общий API-контракт»):
+  //   queued|running → job СРАЗУ терминально cancelled (промежуточный статус
+  //     вроде "cancelling" наружу не выходит), abort доводится через AbortSignal
+  //     до runMediaTool, который убивает порождённые child-процессы
+  //     (SIGTERM, затем SIGKILL по таймауту);
+  //   cancelled → идемпотентный повтор: тот же исход "cancelled", без ошибки;
+  //   completed|failed → терминальные состояния неизменны: "not_cancellable";
+  //   неизвестный id → "not_found".
+  // Возвращает { outcome: "cancelled"|"not_found"|"not_cancellable", job }.
   function cancel(id) {
     const record = jobs.get(String(id || ""));
-    if (!record || !["queued", "running"].includes(record.status)) return false;
-    if (record.status === "queued") {
-      record.status = "cancelled";
-      record.completedAt = now();
-      record.completion.resolve(publicJob(record));
-      return true;
+    if (!record) return { outcome: "not_found", job: null };
+    if (record.status === "cancelled") return { outcome: "cancelled", job: publicJob(record) };
+    if (record.status === "completed" || record.status === "failed") {
+      return { outcome: "not_cancellable", job: publicJob(record) };
     }
-    record.status = "cancelling";
+    const wasQueued = record.status === "queued";
+    record.status = "cancelled";
+    record.completedAt = now();
     record.controller.abort(new Error("Render job cancelled"));
-    return true;
+    if (wasQueued) {
+      // Исполнитель для queued-job не запускался и уже не запустится (pump
+      // пропускает не-queued записи), поэтому job завершается прямо здесь.
+      record.project = null;
+      record.completion.resolve(publicJob(record));
+    }
+    return { outcome: "cancelled", job: publicJob(record) };
   }
 
   async function waitFor(id) {
@@ -131,24 +146,63 @@ export function createLocalMediaJobManager({
         signal: record.controller.signal,
         jobId: record.id
       });
-      if (record.controller.signal.aborted) throw record.controller.signal.reason;
+      if (isCancelled(record)) {
+        adoptOutputDirForCleanup(record, result);
+        throw cancellationReason(record);
+      }
       requirePassedRenderQc(result);
       applyResult(record, result);
       await persistCandidate(record, result);
+      // Отмена могла прийти во время await persistCandidate: поздний успех
+      // не имеет права превратить cancelled в completed.
+      if (isCancelled(record)) throw cancellationReason(record);
       record.status = "completed";
     } catch (error) {
-      if (record.controller.signal.aborted || record.status === "cancelling") {
+      if (isCancelled(record)) {
         record.status = "cancelled";
+        discardRenderOutput(record);
       } else {
         record.status = "failed";
         record.error = sanitizeErrorMessage(error);
       }
     } finally {
       record.project = null;
-      record.completedAt = now();
+      // completedAt отменённого job фиксируется в момент cancel, а не в момент
+      // фактической смерти исполнителя.
+      if (!record.completedAt) record.completedAt = now();
       active -= 1;
       record.completion.resolve(publicJob(record));
       pump();
+    }
+  }
+
+  function isCancelled(record) {
+    return record.status === "cancelled" || record.controller.signal.aborted;
+  }
+
+  function cancellationReason(record) {
+    return record.controller.signal.reason || new Error("Render job cancelled");
+  }
+
+  // Отменённый job не публикует ничего из позднего результата: артефакты,
+  // кандидат и диагностика отбрасываются; outputDir остаётся ради eviction-cleanup.
+  function discardRenderOutput(record) {
+    record.result = null;
+    record.artifacts = [];
+    record.artifactPaths.clear();
+    record.candidate = null;
+    record.blockers = [];
+    record.warnings = [];
+    record.error = null;
+  }
+
+  // Поздний результат отменённого рендера отброшен, но его приватный каталог
+  // всё же принимается под eviction-cleanup, чтобы не копить мусор в /tmp.
+  function adoptOutputDirForCleanup(record, result) {
+    try {
+      record.outputDir = requirePrivateRunDirectory(result?.outputDir);
+    } catch {
+      // Каталог вне контракта не принимаем — чистить нечего.
     }
   }
 
