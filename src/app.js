@@ -1143,7 +1143,8 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       try {
         await fetchJson(`/api/local-media/draft/${encodeURIComponent(jobId)}`, {
           method: "DELETE",
-          headers: { "x-hermest-local-media": "1" }
+          // Worker требует application/json на местных маршрутах — иначе 415 (проверено против реального backend).
+          headers: { "x-hermest-local-media": "1", "content-type": "application/json" }
         });
         // 202: сервер отменяет job; финальное «отменено» покажет poll в draftFromTopic. Держим «Отменяю…».
       } catch (error) {
