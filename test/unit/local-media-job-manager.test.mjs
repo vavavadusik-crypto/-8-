@@ -366,10 +366,209 @@ test("local media job cancellation aborts execution and settles as cancelled", a
   const job = manager.submit({ project: { title: "Cancel", cards: [{ id: "scene", text: "Renderable scene" }] }, platform: "youtube_video" });
   await started.promise;
 
-  assert.equal(manager.cancel(job.id), true);
+  const cancelled = manager.cancel(job.id);
+  assert.equal(cancelled.outcome, "cancelled");
+  assert.equal(cancelled.job.status, "cancelled");
   await manager.waitFor(job.id);
   assert.equal(manager.get(job.id).status, "cancelled");
-  assert.equal(manager.cancel("missing"), false);
+});
+
+test("cancel of an unknown render job reports not_found", () => {
+  const manager = createLocalMediaJobManager({ executeRender: async () => ({}) });
+
+  assert.deepEqual(manager.cancel("missing"), { outcome: "not_found", job: null });
+  assert.deepEqual(manager.cancel(undefined), { outcome: "not_found", job: null });
+});
+
+test("render job cancel is immediately terminal without a transient status", async () => {
+  const started = deferred();
+  const manager = createLocalMediaJobManager({
+    executeRender: ({ signal }) => new Promise((_resolve, reject) => {
+      started.resolve();
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    })
+  });
+  const job = manager.submit({ project: { title: "No transient", cards: [{ id: "scene", text: "Renderable scene" }] }, platform: "youtube_video" });
+  await started.promise;
+  assert.equal(manager.get(job.id).status, "running");
+
+  manager.cancel(job.id);
+  // Наружу никогда не выходит промежуточный статус вроде "cancelling":
+  // публичный вид становится терминально cancelled сразу же.
+  assert.equal(manager.get(job.id).status, "cancelled");
+  assert.equal(typeof manager.get(job.id).completedAt, "string");
+  await manager.waitFor(job.id);
+  assert.equal(manager.get(job.id).status, "cancelled");
+});
+
+test("repeat cancel of a cancelled render job is idempotent", async () => {
+  const started = deferred();
+  const manager = createLocalMediaJobManager({
+    executeRender: ({ signal }) => new Promise((_resolve, reject) => {
+      started.resolve();
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    })
+  });
+  const job = manager.submit({ project: { title: "Repeat", cards: [{ id: "scene", text: "Renderable scene" }] }, platform: "youtube_video" });
+  await started.promise;
+
+  assert.equal(manager.cancel(job.id).outcome, "cancelled");
+  await manager.waitFor(job.id);
+  const repeat = manager.cancel(job.id);
+  assert.equal(repeat.outcome, "cancelled");
+  assert.equal(repeat.job.status, "cancelled");
+  assert.equal(manager.get(job.id).status, "cancelled");
+});
+
+test("cancel of a queued render job settles immediately without executing", async () => {
+  const gate = deferred();
+  let executions = 0;
+  const manager = createLocalMediaJobManager({
+    maxConcurrent: 1,
+    executeRender: () => {
+      executions += 1;
+      return gate.promise;
+    }
+  });
+  const running = manager.submit({ project: { title: "Running", cards: [{ id: "scene", text: "Renderable scene" }] }, platform: "youtube_video" });
+  const queued = manager.submit({ project: { title: "Queued", cards: [{ id: "scene", text: "Renderable scene" }] }, platform: "youtube_video" });
+  await Promise.resolve();
+  assert.equal(manager.get(queued.id).status, "queued");
+
+  const cancelled = manager.cancel(queued.id);
+  assert.equal(cancelled.outcome, "cancelled");
+  assert.equal(cancelled.job.status, "cancelled");
+  await manager.waitFor(queued.id);
+
+  gate.resolve({
+    outputDir: "/tmp/private-running",
+    manifestPath: "/tmp/private-running/master.manifest.json",
+    manifestHashPath: "/tmp/private-running/master.manifest.json.sha256",
+    manifest: { recipe: { id: "youtube-16x9-1080p" }, qc: { passed: true }, blockers: [], warnings: [], artifacts: [] }
+  });
+  await manager.waitFor(running.id);
+  // Отменённый queued-job никогда не запускал исполнителя.
+  assert.equal(executions, 1);
+  assert.equal(manager.get(queued.id).status, "cancelled");
+});
+
+test("cancel of terminal render jobs reports not_cancellable", async () => {
+  const manager = createLocalMediaJobManager({
+    executeRender: async ({ project }) => {
+      if (project.title === "fail") throw new Error("render exploded");
+      return {
+        outputDir: "/tmp/private-terminal",
+        manifestPath: "/tmp/private-terminal/master.manifest.json",
+        manifestHashPath: "/tmp/private-terminal/master.manifest.json.sha256",
+        manifest: { recipe: { id: "youtube-16x9-1080p" }, qc: { passed: true }, blockers: [], warnings: [], artifacts: [] }
+      };
+    }
+  });
+  const completed = manager.submit({ project: { title: "ok", cards: [{ id: "scene", text: "Renderable scene" }] }, platform: "youtube_video" });
+  await manager.waitFor(completed.id);
+  const failed = manager.submit({ project: { title: "fail", cards: [{ id: "scene", text: "Renderable scene" }] }, platform: "youtube_video" });
+  await manager.waitFor(failed.id);
+
+  const completedResult = manager.cancel(completed.id);
+  assert.equal(completedResult.outcome, "not_cancellable");
+  assert.equal(completedResult.job.status, "completed");
+  const failedResult = manager.cancel(failed.id);
+  assert.equal(failedResult.outcome, "not_cancellable");
+  assert.equal(failedResult.job.status, "failed");
+  // Терминальные статусы не изменились после попытки отмены.
+  assert.equal(manager.get(completed.id).status, "completed");
+  assert.equal(manager.get(failed.id).status, "failed");
+});
+
+test("late render success after cancel is discarded and the job stays cancelled", async () => {
+  const gate = deferred();
+  const started = deferred();
+  const manager = createLocalMediaJobManager({
+    // executeRender игнорирует signal: модель зависшего child-процесса,
+    // который физически завершился уже после отмены и вернул результат.
+    executeRender: () => {
+      started.resolve();
+      return gate.promise;
+    }
+  });
+  const job = manager.submit({ project: { title: "Race", cards: [{ id: "scene", text: "Renderable scene" }] }, platform: "youtube_video" });
+  await started.promise;
+
+  assert.equal(manager.cancel(job.id).outcome, "cancelled");
+  gate.resolve({
+    outputDir: "/tmp/private-late-success",
+    manifestPath: "/tmp/private-late-success/master.manifest.json",
+    manifestHashPath: "/tmp/private-late-success/master.manifest.json.sha256",
+    manifest: {
+      recipe: { id: "youtube-16x9-1080p" },
+      qc: { passed: true },
+      blockers: [],
+      warnings: [],
+      artifacts: [{ name: "master.mp4", type: "video/mp4", bytes: 10, sha256: "a".repeat(64) }]
+    }
+  });
+  const settled = await manager.waitFor(job.id);
+
+  assert.equal(settled.status, "cancelled");
+  assert.deepEqual(settled.artifacts, []);
+  assert.equal(manager.get(job.id).status, "cancelled");
+  assert.throws(() => manager.resolveArtifact(job.id, "master.mp4"), /not available/);
+});
+
+test("cancel during candidate persistence never resurrects the job as completed", async () => {
+  const persistGate = deferred();
+  const persistStarted = deferred();
+  const manager = createLocalMediaJobManager({
+    verifyArtifactEvidence: async () => {},
+    persistVerifiedCandidate: () => {
+      persistStarted.resolve();
+      return persistGate.promise;
+    },
+    executeRender: async () => ({
+      outputDir: "/tmp/private-persist-race",
+      manifestPath: "/tmp/private-persist-race/youtube-16x9-1080p.manifest.json",
+      manifestHashPath: "/tmp/private-persist-race/youtube-16x9-1080p.manifest.json.sha256",
+      manifestArtifact: {
+        name: "youtube-16x9-1080p.manifest.json",
+        type: "application/json",
+        bytes: 2000,
+        sha256: "b".repeat(64)
+      },
+      manifest: {
+        recipe: { id: "youtube-16x9-1080p" },
+        qc: { passed: true },
+        blockers: [],
+        warnings: [],
+        artifacts: [
+          { name: "youtube-16x9-1080p.mp4", type: "video/mp4", bytes: 9000, sha256: "a".repeat(64) }
+        ]
+      }
+    })
+  });
+  const job = manager.submit({
+    projectId: "project_saved_1",
+    project: { title: "Persist race", cards: [{ id: "scene", text: "Renderable scene" }] },
+    platform: "youtube_video"
+  });
+  await persistStarted.promise;
+
+  // Отмена пришла, пока job ждал persistVerifiedCandidate: поздний успех
+  // персистенции не имеет права превратить cancelled в completed.
+  assert.equal(manager.cancel(job.id).outcome, "cancelled");
+  persistGate.resolve({
+    id: "cand_late",
+    digest: "d".repeat(64),
+    version: 1,
+    status: "sealed",
+    approvable: true,
+    approvalBlockers: []
+  });
+  const settled = await manager.waitFor(job.id);
+
+  assert.equal(settled.status, "cancelled");
+  assert.equal(settled.candidate, null);
+  assert.deepEqual(settled.artifacts, []);
+  assert.equal(manager.get(job.id).status, "cancelled");
 });
 
 test("local media job manager rejects structurally unsafe projects before queueing", () => {

@@ -27,7 +27,10 @@ test("board UI exposes truthful local render controls and artifact status", asyn
   assert.match(app, /narrationProvider/);
   assert.match(app, /ElevenLabs/);
   assert.match(app, /projectId: state\.server\?\.projectId \|\| ""/);
-  assert.match(app, /Candidate blockers:/);
+  // Статус рендера — понятный пользователю, но правдивый: дружелюбные заголовки по статусу
+  // при сохранении честной подачи блокеров/проблем.
+  assert.match(app, /Рендер отменён/);
+  assert.match(app, /Что мешает:/);
   assert.match(app, /\["completed", "failed", "cancelled"\]/);
   assert.match(app, /document\.createElement\("a"\)/);
   assert.match(app, /localRenderArtifacts\.replaceChildren\(\)/);

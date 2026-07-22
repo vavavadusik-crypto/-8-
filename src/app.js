@@ -168,6 +168,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     let activeStream = null;
     let activeLocalRenderJobId = null;
     let localRenderPollToken = 0;
+    let renderCancelInFlight = false;
     let drag = null;
     let raf = null;
 
@@ -2676,9 +2677,11 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
 
     async function cancelLocalRender() {
       const jobId = activeLocalRenderJobId;
-      if (!jobId) return;
+      // Гард от двойного нажатия и отмены без активного рендера.
+      if (!jobId || renderCancelInFlight) return;
+      renderCancelInFlight = true;
       cancelLocalRenderButton.disabled = true;
-      localRenderStatus.textContent = `Отменяю job ${jobId}…`;
+      localRenderStatus.textContent = "Отменяю рендер…";
       try {
         const data = await fetchJson(`/api/local-media/jobs/${encodeURIComponent(jobId)}`, {
           method: "DELETE",
@@ -2688,24 +2691,42 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
           },
           body: "{}"
         });
+        // 202 → сервер отменяет; финальный статус подтвердит poll. Показываем ответ сразу.
         renderLocalJobStatus(data.job);
       } catch (error) {
-        localRenderStatus.textContent = `Отмена не выполнена: ${error.message || "unknown"}`;
+        const code = error.payload && error.payload.code;
+        if (code === "local_media_job_not_found") {
+          localRenderStatus.textContent = "Рендер уже завершился — отменять нечего.";
+        } else if (code === "local_media_job_not_cancellable") {
+          localRenderStatus.textContent = "Рендер уже завершается — отмена невозможна.";
+        } else {
+          // Ошибка самой отмены — разрешаем повтор, рендер продолжает опрашиваться.
+          localRenderStatus.textContent = "Не удалось отменить рендер. Попробуй ещё раз.";
+          if (activeLocalRenderJobId) cancelLocalRenderButton.disabled = false;
+        }
+      } finally {
+        renderCancelInFlight = false;
       }
     }
 
     function renderLocalJobStatus(job = {}) {
-      localRenderStatus.textContent = [
-        `Job: ${job.id || "unknown"}`,
-        `Status: ${job.status || "unknown"}`,
-        `Recipe: ${job.recipeId || "unknown"}`,
-        job.candidate ? `Candidate: ${job.candidate.status || "unknown"}${job.candidate.approvable ? " (approvable)" : " (blocked)"}` : "",
-        job.candidate?.id ? `Candidate ID: ${job.candidate.id}` : "",
-        job.candidate?.blockers?.length ? `Candidate blockers: ${job.candidate.blockers.join(", ")}` : "",
-        job.blockers?.length ? `Blockers: ${job.blockers.join(", ")}` : "",
-        job.warnings?.length ? `Warnings: ${job.warnings.join(", ")}` : "",
-        job.error ? `Error: ${job.error}` : ""
-      ].filter(Boolean).join("\n");
+      // Ведущая строка — на понятном пользователю языке; developer-детали идут вторичными.
+      const status = job.status || "unknown";
+      const headline = {
+        queued: "Рендер в очереди…",
+        running: "Идёт рендер MP4… можно отменить.",
+        cancelling: "Отменяю рендер…",
+        cancelled: "Рендер отменён. Можешь изменить настройки и запустить снова.",
+        failed: "Рендер не удался.",
+        completed: "Готово: MP4 собран."
+      }[status] || `Статус: ${status}`;
+      const details = [
+        job.blockers?.length ? `Что мешает: ${job.blockers.join(", ")}` : "",
+        job.candidate?.blockers?.length ? `Требует внимания: ${job.candidate.blockers.join(", ")}` : "",
+        job.warnings?.length ? `Предупреждения: ${job.warnings.join(", ")}` : "",
+        job.error ? `Детали: ${job.error}` : ""
+      ].filter(Boolean);
+      localRenderStatus.textContent = [headline, ...details].join("\n");
     }
 
     function renderLocalArtifactLinks(job) {

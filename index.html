@@ -973,9 +973,9 @@
           </div>
           <div class="panel-row two">
             <button id="renderLocalVideo" title="Создать настоящий локальный MP4 через FFmpeg">Рендер MP4</button>
-            <button id="cancelLocalRender" title="Отменить текущий render job" disabled>Отмена</button>
+            <button id="cancelLocalRender" class="btn-danger" title="Отменить текущий render job" aria-label="Отменить рендер MP4" disabled>Отмена</button>
           </div>
-          <div class="auth-status" id="localRenderStatus">Проверяю local media worker…</div>
+          <div class="auth-status" id="localRenderStatus" role="status" aria-live="polite">Проверяю local media worker…</div>
           <div class="artifact-list" id="localRenderArtifacts" aria-live="polite"></div>
         </div>
         <div class="field">
