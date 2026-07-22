@@ -72,11 +72,105 @@ test("draft job cancellation aborts the running bridge call", async () => {
   });
 
   const submitted = manager.submit({ topic: "Long reasoning" });
-  assert.equal(manager.cancel(submitted.id), true);
+  assert.equal(manager.cancel(submitted.id).outcome, "cancelled");
   const cancelled = await waitForStatus(manager, submitted.id, ["cancelled"]);
   assert.equal(cancelled.board, null);
   assert.equal(cancelled.error, null);
-  assert.equal(manager.cancel(submitted.id), false);
+});
+
+test("draft job cancel is immediately terminal without a transient status", () => {
+  let resolveRun;
+  const manager = createDraftJobManager({
+    runDraft: () => new Promise(resolve => { resolveRun = resolve; })
+  });
+
+  const submitted = manager.submit({ topic: "Long reasoning" });
+  const result = manager.cancel(submitted.id);
+  assert.equal(result.outcome, "cancelled");
+  assert.equal(result.job.id, submitted.id);
+  // Контракт статусов: queued|running|completed|failed|cancelled.
+  // Промежуточный "cancelling" наружу не выходит — DELETE и GET сразу
+  // видят терминальный cancelled.
+  assert.equal(result.job.status, "cancelled");
+  assert.equal(manager.get(submitted.id).status, "cancelled");
+  resolveRun({ board: {} });
+});
+
+test("repeat cancel of a cancelled draft job is idempotent", async () => {
+  const manager = createDraftJobManager({
+    runDraft: ({ signal }) => new Promise((resolve, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    })
+  });
+
+  const submitted = manager.submit({ topic: "Long reasoning" });
+  assert.equal(manager.cancel(submitted.id).outcome, "cancelled");
+  await waitForStatus(manager, submitted.id, ["cancelled"]);
+
+  const repeated = manager.cancel(submitted.id);
+  assert.equal(repeated.outcome, "cancelled");
+  assert.equal(repeated.job.status, "cancelled");
+  assert.equal(repeated.job.error, null);
+});
+
+test("cancel of terminal draft jobs reports not_cancellable", async () => {
+  const manager = createDraftJobManager({
+    runDraft: async ({ topic }) => {
+      if (topic === "fail") throw new Error("model exploded");
+      return { board: { title: topic } };
+    }
+  });
+
+  const completed = manager.submit({ topic: "Done" });
+  await waitForStatus(manager, completed.id, ["completed"]);
+  const completedResult = manager.cancel(completed.id);
+  assert.equal(completedResult.outcome, "not_cancellable");
+  assert.equal(completedResult.job.status, "completed");
+
+  const failed = manager.submit({ topic: "fail" });
+  await waitForStatus(manager, failed.id, ["failed"]);
+  const failedResult = manager.cancel(failed.id);
+  assert.equal(failedResult.outcome, "not_cancellable");
+  assert.equal(failedResult.job.status, "failed");
+});
+
+test("late worker result after cancel is discarded and the job stays cancelled", async () => {
+  let resolveRun;
+  const manager = createDraftJobManager({
+    // Исполнитель игнорирует signal — модель upstream-HTTP, который
+    // физически не прервать: job всё равно обязан остаться cancelled.
+    runDraft: () => new Promise(resolve => { resolveRun = resolve; })
+  });
+
+  const submitted = manager.submit({ topic: "Race" });
+  assert.equal(manager.cancel(submitted.id).outcome, "cancelled");
+
+  resolveRun({ board: { title: "Late board" }, warnings: ["late warning"] });
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  const after = manager.get(submitted.id);
+  assert.equal(after.status, "cancelled");
+  assert.equal(after.board, null);
+  assert.deepEqual(after.warnings, []);
+  assert.equal(after.error, null);
+});
+
+test("late worker failure after cancel keeps cancelled status without a public error", async () => {
+  let rejectRun;
+  const manager = createDraftJobManager({
+    runDraft: () => new Promise((resolve, reject) => { rejectRun = reject; })
+  });
+
+  const submitted = manager.submit({ topic: "Race" });
+  assert.equal(manager.cancel(submitted.id).outcome, "cancelled");
+
+  rejectRun(new Error("provider blew up at /home/architect/.secrets/key"));
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  const after = manager.get(submitted.id);
+  assert.equal(after.status, "cancelled");
+  assert.equal(after.error, null);
+  assert.equal(JSON.stringify(after).includes(".secrets"), false);
 });
 
 test("draft job manager rejects an empty topic and unknown ids", () => {
@@ -84,7 +178,7 @@ test("draft job manager rejects an empty topic and unknown ids", () => {
   assert.throws(() => manager.submit({ topic: "   " }), TypeError);
   assert.throws(() => manager.submit({}), TypeError);
   assert.equal(manager.get("draft_missing"), null);
-  assert.equal(manager.cancel("draft_missing"), false);
+  assert.deepEqual(manager.cancel("draft_missing"), { outcome: "not_found", job: null });
 });
 
 test("public draft job view never exposes the controller or submitted params", async () => {

@@ -197,9 +197,24 @@ async function routeRequest(request, response, context, next) {
   }
   if (draftJobMatch && request.method === "DELETE") {
     requireMutationRequest(request);
-    if (!draftManager.cancel(draftJobMatch[1])) throw new HttpError(409, "draft_job_not_cancellable");
-    sendJson(response, 202, { ok: true, job: draftManager.get(draftJobMatch[1]) });
-    return;
+    // Контракт отмены (docs/CANCEL_MILESTONE_HANDOFF.md): queued/running и
+    // повторная отмена → 202 идемпотентно; терминальные completed/failed →
+    // детерминированный 409; неизвестный id → 404. Состояние job никогда
+    // не превращается в 500.
+    const cancelResult = draftManager.cancel(draftJobMatch[1]) || {};
+    switch (cancelResult.outcome) {
+      case "cancelled":
+        sendJson(response, 202, { ok: true, job: cancelResult.job });
+        return;
+      case "not_cancellable":
+        throw new HttpError(409, "draft_job_not_cancellable");
+      case "not_found":
+        throw new HttpError(404, "draft_job_not_found");
+      default:
+        // Менеджер нарушил собственный контракт исходов — честный 500 через
+        // общий error-envelope; fail-closed обработчик не даёт упасть middleware.
+        throw new HttpError(500, "draft_cancel_failed");
+    }
   }
 
   const jobMatch = pathname.match(new RegExp(`^${API_PREFIX}/jobs/(job_[A-Za-z0-9-]+)$`));

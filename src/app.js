@@ -72,6 +72,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     const wizardSceneCountInput = document.getElementById("wizardSceneCount");
     const wizardResearchInput = document.getElementById("wizardResearch");
     const wizardDraftButton = document.getElementById("wizardDraft");
+    const wizardCancelButton = document.getElementById("wizardCancel");
     const wizardModelSelect = document.getElementById("wizardModel");
     const wizardByokConfig = document.getElementById("wizardByokConfig");
     const wizardByokBaseUrl = document.getElementById("wizardByokBaseUrl");
@@ -986,6 +987,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     renderLocalVideoButton.addEventListener("click", renderLocalVideo);
     cancelLocalRenderButton.addEventListener("click", cancelLocalRender);
     wizardDraftButton.addEventListener("click", draftFromTopic);
+    wizardCancelButton.addEventListener("click", cancelDraftJob);
     void loadBridgeModels();
 
     // Заполняет селект моделей живым списком провайдеров моста; deepseek — дефолт
@@ -1040,7 +1042,18 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
 
     wizardModelSelect.addEventListener("change", syncWizardByokConfig);
 
+    // Жизненный цикл draft-job живёт в замыкании: id активной задачи + флаг «отмена в процессе».
+    let activeDraftJobId = null;
+    let draftCancelInFlight = false;
+
+    function setWizardBusy(busy) {
+      wizardDraftButton.disabled = busy;
+      wizardCancelButton.hidden = !busy;
+      if (busy) wizardCancelButton.disabled = false;
+    }
+
     async function draftFromTopic() {
+      if (activeDraftJobId) return; // гард: сборка уже идёт — не запускать вторую
       const topic = wizardTopicInput.value.trim();
       if (!topic) {
         wizardStatus.textContent = "Сначала введи тему ролика.";
@@ -1061,10 +1074,11 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         endpoint = { kind: "openai", baseUrl, apiKey: wizardByokKey.value, model: byokModel };
         model = undefined;
       }
-      wizardDraftButton.disabled = true;
+      setWizardBusy(true);
       wizardStatus.textContent = byokPreset
-        ? "Собираю через ваш API…"
-        : "Ставлю задачу браузерной ИИ-модели… (reasoning-чат думает минутами — не закрывай)";
+        ? "Собираю через ваш API… можно отменить."
+        : "Ставлю задачу ИИ-модели (reasoning-чат думает минутами) — можно отменить.";
+      let cancelledView = false;
       try {
         // Draft асинхронный: reasoning-чат думает минутами, синхронный HTTP рвался в 504.
         const submitted = await fetchJson("/api/local-media/draft", {
@@ -1081,7 +1095,15 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
             narrationProvider: state.brief?.narrationProvider || ""
           })
         });
-        const job = await pollDraftJob(submitted.job.id);
+        activeDraftJobId = submitted.job.id;
+        wizardStatus.textContent = "Идёт сборка карточек… можно отменить.";
+        // Backend-authoritative: poll вернёт cancelled, когда сервер отменит job (без клиентской гонки).
+        const job = await pollDraftJob(activeDraftJobId);
+        if (job.status === "cancelled") {
+          cancelledView = true;
+          wizardStatus.textContent = "Сборка отменена. Поправь тему или настройки и запусти снова.";
+          return;
+        }
         if (job.status !== "completed" || !job.board) {
           throw new Error(job.error || `черновик не собран (${job.status})`);
         }
@@ -1104,7 +1126,41 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
           hint
         ].join(" ");
       } finally {
-        wizardDraftButton.disabled = false;
+        activeDraftJobId = null;
+        draftCancelInFlight = false;
+        setWizardBusy(false);
+        if (cancelledView) wizardTopicInput.focus();
+      }
+    }
+
+    async function cancelDraftJob() {
+      // Гард от двойного нажатия и отмены без активной задачи (конкурирующие submit/cancel).
+      if (!activeDraftJobId || draftCancelInFlight) return;
+      const jobId = activeDraftJobId;
+      draftCancelInFlight = true;
+      wizardCancelButton.disabled = true;
+      wizardStatus.textContent = "Отменяю задачу…";
+      try {
+        await fetchJson(`/api/local-media/draft/${encodeURIComponent(jobId)}`, {
+          method: "DELETE",
+          // Worker требует application/json на местных маршрутах — иначе 415 (проверено против реального backend).
+          headers: { "x-hermest-local-media": "1", "content-type": "application/json" }
+        });
+        // 202: сервер отменяет job; финальное «отменено» покажет poll в draftFromTopic. Держим «Отменяю…».
+      } catch (error) {
+        const code = error.payload && error.payload.code;
+        if (code === "draft_job_not_found") {
+          wizardStatus.textContent = "Задача уже завершилась — отменять нечего.";
+        } else if (code === "draft_job_not_cancellable") {
+          // Job уже завершается (completed/failed) — poll покажет фактический итог.
+          wizardStatus.textContent = "Задача уже завершается — отмена невозможна.";
+        } else {
+          // Ошибка самой отмены — разрешаем повторить, задача продолжает опрашиваться.
+          wizardStatus.textContent = "Не удалось отменить. Попробуй ещё раз.";
+          if (activeDraftJobId) wizardCancelButton.disabled = false;
+        }
+      } finally {
+        draftCancelInFlight = false;
       }
     }
 

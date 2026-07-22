@@ -56,29 +56,45 @@ export function createDraftJobManager({
     return record ? publicJob(record) : null;
   }
 
+  // Контракт отмены (docs/CANCEL_MILESTONE_HANDOFF.md, «Правила идемпотентности»):
+  //   queued|running → job СРАЗУ терминально cancelled (наружу не выходит
+  //     промежуточный статус), abort прерывает таймеры/запросы исполнителя;
+  //   cancelled → идемпотентный повтор: тот же исход "cancelled", без ошибки;
+  //   completed|failed → терминальные состояния неизменны: "not_cancellable";
+  //   неизвестный id → "not_found".
+  // Возвращает { outcome: "cancelled"|"not_found"|"not_cancellable", job }.
   function cancel(id) {
     const record = jobs.get(String(id || ""));
-    if (!record || !["queued", "running"].includes(record.status)) return false;
-    record.status = "cancelling";
+    if (!record) return { outcome: "not_found", job: null };
+    if (record.status === "cancelled") return { outcome: "cancelled", job: publicJob(record) };
+    if (record.status === "completed" || record.status === "failed") {
+      return { outcome: "not_cancellable", job: publicJob(record) };
+    }
+    record.status = "cancelled";
     record.controller.abort(new Error("draft_job_cancelled"));
-    return true;
+    return { outcome: "cancelled", job: publicJob(record) };
   }
 
   async function execute(record, params) {
     record.status = "running";
     try {
       const result = await runDraft({ ...params, signal: record.controller.signal });
-      if (record.controller.signal.aborted) throw record.controller.signal.reason;
+      // Поздний успех после отмены отбрасывается: cancelled — терминальный
+      // статус, job не имеет права стать completed (даже если upstream-HTTP
+      // физически не прервался и всё же вернул борд).
+      if (record.status === "cancelled" || record.controller.signal.aborted) return;
       record.board = result?.board ?? null;
       record.warnings = stringList(result?.warnings);
       record.status = "completed";
     } catch (error) {
-      if (record.controller.signal.aborted || record.status === "cancelling") {
+      // Поздняя ошибка после отмены тоже отбрасывается: статус и публичное
+      // сообщение отменённого job не меняются.
+      if (record.status === "cancelled" || record.controller.signal.aborted) {
         record.status = "cancelled";
-      } else {
-        record.status = "failed";
-        record.error = sanitizeErrorMessage(error);
+        return;
       }
+      record.status = "failed";
+      record.error = sanitizeErrorMessage(error);
     }
   }
 
