@@ -5,8 +5,25 @@
 > Протокол непрерывности: `docs/MASTER_PLAN_2026-07-19.md`, раздел 8.6.
 > Обновляется в начале каждой задачи и после каждого коммита. Это часть Definition of Done.
 
-UPDATED: 2026-07-22 (девятая сессия — RC + draft-cancel + render-cancel закрыты в main)
-ACTIVE PHASE: три milestone закрыты в main @ 7afda71 (RC 0ef4d86, draft-cancel acf3ff3, render-cancel 7afda71).
+UPDATED: 2026-07-23 (девятая сессия — RC + draft-cancel + render-cancel + progress закрыты в main)
+ACTIVE PHASE: четыре milestone в main @ 34c8421 (RC 0ef4d86, draft-cancel acf3ff3, render-cancel 7afda71, progress 34c8421).
+
+## Milestone «прогресс-фидбэк длинной генерации» 2026-07-23 — ✅ ЗАКРЫТ (main @ 34c8421)
+Контракт: docs/PROGRESS_MILESTONE_HANDOFF.md. Ветки feat/progress-ux (я) + feat/progress-runtime (терм. claude).
+- ПОЛОСА A (я): elapsed-таймер (mm:ss) + пульс-индикатор активности для draft и render (aria-hidden — не спамит SR;
+  prefers-reduced-motion honored); показ этапа рендера от worker (job.progress.label, напр. «Сцена 3 из 6») в заголовке
+  статуса; таймеры чистятся на любом терминальном статусе. +1 UI-тест. Коммит в merge 34c8421.
+- ПОЛОСА B (терм. claude соло, 185d68b): поле job.progress {phase,sceneIndex,sceneTotal,label} аддитивно; reporter
+  инъектируется в renderProject (best-effort, try/catch — не роняет рендер); done только менеджером (cancelled/failed не
+  покажут ложный done); late-зомби-отчёты игнорируются; label санитизирован (пути→<path>, ≤120). +11 unit. Тронут
+  src/media/render-project.js → потребовал полного media-gate.
+- ИНТЕГРАЦИЯ: merge → main 34c8421. Дифф ревьюил фактически (reporter best-effort подтверждён). ПОЛНЫЙ npm run check
+  (src/media менялся) → exit 0: validate · 323 unit · smoke:api · 5 media (реальный FFmpeg жив с репортером) · build · render smoke.
+  Живой smoke: elapsed тикает и скрывается, progress.label показан, интервалы без утечек, консоль чистая. Push НЕ делал.
+  Терм. claude в этот раз завершился штатно (exit 0) — единый harness-background механизм.
+NEXT MILESTONE (кандидат, gap-аудит): durable-восстановление незавершённого черновика/настроек между перезагрузками
+  (сейчас доска persist в localStorage, но in-flight draft/render теряются); ИЛИ прогресс-бар (визуальная полоса) поверх
+  текстового прогресса. Один bounded.
 
 ## Milestone «паритет отмены рендер-джобы MP4» 2026-07-22 — ✅ ЗАКРЫТ (main @ 7afda71)
 Контракт: docs/RENDER_CANCEL_MILESTONE_HANDOFF.md. Ветки feat/render-cancel-ux (я) + feat/render-cancel-runtime (терм. claude).
