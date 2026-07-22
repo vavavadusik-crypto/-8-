@@ -57,8 +57,14 @@ export async function renderProject({
   outputDir,
   platform = "youtube_video",
   ttsAdapter = null,
-  signal
+  signal,
+  onProgress = null
 }) {
+  // Прогресс — best-effort телеметрия для job-записи (контракт —
+  // docs/PROGRESS_MILESTONE_HANDOFF.md): фазы preflight → scenes → audio →
+  // encode → finalize; done проставляет только job-manager на completed.
+  const reportProgress = createRenderProgressReporter(onProgress);
+  reportProgress({ phase: "preflight", label: "Подготовка проекта" });
   signal?.throwIfAborted();
   const project = projectInput === undefined
     ? await preflightBoardInput(inputPath)
@@ -89,6 +95,12 @@ export async function renderProject({
     let sceneTtsMetadata = null;
     const ttsWarnings = new Set();
     for (const [sceneIndex, scene] of estimatedStoryboard.scenes.entries()) {
+      reportProgress({
+        phase: "scenes",
+        sceneIndex,
+        sceneTotal: estimatedStoryboard.scenes.length,
+        label: `Сцена ${sceneIndex + 1} из ${estimatedStoryboard.scenes.length}`
+      });
       const sceneTag = String(sceneIndex + 1).padStart(3, "0");
       const sceneRawFile = path.join(runDir, `narration-scene-${sceneTag}.raw.wav`);
       const sceneWavFile = path.join(runDir, `narration-scene-${sceneTag}.wav`);
@@ -126,6 +138,7 @@ export async function renderProject({
       });
     }
 
+    reportProgress({ phase: "audio", label: "Сборка озвучки" });
     const storyboard = reconcileStoryboardWithSceneDurations(
       estimatedStoryboard,
       sceneNarrations.map(sceneNarration => sceneNarration.durationMs)
@@ -161,6 +174,9 @@ export async function renderProject({
     await atomicWriteFile(storyboardFile, `${JSON.stringify(storyboard, null, 2)}\n`);
     await atomicWriteFile(subtitleFile, formatSrt(buildSubtitleCues(storyboard)));
 
+    // «encode» покрывает весь этап сборки видео: подбор футажей/фонов,
+    // композицию кадров и сам ffmpeg-рендер — порядок фаз остаётся монотонным.
+    reportProgress({ phase: "encode", label: "Кодирование видео" });
     const videoName = `${recipe.id}.mp4`;
     const videoPartial = path.join(runDir, `${recipe.id}.partial.mp4`);
     const videoFile = path.join(runDir, videoName);
@@ -344,6 +360,7 @@ export async function renderProject({
         await Promise.all(sceneTitleFiles.map(scene => rm(scene.path, { force: true })));
       }
     }
+    reportProgress({ phase: "finalize", label: "Проверка качества и манифест" });
     const videoProbe = assertVideoProbe(
       await probeMediaFile(videoPartial, { signal }),
       recipe,
@@ -458,6 +475,19 @@ export async function renderProject({
   } finally {
     if (!completed) await rm(runDir, { recursive: true, force: true });
   }
+}
+
+// Сломанный или отсутствующий reporter не имеет права уронить рендер:
+// телеметрия строго best-effort.
+function createRenderProgressReporter(onProgress) {
+  if (typeof onProgress !== "function") return () => {};
+  return update => {
+    try {
+      onProgress(update);
+    } catch {
+      // Прогресс потерян — рендер продолжается.
+    }
+  };
 }
 
 export async function preflightBoardInput(inputPath) {
