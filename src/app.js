@@ -1094,10 +1094,14 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
           warnings.length ? `Предупреждения: ${warnings.join("; ")}` : ""
         ].filter(Boolean).join(" ");
       } catch (error) {
+        // Подсказка зависит от пути: BYOK (свой API) не использует мост — не сбивать пользователя с толку.
+        const hint = byokPreset
+          ? "Проверь Base URL, название модели и ключ своего API."
+          : "Проверь, что мост browser-ai-bridge запущен (:8788) и провайдер залогинен.";
         wizardStatus.textContent = [
           "Не удалось собрать черновик.",
           `Ошибка: ${error.message || "unknown"}`,
-          "Проверь, что мост browser-ai-bridge запущен (:8788) и провайдер залогинен."
+          hint
         ].join(" ");
       } finally {
         wizardDraftButton.disabled = false;
