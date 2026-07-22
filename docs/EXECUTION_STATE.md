@@ -31,8 +31,16 @@ LAST COMMIT: 124b637 выбор модели в wizard. До: a767be9 async draf
   АУДИТ: гейт зелёный (272 unit + 5 media + build + smoke); дерево чистое; продукт функционален и проверен вживую. Гэпы были: README устарел, engines не задан, Docker без .dockerignore, release-пакет отсутствовал.
   Этап A (7cb5501): README актуализирован под все фичи + engines.node. Этап C (9b153d1): .dockerignore + Dockerfile npm ci; Docker-образ СОБРАН и проверен (HTTP 200, отдаёт SPA) — критерий 5. Демо полного стека (Ollama→ElevenLabs George→Pexels→анимация, 64с, loudness −16.5) в ~/Видео/hermest-board-voice-samples/full-stack-demo-ocean-george-1080p.mp4.
   Этап E (в работе, делегат): scripts/build-release.mjs + SHA-256 manifest dist + docs/RELEASE_STATUS.md + HANDOFF/RELEASE_READINESS синк — критерии 10/11.
-STATUS: IN_PROGRESS
-LAST COMMIT: 9b153d1 Docker hardening. До: 7cb5501 README+engines, 411344c UI-тумблер, cea5135 Pollinations.
+  RELEASE v0.3.0 ВЫПУЩЕН (тег v0.3.0, запушен). Все 11 критериев Вадима выполнены фактически (не заявлением):
+    установка/запуск по докам ✓ · UI без критич.ошибок ✓ · запросы к AI (wizard→Ollama live E2E, мост 4 провайдера) ✓ ·
+    состояние/восстановление ✓ · Docker собран+отдаёт SPA HTTP200 ✓ · сценарии вручную+тесты (272 unit+5 media) ✓ ·
+    нет секретов в коде/мёртвого веса (source-zip обновлён) ✓ · fail-open провайдеров ✓ · чистый модульный код ✓ ·
+    docs актуальны (README/RELEASE_STATUS/handoff/CHANGELOG@0.3.0) ✓ · release package + SHA-256 manifest (build-release.mjs) ✓.
+    Артефакт релиза: dist/RELEASE_MANIFEST.sha256 (version 0.3.0, детерминированный). Статус-отчёт: docs/RELEASE_STATUS.md.
+    ВСЁ писал терминальный claude (Opus соло, --disallowed-tools Task); я — оркестратор/ревью/живые проверки. Fable не трогал.
+STATUS: RELEASE_READY (v0.3.0)
+LAST COMMIT: 4461d30 release 0.3.0 + тег v0.3.0. Осн. release-коммиты: 7cb5501 README, 9b153d1 Docker, c451989 release-tooling, b417389 source-zip.
+NEXT ACTION (после релиза, требует решений Вадима): UX-3 оболочка/Google-логин на Supabase (creds Вадима); либо продуктовый хвост P3+ (semantic shorts, editions, шаблоны). Мост :8788; Ollama :11434.
 NEXT ACTION: варианты (Вадим спит, автономно): (1) полный free-stack E2E демо-ролик (Ollama-директор → Pollinations-фоны → ElevenLabs George → премиум-анимация) как showcase + интеграционное доказательство; (2) UX-3 оболочка (заставка/меню/Google-логин/Supabase) — ЗАБЛОКИРОВАНО: нужны Supabase creds Вадима (URL+anon+service key), без них не начинать. HF-image мёртв (не возрождать). Мост :8788; Ollama :11434 (модель kimi-k2.7-code:cloud).
 NEXT ACTION (развилка, спросил Вадима): (A) UX-2-медиа — BYOK-коннекторы генерации ИЗОБРАЖЕНИЙ/ЗВУКА (HuggingFace/Replicate для картинок, доп. TTS) по образцу openai-text-model, + произвольный коннектор через UI; ИЛИ (B) UX-3 оболочка — заставка/меню/Google-регистрация/мультиустройство на Supabase (аккаунт ЕСТЬ у Вадима) = P5 SaaS-ядро, самый крупный кусок. Текстовый director-BYOK — самый частый провайдер, уже даёт максимум рычага, поэтому сделан первым.
 ГРАБЛИ WIZARD/МОСТ: (1) РЕШЕНО async: reasoning-чаты думают МИНУТАМИ — теперь job, UI не висит. НО deepseek draft реально >5 мин (DeepThink) → нужен выбор быстрой модели (UX-1) ИЛИ BYOK-ключ (UX-2). (2) Дефолт модели в text-model.js = "chatgpt" (флаки); рабочая — deepseek. preview-харнесс НЕ подхватывает env из launch.json (для реального npm run dev — env вручную ИЛИ передавать model из UI после UX-1). (3) Мост залипает (провайдер держит lock) — рестарт: `pkill -f bridge-server; cd ~/ai-dev-station/workspace/browser-ai-bridge && setsid nohup node src/bridge-server.mjs >> bridge-server.log 2>&1 < /dev/null &`. Мост :8788, 4 провайдера.
