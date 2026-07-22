@@ -29,7 +29,10 @@ export function createDraftJobManager({
     const topic = requireTopic(params.topic);
     evictJobs();
     if (jobs.size >= maxJobs) {
-      throw Object.assign(new Error("draft_jobs_capacity"), { statusCode: 429 });
+      throw Object.assign(new Error("draft_jobs_capacity"), {
+        statusCode: 429,
+        publicCode: "draft_jobs_capacity"
+      });
     }
 
     const record = {

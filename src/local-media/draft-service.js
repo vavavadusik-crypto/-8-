@@ -46,12 +46,12 @@ export async function draftBoardService({
     try {
       const found = await (researchSearch || searchResearchSources)(cleanTopic);
       sources = Array.isArray(found?.sources) ? found.sources : [];
-      if (Array.isArray(found?.warnings)) warnings.push(...found.warnings.map(String));
+      if (Array.isArray(found?.warnings)) warnings.push(...found.warnings.map(sanitizeWarning));
     } catch (error) {
       // Research — усиление драфта, а не его условие: падение источников
       // остаётся честным warning'ом, борд всё равно собирается.
       sources = [];
-      warnings.push(`research failed: ${String(error?.message || error)}`);
+      warnings.push(sanitizeWarning(`research failed: ${String(error?.message || error)}`));
     }
   }
 
@@ -82,6 +82,17 @@ function createDraftTextModel({ endpoint, model }) {
     });
   }
   return createBridgeTextModel({ model });
+}
+
+// Warnings уходят клиенту как есть, поэтому чистятся здесь: сообщения
+// провайдеров research недоверенные — пути, стеки и длина режутся.
+function sanitizeWarning(value) {
+  return String(value)
+    .replace(/[A-Za-z]:\\[^\s"'<>]+/gu, "<path>")
+    .replace(/\/[^\s"'<>]+/gu, "<path>")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 300);
 }
 
 function clampSceneCount(value) {

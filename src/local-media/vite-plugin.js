@@ -10,6 +10,7 @@ import { createLocalMediaJobManager } from "./job-manager.js";
 import { createProviderKeyStore } from "./provider-keys.js";
 
 const DEFAULT_MAX_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_DRAFT_TOPIC_CHARS = 2000;
 const MUTATION_HEADER = "x-hermest-local-media";
 const API_PREFIX = "/api/local-media";
 
@@ -54,7 +55,8 @@ export function createLocalMediaRequestHandler({
   manager,
   draftManager = createDraftJobManager({ runDraft: params => draftBoardService(params) }),
   maxBodyBytes = DEFAULT_MAX_BODY_BYTES,
-  providerKeys = createProviderKeyStore()
+  providerKeys = createProviderKeyStore(),
+  describeBridge = describeBridgeAvailability
 } = {}) {
   if (!manager || typeof manager.submit !== "function") {
     throw new TypeError("A local media job manager is required");
@@ -66,22 +68,32 @@ export function createLocalMediaRequestHandler({
     throw new RangeError(`maxBodyBytes must be within 64..${DEFAULT_MAX_BODY_BYTES}`);
   }
 
+  const context = { manager, draftManager, maxBodyBytes, providerKeys, describeBridge };
   return function localMediaHandler(request, response, next) {
-    void routeRequest(request, response, manager, draftManager, maxBodyBytes, providerKeys, next).catch(error => {
-      if (response.headersSent) {
-        response.destroy(error);
-        return;
+    void routeRequest(request, response, context, next).catch(error => {
+      // Fail-closed: любой сбой обработчика (включая сбой самой отправки
+      // ошибки) завершается ответом или разрывом соединения, но не роняет
+      // vite-middleware процесса.
+      try {
+        if (response.headersSent) {
+          response.destroy();
+          return;
+        }
+        const status = Number(error?.statusCode) || statusForError(error);
+        sendJson(response, status, {
+          ok: false,
+          error: publicError(error, status),
+          code: errorCode(error, status)
+        });
+      } catch {
+        try { response.destroy(); } catch { /* соединение уже закрыто */ }
       }
-      const status = Number(error?.statusCode) || statusForError(error);
-      sendJson(response, status, {
-        ok: false,
-        error: publicError(error, status)
-      });
     });
   };
 }
 
-async function routeRequest(request, response, manager, draftManager, maxBodyBytes, providerKeys, next) {
+async function routeRequest(request, response, context, next) {
+  const { manager, draftManager, maxBodyBytes, providerKeys, describeBridge } = context;
   const host = String(request.headers.host || "");
   if (!isLoopbackHost(host) || !isAllowedOrigin(request.headers.origin, host)) {
     throw new HttpError(403, "local_media_origin_forbidden");
@@ -115,7 +127,14 @@ async function routeRequest(request, response, manager, draftManager, maxBodyByt
   // Состояние моста читаемо без mutation-header: UI показывает список
   // браузерных провайдеров ещё до первого драфта.
   if (request.method === "GET" && pathname === `${API_PREFIX}/bridge`) {
-    const availability = await describeBridgeAvailability();
+    // Fail-closed: сломанный probe моста — это 503 с кодом, а не упавший
+    // middleware и не утёкшее сообщение провайдера.
+    let availability;
+    try {
+      availability = await describeBridge();
+    } catch {
+      throw new HttpError(503, "bridge_status_unavailable");
+    }
     sendJson(response, 200, {
       ok: true,
       available: availability.status === "executable",
@@ -143,6 +162,7 @@ async function routeRequest(request, response, manager, draftManager, maxBodyByt
   if (request.method === "POST" && pathname === `${API_PREFIX}/render`) {
     requireMutationRequest(request);
     const body = await readJsonBody(request, maxBodyBytes);
+    validateRenderBody(body);
     const job = manager.submit({ project: body.project, projectId: body.projectId, platform: body.platform });
     sendJson(response, 202, { ok: true, job: decorateJob(job) });
     return;
@@ -153,6 +173,7 @@ async function routeRequest(request, response, manager, draftManager, maxBodyByt
   if (request.method === "POST" && pathname === `${API_PREFIX}/draft`) {
     requireMutationRequest(request);
     const body = await readJsonBody(request, maxBodyBytes);
+    validateDraftBody(body);
     const job = draftManager.submit({
       topic: body.topic,
       language: body.language,
@@ -214,7 +235,14 @@ async function routeRequest(request, response, manager, draftManager, maxBodyByt
     } catch {
       throw new HttpError(404, "local_media_artifact_not_found");
     }
-    const fileInfo = await stat(artifactPath);
+    // Файл мог исчезнуть после resolveArtifact (cleanup, eviction): это 404
+    // для клиента, а не внутренний сбой.
+    let fileInfo;
+    try {
+      fileInfo = await stat(artifactPath);
+    } catch {
+      throw new HttpError(404, "local_media_artifact_not_found");
+    }
     if (!fileInfo.isFile()) throw new HttpError(404, "local_media_artifact_not_found");
     response.statusCode = 200;
     response.setHeader("cache-control", "no-store");
@@ -222,7 +250,26 @@ async function routeRequest(request, response, manager, draftManager, maxBodyByt
     response.setHeader("content-length", String(fileInfo.size));
     response.setHeader("content-disposition", `attachment; filename="${path.basename(artifactName)}"`);
     response.setHeader("x-content-type-options", "nosniff");
-    createReadStream(artifactPath).pipe(response);
+    const artifactStream = createReadStream(artifactPath);
+    // Без обработчика 'error' сбой чтения (EACCES, исчезнувший файл) — это
+    // unhandled event и падение всего dev-сервера. Fail-closed: до отправки
+    // заголовков — чистый JSON 500, после — разрыв соединения.
+    artifactStream.on("error", () => {
+      try {
+        if (response.headersSent) {
+          response.destroy();
+          return;
+        }
+        sendJson(response, 500, {
+          ok: false,
+          error: "local_media_artifact_read_failed",
+          code: "local_media_artifact_read_failed"
+        });
+      } catch {
+        try { response.destroy(); } catch { /* соединение уже закрыто */ }
+      }
+    });
+    artifactStream.pipe(response);
     return;
   }
 
@@ -259,6 +306,69 @@ async function readJsonBody(request, maxBodyBytes) {
   } catch {
     throw new HttpError(400, "invalid_local_media_json");
   }
+}
+
+// Граница доверия: любой ввод враждебен. Здесь проверяются только тип и
+// границы длины с явными кодами — семантику (URL, allowlist моделей, схему
+// board) по-прежнему валидируют менеджеры и адаптеры.
+function validateDraftBody(body) {
+  const topic = body.topic;
+  if (topic === undefined || topic === null || (typeof topic === "string" && !topic.trim())) {
+    throw new HttpError(400, "draft_topic_required");
+  }
+  if (typeof topic !== "string" || topic.length > MAX_DRAFT_TOPIC_CHARS) {
+    throw new HttpError(400, "draft_topic_invalid");
+  }
+  requireOptionalBoundedString(body.language, 32, "draft_language_invalid");
+  requireOptionalBoundedString(body.voice, 200, "draft_voice_invalid");
+  requireOptionalBoundedString(body.narrationProvider, 64, "draft_narration_provider_invalid");
+  requireOptionalBoundedString(body.model, 64, "draft_model_invalid");
+  if (body.sceneCount !== undefined && body.sceneCount !== null) {
+    if (typeof body.sceneCount !== "number" || !Number.isFinite(body.sceneCount)) {
+      throw new HttpError(400, "draft_scene_count_invalid");
+    }
+  }
+  if (body.research !== undefined && body.research !== null && typeof body.research !== "boolean") {
+    throw new HttpError(400, "draft_research_invalid");
+  }
+  validateDraftEndpoint(body.endpoint);
+}
+
+function validateDraftEndpoint(endpoint) {
+  if (endpoint === undefined || endpoint === null) return;
+  if (typeof endpoint !== "object" || Array.isArray(endpoint)) {
+    throw new HttpError(400, "draft_endpoint_invalid");
+  }
+  if (endpoint.kind === "bridge") return;
+  if (endpoint.kind !== "openai") throw new HttpError(400, "draft_endpoint_invalid");
+  for (const [value, maxChars] of [[endpoint.baseUrl, 500], [endpoint.apiKey, 500], [endpoint.model, 200]]) {
+    if (value === undefined || value === null) continue;
+    if (typeof value !== "string" || value.length > maxChars) {
+      throw new HttpError(400, "draft_endpoint_invalid");
+    }
+  }
+}
+
+function validateRenderBody(body) {
+  const project = body.project;
+  if (!project || typeof project !== "object" || Array.isArray(project)) {
+    throw new HttpError(400, "render_project_invalid");
+  }
+  if (body.platform !== undefined && body.platform !== null) {
+    if (typeof body.platform !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(body.platform)) {
+      throw new HttpError(400, "render_platform_invalid");
+    }
+  }
+  if (body.projectId !== undefined && body.projectId !== null) {
+    if (typeof body.projectId !== "string" || body.projectId.length > 120) {
+      throw new HttpError(400, "render_project_id_invalid");
+    }
+  }
+}
+
+function requireOptionalBoundedString(value, maxChars, code) {
+  if (value === undefined || value === null) return;
+  if (typeof value !== "string" || value.length > maxChars) throw new HttpError(400, code);
 }
 
 // Роут только приводит форму: значения baseUrl/apiKey/model валидирует сам
@@ -323,9 +433,30 @@ function statusForError(error) {
 }
 
 export function publicError(error, status) {
-  if (error instanceof HttpError) return error.publicCode;
-  if (status < 500) return redactAbsolutePaths(String(error?.message || "invalid_request"));
+  if (typeof error?.publicCode === "string") return error.publicCode;
+  if (status < 500) {
+    return redactAbsolutePaths(String(error?.message || "invalid_request"))
+      .replace(/\s+/g, " ")
+      .slice(0, 300);
+  }
   return "local_media_internal_error";
+}
+
+// Машинный код ошибки: явный publicCode, иначе — детерминированно от статуса.
+// Сообщения провайдеров/валидаторов сюда не попадают.
+function errorCode(error, status) {
+  if (typeof error?.publicCode === "string") return error.publicCode;
+  switch (status) {
+    case 400: return "local_media_invalid_input";
+    case 403: return "local_media_forbidden";
+    case 404: return "not_found";
+    case 409: return "local_media_conflict";
+    case 413: return "local_media_request_too_large";
+    case 415: return "application_json_required";
+    case 429: return "local_media_capacity";
+    case 503: return "local_media_upstream_unavailable";
+    default: return "local_media_internal_error";
+  }
 }
 
 function redactAbsolutePaths(message) {
