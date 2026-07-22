@@ -5,8 +5,27 @@
 > Протокол непрерывности: `docs/MASTER_PLAN_2026-07-19.md`, раздел 8.6.
 > Обновляется в начале каждой задачи и после каждого коммита. Это часть Definition of Done.
 
-UPDATED: 2026-07-22 (девятая сессия — параллельные полосы: я=frontend/UX интегратор, терминальный claude=backend/runtime)
-ACTIVE PHASE: RC / UX — довести до release-candidate, которым человек пользуется локально без костылей (директива Вадима 2026-07-22)
+UPDATED: 2026-07-22 (девятая сессия — RC закрыт в main + milestone «отмена draft-job» интегрирован)
+ACTIVE PHASE: RC закрыт; milestone cancel-lifecycle закрыт (main @ acf3ff3).
+NEXT MILESTONE (кандидат, требует gap-аудита перед стартом): паритет lifecycle рендер-джобы MP4 — у renderLocalVideo/
+cancelLocalRender уже есть кнопка отмены, DELETE с content-type и renderLocalJobStatus (415-бага нет), поэтому сперва
+проверить, каких состояний/гардов не хватает vs draft (отменяется/ошибка-отмены/двойной клик/фокус), и закрыть только
+реальный разрыв. Альтернатива, если разрыва нет: прогресс-фидбек длинной сборки (elapsed/шаги). Один bounded milestone.
+
+## Milestone «управляемая отмена draft-job» 2026-07-22 — ✅ ЗАКРЫТ
+Контракт: docs/CANCEL_MILESTONE_HANDOFF.md. Две изолированные ветки, disjoint files, я мержил.
+- RC закрыт в main: merge 0ef4d86 (integrator/ux-release-candidate → main).
+- ПОЛОСА A (я, feat/draft-cancel-ux): кнопка «Отменить» в queued/running; состояния запуск/выполняется/отменяется/
+  отменено/ошибка-отмены/успех; гарды двойного submit и cancel; backend-authoritative (poll видит cancelled, без гонки);
+  a11y (aria-live status, aria-label, keyboard, фокус на теме после отмены); мобайл 375px. Коммиты 0c9ecb8, 44d285e.
+  НАЙДЕН+ИСПРАВЛЕН реальный интеграционный баг: worker требует content-type: application/json на local-маршрутах →
+  DELETE отмены без заголовка давал 415, отмена не работала против реального backend (мок не поймал). Фикс 44d285e.
+- ПОЛОСА B (терминальный claude соло, feat/draft-cancel-runtime): idempotent cancel {outcome}, late-result discard,
+  404 not_found / 409 not_cancellable / 202 cancelled, очистка таймеров/abort. +10 unit (288→298). Коммиты 18b8815, e7c2bc6.
+- ИНТЕГРАЦИЯ: merge 6ec36e8 (backend→ux), merge acf3ff3 (feat/draft-cancel-ux → main). main @ acf3ff3.
+  Дифф ревьюился фактически (не только отчёт). src/media НЕ тронут → тяжёлый media-gate не гонялся повторно.
+  Лёгкий gate на main: validate ok · 298 unit (0 fail) · smoke:api ok · build ok — все exit 0. Живой smoke: консоль чистая,
+  CTA/cancel/aria-live/BYOK/21 карточка. Процессы: единый harness-background (без nohup+&, без self-matching poller). Push НЕ делал.
 
 ## Параллельные полосы 2026-07-22 (директива Вадима: использовать И терминального claude)
 Контракт границ: docs/INTEGRATION_HANDOFF.md. Правило: локальные LLM (Ollama) не запускать; push запрещён (переопределяет standing-approval).
