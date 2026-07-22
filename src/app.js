@@ -65,6 +65,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     const publishOutput = document.getElementById("publishOutput");
     const localRenderPlatform = document.getElementById("localRenderPlatform");
     const localRenderStatus = document.getElementById("localRenderStatus");
+    const localRenderElapsed = document.getElementById("localRenderElapsed");
     const localRenderArtifacts = document.getElementById("localRenderArtifacts");
     const renderLocalVideoButton = document.getElementById("renderLocalVideo");
     const cancelLocalRenderButton = document.getElementById("cancelLocalRender");
@@ -79,6 +80,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     const wizardByokModel = document.getElementById("wizardByokModel");
     const wizardByokKey = document.getElementById("wizardByokKey");
     const wizardStatus = document.getElementById("wizardStatus");
+    const wizardElapsed = document.getElementById("wizardElapsed");
 
     // OpenAI-совместимые провайдеры: свой ключ ИЛИ бесплатный. baseUrl совпадает
     // с OPENAI_COMPATIBLE_PRESETS на сервере; "" = свой URL (пользователь вводит).
@@ -169,6 +171,31 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     let activeLocalRenderJobId = null;
     let localRenderPollToken = 0;
     let renderCancelInFlight = false;
+
+    // Индикатор активности + истёкшее время для длинных операций (draft/render).
+    // Элемент aria-hidden — тикающее время не спамит скринридер; статус объявляет live-region.
+    function createElapsedTimer(el) {
+      let intervalId = null;
+      let startMs = 0;
+      const paint = () => {
+        const total = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+        el.textContent = `Идёт · ${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+      };
+      const stop = () => {
+        if (intervalId) { clearInterval(intervalId); intervalId = null; }
+        el.hidden = true;
+      };
+      const start = () => {
+        stop();
+        startMs = Date.now();
+        el.hidden = false;
+        paint();
+        intervalId = setInterval(paint, 1000);
+      };
+      return { start, stop };
+    }
+    const wizardElapsedTimer = createElapsedTimer(wizardElapsed);
+    const localRenderElapsedTimer = createElapsedTimer(localRenderElapsed);
     let drag = null;
     let raf = null;
 
@@ -1076,6 +1103,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         model = undefined;
       }
       setWizardBusy(true);
+      wizardElapsedTimer.start();
       wizardStatus.textContent = byokPreset
         ? "Собираю через ваш API… можно отменить."
         : "Ставлю задачу ИИ-модели (reasoning-чат думает минутами) — можно отменить.";
@@ -1130,6 +1158,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         activeDraftJobId = null;
         draftCancelInFlight = false;
         setWizardBusy(false);
+        wizardElapsedTimer.stop();
         if (cancelledView) wizardTopicInput.focus();
       }
     }
@@ -2630,6 +2659,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       cancelLocalRenderButton.disabled = true;
       localRenderArtifacts.replaceChildren();
       localRenderStatus.textContent = "Проверяю board и ставлю локальный render в очередь…";
+      localRenderElapsedTimer.start();
       try {
         const data = await fetchJson("/api/local-media/render", {
           method: "POST",
@@ -2660,6 +2690,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
           renderLocalVideoButton.disabled = false;
           localRenderPlatform.disabled = false;
           cancelLocalRenderButton.disabled = true;
+          localRenderElapsedTimer.stop();
         }
       }
     }
@@ -2712,7 +2743,8 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     function renderLocalJobStatus(job = {}) {
       // Ведущая строка — на понятном пользователю языке; developer-детали идут вторичными.
       const status = job.status || "unknown";
-      const headline = {
+      const progressLabel = typeof job.progress?.label === "string" ? job.progress.label.slice(0, 120) : "";
+      const base = {
         queued: "Рендер в очереди…",
         running: "Идёт рендер MP4… можно отменить.",
         cancelling: "Отменяю рендер…",
@@ -2720,6 +2752,8 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         failed: "Рендер не удался.",
         completed: "Готово: MP4 собран."
       }[status] || `Статус: ${status}`;
+      // Пока рендер идёт — показываем этап от worker (напр. «Сцена 3 из 6»), если он прислан.
+      const headline = status === "running" && progressLabel ? `${progressLabel}… можно отменить.` : base;
       const details = [
         job.blockers?.length ? `Что мешает: ${job.blockers.join(", ")}` : "",
         job.candidate?.blockers?.length ? `Требует внимания: ${job.candidate.blockers.join(", ")}` : "",

@@ -60,6 +60,7 @@ export function createLocalMediaJobManager({
       startedAt: null,
       completedAt: null,
       project: structuredClone(project),
+      progress: { phase: "queued" },
       controller: new AbortController(),
       completion,
       result: null,
@@ -144,7 +145,8 @@ export function createLocalMediaJobManager({
         project: structuredClone(record.project),
         platform: record.platform,
         signal: record.controller.signal,
-        jobId: record.id
+        jobId: record.id,
+        onProgress: makeProgressReporter(record)
       });
       if (isCancelled(record)) {
         adoptOutputDirForCleanup(record, result);
@@ -157,6 +159,9 @@ export function createLocalMediaJobManager({
       // не имеет права превратить cancelled в completed.
       if (isCancelled(record)) throw cancellationReason(record);
       record.status = "completed";
+      // phase:"done" проставляет только сам менеджер и только на completed:
+      // отменённый/упавший job не имеет права показывать ложный done.
+      record.progress = { phase: "done" };
     } catch (error) {
       if (isCancelled(record)) {
         record.status = "cancelled";
@@ -174,6 +179,20 @@ export function createLocalMediaJobManager({
       record.completion.resolve(publicJob(record));
       pump();
     }
+  }
+
+  // Прогресс-контракт (docs/PROGRESS_MILESTONE_HANDOFF.md, «Общий API-контракт»):
+  // адаптер сообщает фазы preflight|scenes|audio|encode|finalize через
+  // инъектируемый onProgress; queued ставится при submit, done — только
+  // менеджером на completed. Отчёты вне running (поздние зомби-отчёты после
+  // cancel/fail) игнорируются, невалидные обновления молча отбрасываются:
+  // телеметрия не имеет права уронить рендер.
+  function makeProgressReporter(record) {
+    return update => {
+      if (record.status !== "running" || record.controller.signal.aborted) return;
+      const progress = sanitizeProgressUpdate(update);
+      if (progress) record.progress = progress;
+    };
   }
 
   function isCancelled(record) {
@@ -439,12 +458,52 @@ function publicJob(record) {
     createdAt: record.createdAt,
     startedAt: record.startedAt,
     completedAt: record.completedAt,
+    progress: record.progress,
     artifacts: record.artifacts,
     candidate: record.candidate,
     blockers: record.blockers,
     warnings: record.warnings,
     error: record.error
   });
+}
+
+const ADAPTER_PROGRESS_PHASES = new Set(["preflight", "scenes", "audio", "encode", "finalize"]);
+const MAX_PROGRESS_LABEL_CHARS = 120;
+const MAX_PROGRESS_SCENE_TOTAL = 10000;
+
+function sanitizeProgressUpdate(update) {
+  const phase = update?.phase;
+  if (typeof phase !== "string" || !ADAPTER_PROGRESS_PHASES.has(phase)) return null;
+  const progress = { phase };
+  if (phase === "scenes") {
+    const sceneIndex = update.sceneIndex;
+    const sceneTotal = update.sceneTotal;
+    if (
+      Number.isSafeInteger(sceneIndex) && Number.isSafeInteger(sceneTotal)
+      && sceneIndex >= 0 && sceneTotal >= 1 && sceneIndex < sceneTotal
+      && sceneTotal <= MAX_PROGRESS_SCENE_TOTAL
+    ) {
+      progress.sceneIndex = sceneIndex;
+      progress.sceneTotal = sceneTotal;
+    }
+  }
+  const label = sanitizeProgressLabel(update.label);
+  if (label) progress.label = label;
+  return progress;
+}
+
+// label человекочитаем и безопасен: абсолютные пути редактируются, управляющие
+// символы (включая многострочные stack) схлопываются в пробел, длина ≤ 120.
+function sanitizeProgressLabel(value) {
+  if (typeof value !== "string") return null;
+  const sanitized = value
+    .replace(/[A-Za-z]:\\[^\s"'<>]+/gu, "<path>")
+    .replace(/\/[^\s"'<>]+/gu, "<path>")
+    .replace(/[\u0000-\u001f\u007f]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, MAX_PROGRESS_LABEL_CHARS);
+  return sanitized || null;
 }
 
 function requirePrivateRunDirectory(value) {
