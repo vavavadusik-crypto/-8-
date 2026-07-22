@@ -42,7 +42,12 @@ export function createLocalMediaJobManager({
     const persistedProjectId = normalizeProjectId(projectId);
     const recipe = getPlatformRecipe(platform);
     evictFinishedJobs();
-    if (jobs.size >= maxJobs) throw new Error("Local media job capacity reached");
+    if (jobs.size >= maxJobs) {
+      throw Object.assign(new Error("local_media_jobs_capacity"), {
+        statusCode: 429,
+        publicCode: "local_media_jobs_capacity"
+      });
+    }
 
     const completion = deferred();
     const record = {

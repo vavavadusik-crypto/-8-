@@ -68,15 +68,23 @@ export function createLocalMediaRequestHandler({
 
   return function localMediaHandler(request, response, next) {
     void routeRequest(request, response, manager, draftManager, maxBodyBytes, providerKeys, next).catch(error => {
-      if (response.headersSent) {
-        response.destroy(error);
-        return;
+      // Fail-closed: любой сбой обработчика (включая сбой самой отправки
+      // ошибки) завершается ответом или разрывом соединения, но не роняет
+      // vite-middleware процесса.
+      try {
+        if (response.headersSent) {
+          response.destroy();
+          return;
+        }
+        const status = Number(error?.statusCode) || statusForError(error);
+        sendJson(response, status, {
+          ok: false,
+          error: publicError(error, status),
+          code: errorCode(error, status)
+        });
+      } catch {
+        try { response.destroy(); } catch { /* соединение уже закрыто */ }
       }
-      const status = Number(error?.statusCode) || statusForError(error);
-      sendJson(response, status, {
-        ok: false,
-        error: publicError(error, status)
-      });
     });
   };
 }
@@ -214,7 +222,14 @@ async function routeRequest(request, response, manager, draftManager, maxBodyByt
     } catch {
       throw new HttpError(404, "local_media_artifact_not_found");
     }
-    const fileInfo = await stat(artifactPath);
+    // Файл мог исчезнуть после resolveArtifact (cleanup, eviction): это 404
+    // для клиента, а не внутренний сбой.
+    let fileInfo;
+    try {
+      fileInfo = await stat(artifactPath);
+    } catch {
+      throw new HttpError(404, "local_media_artifact_not_found");
+    }
     if (!fileInfo.isFile()) throw new HttpError(404, "local_media_artifact_not_found");
     response.statusCode = 200;
     response.setHeader("cache-control", "no-store");
@@ -323,9 +338,30 @@ function statusForError(error) {
 }
 
 export function publicError(error, status) {
-  if (error instanceof HttpError) return error.publicCode;
-  if (status < 500) return redactAbsolutePaths(String(error?.message || "invalid_request"));
+  if (typeof error?.publicCode === "string") return error.publicCode;
+  if (status < 500) {
+    return redactAbsolutePaths(String(error?.message || "invalid_request"))
+      .replace(/\s+/g, " ")
+      .slice(0, 300);
+  }
   return "local_media_internal_error";
+}
+
+// Машинный код ошибки: явный publicCode, иначе — детерминированно от статуса.
+// Сообщения провайдеров/валидаторов сюда не попадают.
+function errorCode(error, status) {
+  if (typeof error?.publicCode === "string") return error.publicCode;
+  switch (status) {
+    case 400: return "local_media_invalid_input";
+    case 403: return "local_media_forbidden";
+    case 404: return "not_found";
+    case 409: return "local_media_conflict";
+    case 413: return "local_media_request_too_large";
+    case 415: return "application_json_required";
+    case 429: return "local_media_capacity";
+    case 503: return "local_media_upstream_unavailable";
+    default: return "local_media_internal_error";
+  }
 }
 
 function redactAbsolutePaths(message) {
