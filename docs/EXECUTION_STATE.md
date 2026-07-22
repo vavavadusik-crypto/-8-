@@ -5,12 +5,24 @@
 > Протокол непрерывности: `docs/MASTER_PLAN_2026-07-19.md`, раздел 8.6.
 > Обновляется в начале каждой задачи и после каждого коммита. Это часть Definition of Done.
 
-UPDATED: 2026-07-22 (девятая сессия — RC закрыт в main + milestone «отмена draft-job» интегрирован)
-ACTIVE PHASE: RC закрыт; milestone cancel-lifecycle закрыт (main @ acf3ff3).
-NEXT MILESTONE (кандидат, требует gap-аудита перед стартом): паритет lifecycle рендер-джобы MP4 — у renderLocalVideo/
-cancelLocalRender уже есть кнопка отмены, DELETE с content-type и renderLocalJobStatus (415-бага нет), поэтому сперва
-проверить, каких состояний/гардов не хватает vs draft (отменяется/ошибка-отмены/двойной клик/фокус), и закрыть только
-реальный разрыв. Альтернатива, если разрыва нет: прогресс-фидбек длинной сборки (elapsed/шаги). Один bounded milestone.
+UPDATED: 2026-07-22 (девятая сессия — RC + draft-cancel + render-cancel закрыты в main)
+ACTIVE PHASE: три milestone закрыты в main @ 7afda71 (RC 0ef4d86, draft-cancel acf3ff3, render-cancel 7afda71).
+
+## Milestone «паритет отмены рендер-джобы MP4» 2026-07-22 — ✅ ЗАКРЫТ (main @ 7afda71)
+Контракт: docs/RENDER_CANCEL_MILESTONE_HANDOFF.md. Ветки feat/render-cancel-ux (я) + feat/render-cancel-runtime (терм. claude).
+- ПОЛОСА A (я): live-region статуса рендера (role=status aria-live=polite) + aria-label кнопки; понятные пользователю сообщения
+  по статусу (в очереди/идёт/отменён/ошибка/готово) вместо dev-дампа; retryable ошибка отмены (кнопка не залипает); структурные
+  404/409; гард двойной отмены. Обновил тест local-media-ui под новые строки. Коммиты 8860de6, a55c533.
+- ПОЛОСА B (терм. claude соло, 9b17f4a): render cancel → {outcome} (идемпотентно/404/409/202); РЕАЛЬНОЕ убийство child-процессов
+  (controller.abort → runMediaTool child.kill SIGTERM→SIGKILL; process-runner уже honor'ил signal); late-result отбрасывается
+  (isCancelled не даёт стать completed, discardRenderOutput). +13 unit (298→311). ТОЛЬКО backend-файлы.
+  ГРАБЛЯ: терм. claude упал по транзитной API-ошибке ПОСЛЕ коммита (на финальном отчёте) — код+тесты уцелели (311 зелёных);
+  НЕ перезапускал зря, догнал гейт сам как интегратор. Дифф ревьюил фактически.
+- ИНТЕГРАЦИЯ: merge 6699f28 (backend→ux), merge 7afda71 (→main). Поймал регрессию: UI-тест грепал старую dev-строку статуса →
+  обновил тест (a55c533). Лёгкий gate на main: validate ok · 311 unit (0 fail) · smoke:api ok · build ok. src/media не тронут →
+  тяжёлый media-gate не гонялся. Живой smoke: консоль чистая (только Vite HMR-ws шум), cancel/aria-live/worker готовы. Push НЕ делал.
+NEXT MILESTONE (кандидат, gap-аудит перед стартом): прогресс-фидбек длинной сборки draft/render (elapsed/шаги/спиннер) —
+  сейчас только текстовый статус без ощущения прогресса; ИЛИ durable-состояние черновика между перезагрузками. Один bounded.
 
 ## Milestone «управляемая отмена draft-job» 2026-07-22 — ✅ ЗАКРЫТ
 Контракт: docs/CANCEL_MILESTONE_HANDOFF.md. Две изолированные ветки, disjoint files, я мержил.
