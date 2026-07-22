@@ -55,7 +55,8 @@ export function createLocalMediaRequestHandler({
   manager,
   draftManager = createDraftJobManager({ runDraft: params => draftBoardService(params) }),
   maxBodyBytes = DEFAULT_MAX_BODY_BYTES,
-  providerKeys = createProviderKeyStore()
+  providerKeys = createProviderKeyStore(),
+  describeBridge = describeBridgeAvailability
 } = {}) {
   if (!manager || typeof manager.submit !== "function") {
     throw new TypeError("A local media job manager is required");
@@ -67,8 +68,9 @@ export function createLocalMediaRequestHandler({
     throw new RangeError(`maxBodyBytes must be within 64..${DEFAULT_MAX_BODY_BYTES}`);
   }
 
+  const context = { manager, draftManager, maxBodyBytes, providerKeys, describeBridge };
   return function localMediaHandler(request, response, next) {
-    void routeRequest(request, response, manager, draftManager, maxBodyBytes, providerKeys, next).catch(error => {
+    void routeRequest(request, response, context, next).catch(error => {
       // Fail-closed: любой сбой обработчика (включая сбой самой отправки
       // ошибки) завершается ответом или разрывом соединения, но не роняет
       // vite-middleware процесса.
@@ -90,7 +92,8 @@ export function createLocalMediaRequestHandler({
   };
 }
 
-async function routeRequest(request, response, manager, draftManager, maxBodyBytes, providerKeys, next) {
+async function routeRequest(request, response, context, next) {
+  const { manager, draftManager, maxBodyBytes, providerKeys, describeBridge } = context;
   const host = String(request.headers.host || "");
   if (!isLoopbackHost(host) || !isAllowedOrigin(request.headers.origin, host)) {
     throw new HttpError(403, "local_media_origin_forbidden");
@@ -124,7 +127,14 @@ async function routeRequest(request, response, manager, draftManager, maxBodyByt
   // Состояние моста читаемо без mutation-header: UI показывает список
   // браузерных провайдеров ещё до первого драфта.
   if (request.method === "GET" && pathname === `${API_PREFIX}/bridge`) {
-    const availability = await describeBridgeAvailability();
+    // Fail-closed: сломанный probe моста — это 503 с кодом, а не упавший
+    // middleware и не утёкшее сообщение провайдера.
+    let availability;
+    try {
+      availability = await describeBridge();
+    } catch {
+      throw new HttpError(503, "bridge_status_unavailable");
+    }
     sendJson(response, 200, {
       ok: true,
       available: availability.status === "executable",
@@ -240,7 +250,26 @@ async function routeRequest(request, response, manager, draftManager, maxBodyByt
     response.setHeader("content-length", String(fileInfo.size));
     response.setHeader("content-disposition", `attachment; filename="${path.basename(artifactName)}"`);
     response.setHeader("x-content-type-options", "nosniff");
-    createReadStream(artifactPath).pipe(response);
+    const artifactStream = createReadStream(artifactPath);
+    // Без обработчика 'error' сбой чтения (EACCES, исчезнувший файл) — это
+    // unhandled event и падение всего dev-сервера. Fail-closed: до отправки
+    // заголовков — чистый JSON 500, после — разрыв соединения.
+    artifactStream.on("error", () => {
+      try {
+        if (response.headersSent) {
+          response.destroy();
+          return;
+        }
+        sendJson(response, 500, {
+          ok: false,
+          error: "local_media_artifact_read_failed",
+          code: "local_media_artifact_read_failed"
+        });
+      } catch {
+        try { response.destroy(); } catch { /* соединение уже закрыто */ }
+      }
+    });
+    artifactStream.pipe(response);
     return;
   }
 
