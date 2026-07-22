@@ -10,6 +10,7 @@ import { createLocalMediaJobManager } from "./job-manager.js";
 import { createProviderKeyStore } from "./provider-keys.js";
 
 const DEFAULT_MAX_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_DRAFT_TOPIC_CHARS = 2000;
 const MUTATION_HEADER = "x-hermest-local-media";
 const API_PREFIX = "/api/local-media";
 
@@ -151,6 +152,7 @@ async function routeRequest(request, response, manager, draftManager, maxBodyByt
   if (request.method === "POST" && pathname === `${API_PREFIX}/render`) {
     requireMutationRequest(request);
     const body = await readJsonBody(request, maxBodyBytes);
+    validateRenderBody(body);
     const job = manager.submit({ project: body.project, projectId: body.projectId, platform: body.platform });
     sendJson(response, 202, { ok: true, job: decorateJob(job) });
     return;
@@ -161,6 +163,7 @@ async function routeRequest(request, response, manager, draftManager, maxBodyByt
   if (request.method === "POST" && pathname === `${API_PREFIX}/draft`) {
     requireMutationRequest(request);
     const body = await readJsonBody(request, maxBodyBytes);
+    validateDraftBody(body);
     const job = draftManager.submit({
       topic: body.topic,
       language: body.language,
@@ -274,6 +277,69 @@ async function readJsonBody(request, maxBodyBytes) {
   } catch {
     throw new HttpError(400, "invalid_local_media_json");
   }
+}
+
+// Граница доверия: любой ввод враждебен. Здесь проверяются только тип и
+// границы длины с явными кодами — семантику (URL, allowlist моделей, схему
+// board) по-прежнему валидируют менеджеры и адаптеры.
+function validateDraftBody(body) {
+  const topic = body.topic;
+  if (topic === undefined || topic === null || (typeof topic === "string" && !topic.trim())) {
+    throw new HttpError(400, "draft_topic_required");
+  }
+  if (typeof topic !== "string" || topic.length > MAX_DRAFT_TOPIC_CHARS) {
+    throw new HttpError(400, "draft_topic_invalid");
+  }
+  requireOptionalBoundedString(body.language, 32, "draft_language_invalid");
+  requireOptionalBoundedString(body.voice, 200, "draft_voice_invalid");
+  requireOptionalBoundedString(body.narrationProvider, 64, "draft_narration_provider_invalid");
+  requireOptionalBoundedString(body.model, 64, "draft_model_invalid");
+  if (body.sceneCount !== undefined && body.sceneCount !== null) {
+    if (typeof body.sceneCount !== "number" || !Number.isFinite(body.sceneCount)) {
+      throw new HttpError(400, "draft_scene_count_invalid");
+    }
+  }
+  if (body.research !== undefined && body.research !== null && typeof body.research !== "boolean") {
+    throw new HttpError(400, "draft_research_invalid");
+  }
+  validateDraftEndpoint(body.endpoint);
+}
+
+function validateDraftEndpoint(endpoint) {
+  if (endpoint === undefined || endpoint === null) return;
+  if (typeof endpoint !== "object" || Array.isArray(endpoint)) {
+    throw new HttpError(400, "draft_endpoint_invalid");
+  }
+  if (endpoint.kind === "bridge") return;
+  if (endpoint.kind !== "openai") throw new HttpError(400, "draft_endpoint_invalid");
+  for (const [value, maxChars] of [[endpoint.baseUrl, 500], [endpoint.apiKey, 500], [endpoint.model, 200]]) {
+    if (value === undefined || value === null) continue;
+    if (typeof value !== "string" || value.length > maxChars) {
+      throw new HttpError(400, "draft_endpoint_invalid");
+    }
+  }
+}
+
+function validateRenderBody(body) {
+  const project = body.project;
+  if (!project || typeof project !== "object" || Array.isArray(project)) {
+    throw new HttpError(400, "render_project_invalid");
+  }
+  if (body.platform !== undefined && body.platform !== null) {
+    if (typeof body.platform !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(body.platform)) {
+      throw new HttpError(400, "render_platform_invalid");
+    }
+  }
+  if (body.projectId !== undefined && body.projectId !== null) {
+    if (typeof body.projectId !== "string" || body.projectId.length > 120) {
+      throw new HttpError(400, "render_project_id_invalid");
+    }
+  }
+}
+
+function requireOptionalBoundedString(value, maxChars, code) {
+  if (value === undefined || value === null) return;
+  if (typeof value !== "string" || value.length > maxChars) throw new HttpError(400, code);
 }
 
 // Роут только приводит форму: значения baseUrl/apiKey/model валидирует сам
