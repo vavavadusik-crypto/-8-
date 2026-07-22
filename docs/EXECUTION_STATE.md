@@ -5,8 +5,25 @@
 > Протокол непрерывности: `docs/MASTER_PLAN_2026-07-19.md`, раздел 8.6.
 > Обновляется в начале каждой задачи и после каждого коммита. Это часть Definition of Done.
 
-UPDATED: 2026-07-21 (Claude Opus 4.8, восьмая сессия — Fable бережём, механику делает терминальный claude соло)
-ACTIVE PHASE: P3 / UX — браузерные модели удобно в Hermest Board (директива Вадима 2026-07-21)
+UPDATED: 2026-07-22 (девятая сессия — параллельные полосы: я=frontend/UX интегратор, терминальный claude=backend/runtime)
+ACTIVE PHASE: RC / UX — довести до release-candidate, которым человек пользуется локально без костылей (директива Вадима 2026-07-22)
+
+## Параллельные полосы 2026-07-22 (директива Вадима: использовать И терминального claude)
+Контракт границ: docs/INTEGRATION_HANDOFF.md. Правило: локальные LLM (Ollama) не запускать; push запрещён (переопределяет standing-approval).
+- ПОЛОСА A (я, ветка integrator/ux-release-candidate): frontend/product UX.
+  ✅ Онбординг + заметный вход в главный сценарий. Коммиты 1cfa6bb (handoff), cc996f6 (UX).
+     Новый пользователь: первый-запуск оверлей «Из темы — в готовое видео» (тема→сразу в wizard) + шапка-CTA «🎬 Тема→видео»
+     (открывает панель, префилл+фокус wizard). localStorage-gated. Проверено вживую в превью: оверлей show/dismiss/persist,
+     CTA открывает+префиллит+фокусит, мобайл 375px без переполнений, validate ok, консоль чистая. Скриншот-рендерер превью
+     таймаутит (проблема инструмента, не приложения).
+- ПОЛОСА B (терминальный claude, worktree ../hermest-board-backend, ветка feat/backend-runtime): backend/runtime robustness. ✅ ЗАВЕРШЕНО.
+     4 коммита (bc1b894 error-envelope, 8d359bc input-validation 400, 7ebf23a fail-closed мост+стрим, 871342f sanitize warnings),
+     +16 unit (272→288), только backend-файлы. Закрыл крашер: createReadStream().pipe() без error-handler ронял весь vite dev-server.
+- ✅ ИНТЕГРАЦИЯ (я): merge a50f42d (feat/backend-runtime → integrator/ux-release-candidate, disjoint files, 0 конфликтов).
+     Фронт-контракт цел: fetchJson читает data.error (строка), code лёг в error.payload аддитивно.
+     ПОЛНЫЙ ГЕЙТ `npm run check` → exit 0: validate · 288 unit · smoke:api · 5 media (реальный FFmpeg) · build · render smoke.
+     Живой интеграционный smoke: консоль чистая, CTA/онбординг/BYOK(10 опц.)/render-worker готовы, 21 карточка. Push НЕ делал (директива).
+     Worktree ../hermest-board-backend оставлен для следующей backend-порции терминального claude.
 ACTIVE TASK: очередь Вадима 2026-07-21 (браузерные модели удобно в UI) — ВСЕ ТРИ ПУНКТА закрыты/проверены за сессию:
   ПУНКТ 1 wizard «тема→видео»: c9ac973 → a767be9 (async job, UI не виснет; submit 38мс, cancel→cancelled вживую).
   ПУНКТ 2 выбор ИИ-модели: 124b637 (селект из /bridge, 4 провайдера live, дефолт deepseek; model санитизирован allowlist + проброшен topic→draft→text-model). Гейт 261/261 unit + 5/5 media.

@@ -101,6 +101,39 @@ test("draft service stays fail-open when research blows up", async () => {
   assert.match(result.warnings[0], /research failed: all providers unreachable/);
 });
 
+test("research warnings are sanitized: no absolute paths, stacks or unbounded text", async () => {
+  const noisyFailure = new Error(
+    `providers died at /home/architect/.secrets/research.js and C:\\Users\\dev\\keys.txt\n    at stackFrame (/home/architect/app.js:1:1)\n${"x".repeat(600)}`
+  );
+  const failed = await draftBoardService({
+    topic: "Как работает GPS",
+    sceneCount: 2,
+    textModel: mockTextModel(),
+    researchSearch: countingResearch(noisyFailure).search,
+    availabilityCheck: executableBridge()
+  });
+  assert.equal(failed.warnings.length, 1);
+  assert.match(failed.warnings[0], /^research failed: /);
+  assert.equal(failed.warnings[0].includes("/home"), false, "no POSIX paths in warnings");
+  assert.equal(failed.warnings[0].includes("C:\\"), false, "no Windows paths in warnings");
+  assert.equal(failed.warnings[0].includes("\n"), false, "no multi-line stacks in warnings");
+  assert.ok(failed.warnings[0].length <= 300, "warnings are length-capped");
+
+  const noisyProvider = await draftBoardService({
+    topic: "Как работает GPS",
+    sceneCount: 2,
+    textModel: mockTextModel(),
+    researchSearch: countingResearch({
+      sources: [],
+      warnings: ["crossref hiccup at /home/architect/.cache/crossref\n    at frame"]
+    }).search,
+    availabilityCheck: executableBridge()
+  });
+  assert.equal(noisyProvider.warnings.length, 1);
+  assert.equal(noisyProvider.warnings[0].includes("/home"), false);
+  assert.equal(noisyProvider.warnings[0].includes("\n"), false);
+});
+
 test("draft service fails closed with 503 when the text bridge is down", async () => {
   const research = countingResearch({ sources: [], warnings: [] });
 

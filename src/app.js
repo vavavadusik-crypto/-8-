@@ -1001,14 +1001,15 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         const data = await fetchJson("/api/local-media/bridge");
         const providers = Array.isArray(data.providers) ? data.providers : [];
         if (!data.available || providers.length === 0) {
-          wizardModelSelect.replaceChildren(new Option("Мост недоступен — запусти browser-ai-bridge", ""));
-          wizardModelSelect.disabled = true;
-          return;
+          // Мост не отдаёт провайдеров, но BYOK (свой/бесплатный OpenAI-совместимый ключ) работает и без моста.
+          wizardModelSelect.replaceChildren(new Option("Мост недоступен — выбери свой API ниже", ""), buildByokOptGroup());
+          wizardModelSelect.disabled = false;
+        } else {
+          const bridgeOptions = providers.map(id => new Option(labels[id] || id, id));
+          wizardModelSelect.replaceChildren(...bridgeOptions, buildByokOptGroup());
+          wizardModelSelect.disabled = false;
+          wizardModelSelect.value = providers.includes("deepseek") ? "deepseek" : providers[0];
         }
-        const bridgeOptions = providers.map(id => new Option(labels[id] || id, id));
-        wizardModelSelect.replaceChildren(...bridgeOptions, buildByokOptGroup());
-        wizardModelSelect.disabled = false;
-        wizardModelSelect.value = providers.includes("deepseek") ? "deepseek" : providers[0];
       } catch {
         wizardModelSelect.replaceChildren(new Option("Мост недоступен", ""), buildByokOptGroup());
         wizardModelSelect.disabled = false;
@@ -1093,10 +1094,14 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
           warnings.length ? `Предупреждения: ${warnings.join("; ")}` : ""
         ].filter(Boolean).join(" ");
       } catch (error) {
+        // Подсказка зависит от пути: BYOK (свой API) не использует мост — не сбивать пользователя с толку.
+        const hint = byokPreset
+          ? "Проверь Base URL, название модели и ключ своего API."
+          : "Проверь, что мост browser-ai-bridge запущен (:8788) и провайдер залогинен.";
         wizardStatus.textContent = [
           "Не удалось собрать черновик.",
           `Ошибка: ${error.message || "unknown"}`,
-          "Проверь, что мост browser-ai-bridge запущен (:8788) и провайдер залогинен."
+          hint
         ].join(" ");
       } finally {
         wizardDraftButton.disabled = false;
@@ -3162,9 +3167,71 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       });
     }
 
+    // Онбординг: заметный вход в главный сценарий «Тема → видео» и первый-запуск приветствие.
+    const ONBOARD_KEY = "hermest-board:onboarded";
+
+    function openWizard(prefillTopic) {
+      sidePanel.hidden = false;
+      if (typeof prefillTopic === "string" && prefillTopic) {
+        wizardTopicInput.value = prefillTopic.slice(0, 300);
+      }
+      // Фокус синхронно (панель уже видима) с preventScroll, затем плавный скролл к wizard.
+      wizardTopicInput.focus({ preventScroll: true });
+      const panel = document.querySelector(".topic-wizard-panel");
+      if (panel) panel.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+
+    function initOnboarding() {
+      const startButton = document.getElementById("startWizard");
+      if (startButton) startButton.addEventListener("click", () => openWizard());
+
+      const overlay = document.getElementById("welcomeOverlay");
+      if (!overlay) return;
+
+      let alreadyOnboarded = false;
+      try { alreadyOnboarded = localStorage.getItem(ONBOARD_KEY) === "1"; } catch (_) {}
+      if (alreadyOnboarded) {
+        overlay.hidden = true;
+        return;
+      }
+
+      const topicInput = document.getElementById("welcomeTopic");
+      const startCta = document.getElementById("welcomeStart");
+      const skipCta = document.getElementById("welcomeSkip");
+      const dismiss = () => {
+        overlay.hidden = true;
+        try { localStorage.setItem(ONBOARD_KEY, "1"); } catch (_) {}
+      };
+
+      overlay.hidden = false;
+      requestAnimationFrame(() => { if (topicInput) topicInput.focus(); });
+
+      if (startCta) startCta.addEventListener("click", () => {
+        const topic = topicInput ? topicInput.value.trim() : "";
+        dismiss();
+        openWizard(topic);
+      });
+      if (skipCta) skipCta.addEventListener("click", dismiss);
+      if (topicInput) topicInput.addEventListener("keydown", event => {
+        if (event.key === "Enter" && startCta) { event.preventDefault(); startCta.click(); }
+      });
+      // Модалка удерживает фокус: Escape закрывает, Tab циклится внутри (a11y).
+      const focusables = [topicInput, startCta, skipCta].filter(Boolean);
+      overlay.addEventListener("keydown", event => {
+        if (event.key === "Escape") { event.preventDefault(); dismiss(); return; }
+        if (event.key === "Tab" && focusables.length) {
+          const first = focusables[0];
+          const last = focusables[focusables.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+      });
+    }
+
     render();
     renderApiProviderControls();
     syncAiSettingsForm();
     loadApiProviderCatalog();
     checkLocalMediaStatus();
     setTimeout(fitView, 80);
+    initOnboarding();
