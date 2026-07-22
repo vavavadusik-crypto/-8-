@@ -22,11 +22,12 @@ export function createLocalMediaVitePlugin({
   providerKeys
 } = {}) {
   const activeManager = manager || createLocalMediaJobManager({
-    executeRender: ({ project, platform, signal }) => renderProject({
+    executeRender: ({ project, platform, signal, onProgress }) => renderProject({
       project,
       platform,
       signal,
-      outputDir: "/tmp"
+      outputDir: "/tmp",
+      onProgress
     }),
     persistVerifiedCandidate,
     cleanupRender: ({ outputDir }) => rm(outputDir, { recursive: true, force: true })
