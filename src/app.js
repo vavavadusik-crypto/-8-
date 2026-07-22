@@ -3162,9 +3162,63 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       });
     }
 
+    // Онбординг: заметный вход в главный сценарий «Тема → видео» и первый-запуск приветствие.
+    const ONBOARD_KEY = "hermest-board:onboarded";
+
+    function openWizard(prefillTopic) {
+      sidePanel.hidden = false;
+      if (typeof prefillTopic === "string" && prefillTopic) {
+        wizardTopicInput.value = prefillTopic.slice(0, 300);
+      }
+      // Фокус синхронно (панель уже видима) с preventScroll, затем плавный скролл к wizard.
+      wizardTopicInput.focus({ preventScroll: true });
+      const panel = document.querySelector(".topic-wizard-panel");
+      if (panel) panel.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+
+    function initOnboarding() {
+      const startButton = document.getElementById("startWizard");
+      if (startButton) startButton.addEventListener("click", () => openWizard());
+
+      const overlay = document.getElementById("welcomeOverlay");
+      if (!overlay) return;
+
+      let alreadyOnboarded = false;
+      try { alreadyOnboarded = localStorage.getItem(ONBOARD_KEY) === "1"; } catch (_) {}
+      if (alreadyOnboarded) {
+        overlay.hidden = true;
+        return;
+      }
+
+      const topicInput = document.getElementById("welcomeTopic");
+      const startCta = document.getElementById("welcomeStart");
+      const skipCta = document.getElementById("welcomeSkip");
+      const dismiss = () => {
+        overlay.hidden = true;
+        try { localStorage.setItem(ONBOARD_KEY, "1"); } catch (_) {}
+      };
+
+      overlay.hidden = false;
+      requestAnimationFrame(() => { if (topicInput) topicInput.focus(); });
+
+      if (startCta) startCta.addEventListener("click", () => {
+        const topic = topicInput ? topicInput.value.trim() : "";
+        dismiss();
+        openWizard(topic);
+      });
+      if (skipCta) skipCta.addEventListener("click", dismiss);
+      if (topicInput) topicInput.addEventListener("keydown", event => {
+        if (event.key === "Enter" && startCta) { event.preventDefault(); startCta.click(); }
+      });
+      overlay.addEventListener("keydown", event => {
+        if (event.key === "Escape") { event.preventDefault(); dismiss(); }
+      });
+    }
+
     render();
     renderApiProviderControls();
     syncAiSettingsForm();
     loadApiProviderCatalog();
     checkLocalMediaStatus();
     setTimeout(fitView, 80);
+    initOnboarding();

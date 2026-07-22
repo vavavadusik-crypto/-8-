@@ -66,6 +66,131 @@
 
     button:active { transform: translateY(1px); }
 
+    .cta-primary {
+      width: auto;
+      gap: 8px;
+      padding: 0 16px;
+      font-weight: 800;
+      white-space: nowrap;
+      color: #041016;
+      background: linear-gradient(135deg, var(--accent), #93c5fd);
+      border-color: transparent;
+    }
+
+    .cta-primary:hover {
+      color: #041016;
+      background: linear-gradient(135deg, #7ff2df, #a9cbff);
+      border-color: transparent;
+    }
+
+    .cta-icon { font-size: 15px; line-height: 1; }
+
+    .welcome-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(2, 5, 12, 0.72);
+      backdrop-filter: blur(8px);
+    }
+
+    .welcome-overlay[hidden] { display: none; }
+
+    .welcome-card {
+      width: min(520px, 100%);
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 28px;
+      border-radius: 18px;
+      border: 1px solid rgba(94, 234, 212, 0.28);
+      background: linear-gradient(180deg, rgba(9, 18, 32, 0.96), rgba(3, 7, 15, 0.98));
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+    }
+
+    .welcome-mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-weight: 950;
+      font-size: 22px;
+      color: var(--accent);
+      background:
+        linear-gradient(135deg, rgba(94, 234, 212, .28), rgba(240, 171, 252, .2)),
+        rgba(3, 9, 18, .9);
+      border: 1px solid rgba(94, 234, 212, .42);
+    }
+
+    .welcome-card h1 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.15;
+      color: #eafcff;
+    }
+
+    .welcome-lead {
+      margin: 0;
+      color: var(--muted, #9fb4c6);
+      line-height: 1.5;
+    }
+
+    .welcome-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 13px;
+      color: #cfe6f2;
+    }
+
+    .welcome-field input {
+      height: 44px;
+      border-radius: 10px;
+      border: 1px solid rgba(123, 220, 255, .24);
+      background: rgba(3, 9, 18, .7);
+      color: var(--text);
+      padding: 0 14px;
+      font-size: 15px;
+      outline: none;
+    }
+
+    .welcome-field input:focus { border-color: rgba(94, 234, 212, 0.72); }
+
+    .welcome-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .welcome-actions .cta-primary {
+      flex: 1 1 auto;
+      height: 46px;
+      font-size: 15px;
+    }
+
+    .welcome-ghost {
+      width: auto;
+      height: 46px;
+      padding: 0 16px;
+      white-space: nowrap;
+    }
+
+    .welcome-foot {
+      margin: 0;
+      font-size: 12px;
+      color: rgba(159, 180, 198, 0.7);
+    }
+
+    @media (max-width: 520px) {
+      .welcome-actions .cta-primary,
+      .welcome-ghost { flex: 1 1 100%; }
+    }
+
     .shell {
       position: fixed;
       inset: 0;
@@ -689,6 +814,7 @@
       </div>
       <input class="deck-title" id="deckTitle" value="Hermest: оболочка над ИИ-агентами" aria-label="Название борда">
       <nav class="toolbar" aria-label="Инструменты">
+        <button id="startWizard" class="cta-primary" title="Собрать видео из темы — главный сценарий"><span class="cta-icon" aria-hidden="true">🎬</span><span class="cta-label">Тема → видео</span></button>
         <button id="addCard" title="Добавить карточку">＋</button>
         <button id="connectMode" title="Соединить выбранные карточки">⛓</button>
         <button id="fitView" title="Показать все карточки">⌖</button>
@@ -1017,6 +1143,23 @@
     <input class="hidden-input" id="planFileInput" type="file" accept=".md,.txt,.json,text/markdown,text/plain,application/json">
     <input class="hidden-input" id="roadmapFileInput" type="file" accept=".md,.txt,.json,text/markdown,text/plain,application/json">
   </main>
+
+  <div class="welcome-overlay" id="welcomeOverlay" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle" hidden>
+    <div class="welcome-card">
+      <div class="welcome-mark" aria-hidden="true">H</div>
+      <h1 id="welcomeTitle">Из темы — в готовое видео</h1>
+      <p class="welcome-lead">Введи тему. ИИ соберёт карточки-сценарий, озвучит и смонтирует настоящий MP4 — локально, на твоём компьютере. Подойдёт свой или бесплатный API-ключ, без обязательной подписки.</p>
+      <label class="welcome-field" for="welcomeTopic">
+        <span>Тема ролика</span>
+        <input id="welcomeTopic" type="text" maxlength="300" placeholder="Например: Квантовые компьютеры простыми словами" autocomplete="off">
+      </label>
+      <div class="welcome-actions">
+        <button id="welcomeStart" class="cta-primary">Начать</button>
+        <button id="welcomeSkip" class="welcome-ghost">Осмотреть доску</button>
+      </div>
+      <p class="welcome-foot">Ничего не отправляется без твоего действия. Данные хранятся локально в браузере.</p>
+    </div>
+  </div>
 
   <script type="module" src="/src/app.js"></script>
 </body>
