@@ -85,6 +85,19 @@
 
     .cta-icon { font-size: 15px; line-height: 1; }
 
+    .btn-danger {
+      color: #fecdd3;
+      border-color: rgba(244, 63, 94, .5);
+      background: rgba(244, 63, 94, .16);
+    }
+
+    .btn-danger:hover {
+      border-color: rgba(244, 63, 94, .85);
+      background: rgba(244, 63, 94, .28);
+    }
+
+    .btn-danger[hidden] { display: none; }
+
     .welcome-overlay {
       position: fixed;
       inset: 0;
@@ -910,10 +923,11 @@
             </div>
             <div class="mini-note">Свой или бесплатный API (Ollama, OpenRouter, Hugging Face…). Ключ уходит на локальный worker только на время запроса и не попадает в проект, localStorage и manifest.</div>
           </div>
-          <div class="panel-row wide">
+          <div class="panel-row two">
             <button id="wizardDraft" title="Собрать карточки из темы браузерной ИИ-моделью">Собрать из темы</button>
+            <button id="wizardCancel" class="btn-danger" title="Отменить текущую сборку" aria-label="Отменить сборку черновика" hidden>Отменить</button>
           </div>
-          <div class="auth-status" id="wizardStatus">Готово. Введи тему и нажми «Собрать из темы».</div>
+          <div class="auth-status" id="wizardStatus" role="status" aria-live="polite">Готово. Введи тему и нажми «Собрать из темы».</div>
         </div>
         <div class="panel-section local-render-panel">
           <h2>Настоящий локальный MP4</h2>
