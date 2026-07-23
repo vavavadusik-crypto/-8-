@@ -27,3 +27,10 @@
 
 ## Верификация (PHASE 1.4) — заполняется по завершении
 (команды, exit codes, реальный smoke render, UI/API на реальном job)
+
+## M1-ext ЗАКРЫТ (PHASE 1 полный контракт) — 2026-07-23
+
+Обе полосы слиты в main: backend af46c4e (feat/m1-ext-runtime — deriveRenderAnalytics расширен до resolution/aspectRatio/truePeakDbtp/footageCount/recipeHash/videoType/qcPassed/blockers/warnings/completedAt/loudnessRangeLu/totalBytes; +real manifest fixture; 11 analytics-тестов), frontend 04442d2 (feat/m1-ext-ux — блок аналитики расширен: разрешение+aspect, QC, True Peak, B-roll count, warnings/blockers; всё деградирует в «—»).
+Контракт полей 1:1: всё, что читает фронт (17 полей), backend отдаёт.
+ПОЛНЫЙ gate (реальный ffmpeg — требование M1.4): validate ok · 345 unit / 0 fail · smoke:api ok · 5 media / 0 fail (3 реальных MP4-рендера EN/RU + repeat-детерминизм) · build ok · render smoke ok. GATE EXIT 0.
+Push НЕ делался (master-prompt: без публичного push до разрешения). PHASE 1 ✅.
