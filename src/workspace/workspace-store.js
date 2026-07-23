@@ -431,6 +431,31 @@ export function createWorkspaceStore({ dbPath = process.env.HERMEST_WORKSPACE_DB
     return data;
   }
 
+  function backupWorkspace(filters = {}) {
+    const snapshot = exportJson();
+    if (filters.workspace_id) {
+      const wsid = filters.workspace_id;
+      for (const table of ["clients", "projects", "campaigns", "content_items", "assets", "render_jobs", "publish_jobs", "notes", "activity_log"]) {
+        if (snapshot[table]) {
+          snapshot[table] = snapshot[table].filter(row => row.workspace_id === wsid);
+        }
+      }
+    }
+    return snapshot;
+  }
+
+  function deleteWorkspace(workspaceId) {
+    if (!workspaceId) throw new Error("workspace_id_required");
+    const tables = ["activity_log", "notes", "publish_jobs", "render_jobs", "assets", "content_items", "campaigns", "projects", "clients"];
+    let totalDeleted = 0;
+    for (const table of tables) {
+      const result = db.prepare(`delete from ${table} where workspace_id = ?`).run(workspaceId);
+      totalDeleted += result.changes || 0;
+    }
+    appendActivity(null, null, "workspace_deleted", null, `Deleted workspace '${workspaceId}' (${totalDeleted} rows)`);
+    return { ok: true, workspace_id: workspaceId, deleted: totalDeleted };
+  }
+
   function importJson(data) {
     if (data.version !== 1) throw new Error("incompatible_export_version");
     const tables = ["clients", "projects", "campaigns", "content_items", "assets", "render_jobs", "publish_jobs", "notes", "activity_log"];
@@ -498,6 +523,8 @@ export function createWorkspaceStore({ dbPath = process.env.HERMEST_WORKSPACE_DB
     getActivity,
     exportJson,
     importJson,
+    backupWorkspace,
+    deleteWorkspace,
     close
   };
 }

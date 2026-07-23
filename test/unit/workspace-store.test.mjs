@@ -203,4 +203,30 @@ describe("workspace-store", () => {
 
     store2.close();
   });
+
+  it("backup workspace (scoped export)", () => {
+    const store = createWorkspaceStore({ dbPath: ":memory:" });
+    store.createClient({ workspace_id: "ws_alpha", name: "Client A", owner: "user_vadim" });
+    store.createClient({ workspace_id: "ws_beta", name: "Client B", owner: "user_vadim" });
+    const backup = store.backupWorkspace({ workspace_id: "ws_alpha" });
+    assert.equal(backup.version, 1);
+    assert.equal(backup.clients.length, 1);
+    assert.equal(backup.clients[0].workspace_id, "ws_alpha");
+    store.close();
+  });
+
+  it("delete workspace (cascade all entities)", () => {
+    const store = createWorkspaceStore({ dbPath: ":memory:" });
+    store.createClient({ workspace_id: "ws_doomed", name: "Doomed Client", owner: "user_vadim" });
+    store.createProject({ workspace_id: "ws_doomed", name: "Doomed Project", owner: "user_vadim" });
+    const result = store.deleteWorkspace("ws_doomed");
+    assert.equal(result.ok, true);
+    assert.equal(result.workspace_id, "ws_doomed");
+    assert.ok(result.deleted >= 2);
+    const clients = store.listClients({ workspace_id: "ws_doomed" });
+    const projects = store.listProjects({ workspace_id: "ws_doomed" });
+    assert.equal(clients.length, 0);
+    assert.equal(projects.length, 0);
+    store.close();
+  });
 });
