@@ -5,8 +5,25 @@
 > Протокол непрерывности: `docs/MASTER_PLAN_2026-07-19.md`, раздел 8.6.
 > Обновляется в начале каждой задачи и после каждого коммита. Это часть Definition of Done.
 
-UPDATED: 2026-07-23 (девятая сессия — RC + draft-cancel + render-cancel + progress + resume закрыты в main)
-ACTIVE PHASE: пять milestone в main @ 88cad83 (RC 0ef4d86, draft-cancel acf3ff3, render-cancel 7afda71, progress 34c8421, resume 88cad83).
+UPDATED: 2026-07-23 (девятая сессия — +аналитика M1, шесть milestone в main)
+ACTIVE PHASE: шесть milestone в main @ 101013c (RC 0ef4d86, draft-cancel acf3ff3, render-cancel 7afda71, progress 34c8421, resume 88cad83, analytics-M1 101013c).
+
+## Конкурент InMedia (Инмедиа, Баку / Silkway Accelerator / Astana Hub) — бенчмарк
+Из расшифровки TikTok-ролика (@astana_hub): единая AI-платформа — генерация текста/картинок/видео/озвучки + публикация + аналитика + CRM; «вместо десятков сервисов — одна экосистема». VC: $85k инвестиций, $150k Azure, $25k Cloudflare, раунд $250k.
+НАШ КЛИН: полностью бесплатно + BYOK + локально + приватно + РЕАЛЬНЫЙ детерминированный MP4 — того, что VC-SaaS позволить не может. Наши разрывы: аналитика (закрыт M1), авто-публикация (OAuth), генеративные видео-клипы, CRM (не приоритет). Сравнение — в ответе сессии 2026-07-23.
+
+## Milestone M1 «аналитика ролика» 2026-07-23 — ✅ ЗАКРЫТ (main @ 101013c) — ответ на InMedia
+Контракт: docs/ANALYTICS_MILESTONE_HANDOFF.md. Ветки feat/analytics-ux (я) + feat/analytics-runtime (терм. claude).
+- ПОЛОСА A (я): блок «Аналитика ролика» на completed-рендере — длительность/LUFS/размер MP4/сцены/голос+язык/формат/музыка/
+  число артефактов/SHA-256 + кнопка «Скопировать сводку». Скрыт без analytics, безопасный DOM, a11y-section, мобайл 375px. +1 UI-тест.
+- ПОЛОСА B (терм. claude соло, 83c2349): аддитивное job.analytics ТОЛЬКО на completed, деривация из verified result.manifest
+  (durationSeconds/LUFS/voice/language/recipeId/sceneCount/musicUsed/artifactCount/totalBytes/videoBytes/videoSha256),
+  try/catch (сводка не роняет рендер), санитизация (пути→<path>, ≤80, sha256 /^[a-f0-9]{64}$/), null/0 без выдумки,
+  cancel×late → не публикуется. +6 unit. Только job-manager, src/media НЕ тронут.
+- ИНТЕГРАЦИЯ: merge → main 101013c. Дифф ревьюил (deriveRenderAnalytics best-effort, имена полей 1:1 с фронтом). Лёгкий gate:
+  validate ok · 340 unit (0 fail) · smoke:api ok · build ok. Живой smoke: блок рендерится (9 полей, copy), скрыт без analytics,
+  мобайл без переполнений, консоль чистая. Терм. claude exit 0. Push НЕ делал.
+NEXT: M2 генеративный AI-b-roll (ближе к «генерации видео»); ИЛИ M3 авто-публикация (OAuth, нужно решение Вадима по площадкам/ключам).
 
 ## Milestone «resume in-flight задач после reload» 2026-07-23 — ✅ ЗАКРЫТ (main @ 88cad83)
 Контракт: docs/RESUME_MILESTONE_HANDOFF.md. Ветки feat/resume-ux (я) + feat/resume-runtime (терм. claude).
