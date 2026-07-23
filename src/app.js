@@ -66,6 +66,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     const localRenderPlatform = document.getElementById("localRenderPlatform");
     const localRenderStatus = document.getElementById("localRenderStatus");
     const localRenderElapsed = document.getElementById("localRenderElapsed");
+    const localRenderAnalytics = document.getElementById("localRenderAnalytics");
     const localRenderArtifacts = document.getElementById("localRenderArtifacts");
     const renderLocalVideoButton = document.getElementById("renderLocalVideo");
     const cancelLocalRenderButton = document.getElementById("cancelLocalRender");
@@ -2716,6 +2717,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       localRenderPlatform.disabled = true;
       cancelLocalRenderButton.disabled = true;
       localRenderArtifacts.replaceChildren();
+      renderRenderAnalytics(null);
       localRenderStatus.textContent = "Проверяю board и ставлю локальный render в очередь…";
       localRenderElapsedTimer.start();
       let data;
@@ -2753,7 +2755,10 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     async function settleRenderJob(jobId, pollToken) {
       try {
         const completed = await pollLocalRenderJob(jobId, pollToken);
-        if (completed?.status === "completed") renderLocalArtifactLinks(completed);
+        if (completed?.status === "completed") {
+          renderLocalArtifactLinks(completed);
+          renderRenderAnalytics(completed);
+        }
       } catch (error) {
         localRenderStatus.textContent = renderErrorText(error);
       } finally {
@@ -2885,6 +2890,68 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         row.append(link, meta);
         localRenderArtifacts.append(row);
       }
+    }
+
+    function formatMediaBytes(bytes) {
+      const value = Number(bytes);
+      if (!Number.isFinite(value) || value <= 0) return "—";
+      if (value >= 1048576) return `${(value / 1048576).toFixed(1)} МБ`;
+      if (value >= 1024) return `${(value / 1024).toFixed(1)} КБ`;
+      return `${value} B`;
+    }
+
+    function formatDurationSeconds(seconds) {
+      const value = Number(seconds);
+      if (!Number.isFinite(value) || value < 0) return "—";
+      const total = Math.round(value);
+      return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+    }
+
+    // Аналитика ролика: честная сводка из job.analytics (backend деривирует из verified manifest).
+    function renderRenderAnalytics(job) {
+      const analytics = job && typeof job.analytics === "object" ? job.analytics : null;
+      if (!analytics) {
+        localRenderAnalytics.hidden = true;
+        localRenderAnalytics.replaceChildren();
+        return;
+      }
+      const rows = [
+        ["Длительность", formatDurationSeconds(analytics.durationSeconds)],
+        ["Громкость", Number.isFinite(analytics.integratedLufs) ? `${analytics.integratedLufs} LUFS` : "—"],
+        ["Размер MP4", formatMediaBytes(analytics.videoBytes)],
+        ["Сцен", Number.isFinite(analytics.sceneCount) ? String(analytics.sceneCount) : "—"],
+        ["Голос · язык", [analytics.voice, analytics.language].filter(Boolean).join(" · ") || "—"],
+        ["Формат", analytics.recipeId || "—"],
+        ["Музыка", analytics.musicUsed ? "да" : "нет"],
+        ["Артефактов", Number.isFinite(analytics.artifactCount) ? String(analytics.artifactCount) : "—"],
+        ["SHA-256 (MP4)", typeof analytics.videoSha256 === "string" && analytics.videoSha256 ? `${analytics.videoSha256.slice(0, 16)}…` : "—"]
+      ];
+      const heading = document.createElement("h3");
+      heading.textContent = "Аналитика ролика";
+      const grid = document.createElement("dl");
+      grid.className = "analytics-grid";
+      for (const [label, value] of rows) {
+        const term = document.createElement("dt");
+        term.textContent = label;
+        const detail = document.createElement("dd");
+        detail.textContent = value;
+        grid.append(term, detail);
+      }
+      const copyButton = document.createElement("button");
+      copyButton.className = "analytics-copy";
+      copyButton.type = "button";
+      copyButton.textContent = "Скопировать сводку";
+      copyButton.addEventListener("click", () => {
+        const text = rows.map(([label, value]) => `${label}: ${value}`).join("\n");
+        if (navigator.clipboard?.writeText) {
+          navigator.clipboard.writeText(text).then(
+            () => { copyButton.textContent = "Скопировано"; },
+            () => { copyButton.textContent = "Не удалось скопировать"; }
+          );
+        }
+      });
+      localRenderAnalytics.replaceChildren(heading, grid, copyButton);
+      localRenderAnalytics.hidden = false;
     }
 
     async function checkLocalMediaStatus() {
