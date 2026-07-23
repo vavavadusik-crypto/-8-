@@ -9,6 +9,7 @@ import { assertCandidateApproval, buildPublishCandidate, summarizeAssetRights } 
 import { getProductReadiness } from "./_lib/readiness.js";
 import { createSignedSessionToken } from "./_lib/session.js";
 import { encryptSecret, redactConnector, requireTokenVault, sanitizeConnectorMetadata } from "./_lib/token-vault.js";
+import { getPlatformPublishingStatus, getPlatformStatus } from "../src/publishing/platform-status.js";
 import {
   appendAudit,
   createId,
@@ -156,6 +157,23 @@ export default async function handler(request, response) {
 
     if (path[0] === "connectors" && path[1]) {
       await handleConnectorById(request, response, path[1]);
+      return;
+    }
+
+    if (path[0] === "publishing" && path[1] === "platforms" && !path[2]) {
+      if (!requireMethods(request, response, ["GET"])) return;
+      sendJson(response, 200, getPlatformPublishingStatus());
+      return;
+    }
+
+    if (path[0] === "publishing" && path[1] === "platforms" && path[2]) {
+      if (!requireMethods(request, response, ["GET"])) return;
+      const status = getPlatformStatus(path[2]);
+      if (!status) {
+        sendJson(response, 404, { ok: false, error: "platform_not_found", platform: path[2] });
+        return;
+      }
+      sendJson(response, 200, { ok: true, platform: status });
       return;
     }
 
