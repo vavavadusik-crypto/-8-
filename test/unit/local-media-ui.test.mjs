@@ -55,6 +55,20 @@ test("board UI shows elapsed activity and render progress for long jobs", async 
   assert.match(app, /job\.progress\?\.label/);
 });
 
+test("board UI persists and resumes in-flight jobs across reload", async () => {
+  const app = await readFile("src/app.js", "utf8");
+  assert.match(app, /hermest-board:active-jobs:v1/);
+  assert.match(app, /persistActiveJob\("draft"/);
+  assert.match(app, /persistActiveJob\("render"/);
+  assert.match(app, /clearActiveJob\("draft"/);
+  assert.match(app, /clearActiveJob\("render"/);
+  assert.match(app, /async function resumeDraftJob/);
+  assert.match(app, /async function resumeRenderJob/);
+  assert.match(app, /resumeActiveJobs\(\)/);
+  // reconnect восстанавливает elapsed от createdAt и не авто-применяет терминальный job
+  assert.match(app, /Date\.parse\(job\.createdAt\)/);
+});
+
 test("board UI manages BYOK provider keys without persisting them", async () => {
   const html = await readFile("index.html", "utf8");
   const app = await readFile("src/app.js", "utf8");

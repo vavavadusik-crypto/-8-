@@ -185,9 +185,9 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         if (intervalId) { clearInterval(intervalId); intervalId = null; }
         el.hidden = true;
       };
-      const start = () => {
+      const start = fromMs => {
         stop();
-        startMs = Date.now();
+        startMs = Number.isFinite(fromMs) ? fromMs : Date.now();
         el.hidden = false;
         paint();
         intervalId = setInterval(paint, 1000);
@@ -196,6 +196,27 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     }
     const wizardElapsedTimer = createElapsedTimer(wizardElapsed);
     const localRenderElapsedTimer = createElapsedTimer(localRenderElapsed);
+
+    // Персист id активных задач, чтобы переподключиться к ним после reload.
+    const ACTIVE_JOBS_KEY = "hermest-board:active-jobs:v1";
+    function readActiveJobs() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(ACTIVE_JOBS_KEY) || "{}");
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+    function persistActiveJob(kind, jobId) {
+      const next = readActiveJobs();
+      next[kind] = jobId;
+      try { localStorage.setItem(ACTIVE_JOBS_KEY, JSON.stringify(next)); } catch (_) {}
+    }
+    function clearActiveJob(kind) {
+      const next = readActiveJobs();
+      delete next[kind];
+      try { localStorage.setItem(ACTIVE_JOBS_KEY, JSON.stringify(next)); } catch (_) {}
+    }
     let drag = null;
     let raf = null;
 
@@ -1107,10 +1128,10 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       wizardStatus.textContent = byokPreset
         ? "Собираю через ваш API… можно отменить."
         : "Ставлю задачу ИИ-модели (reasoning-чат думает минутами) — можно отменить.";
-      let cancelledView = false;
+      let submitted;
       try {
         // Draft асинхронный: reasoning-чат думает минутами, синхронный HTTP рвался в 504.
-        const submitted = await fetchJson("/api/local-media/draft", {
+        submitted = await fetchJson("/api/local-media/draft", {
           method: "POST",
           headers: { "content-type": "application/json", "x-hermest-local-media": "1" },
           body: JSON.stringify({
@@ -1124,10 +1145,24 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
             narrationProvider: state.brief?.narrationProvider || ""
           })
         });
-        activeDraftJobId = submitted.job.id;
-        wizardStatus.textContent = "Идёт сборка карточек… можно отменить.";
+      } catch (error) {
+        wizardStatus.textContent = draftErrorText(error, byokPreset);
+        setWizardBusy(false);
+        wizardElapsedTimer.stop();
+        return;
+      }
+      activeDraftJobId = submitted.job.id;
+      persistActiveJob("draft", activeDraftJobId);
+      wizardStatus.textContent = "Идёт сборка карточек… можно отменить.";
+      await settleDraftJob(activeDraftJobId, byokPreset);
+    }
+
+    // Опрос и применение результата draft-job. Общее для нового запуска и reconnect после reload.
+    async function settleDraftJob(jobId, byokPreset) {
+      let cancelledView = false;
+      try {
         // Backend-authoritative: poll вернёт cancelled, когда сервер отменит job (без клиентской гонки).
-        const job = await pollDraftJob(activeDraftJobId);
+        const job = await pollDraftJob(jobId);
         if (job.status === "cancelled") {
           cancelledView = true;
           wizardStatus.textContent = "Сборка отменена. Поправь тему или настройки и запусти снова.";
@@ -1145,22 +1180,45 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
           warnings.length ? `Предупреждения: ${warnings.join("; ")}` : ""
         ].filter(Boolean).join(" ");
       } catch (error) {
-        // Подсказка зависит от пути: BYOK (свой API) не использует мост — не сбивать пользователя с толку.
-        const hint = byokPreset
-          ? "Проверь Base URL, название модели и ключ своего API."
-          : "Проверь, что мост browser-ai-bridge запущен (:8788) и провайдер залогинен.";
-        wizardStatus.textContent = [
-          "Не удалось собрать черновик.",
-          `Ошибка: ${error.message || "unknown"}`,
-          hint
-        ].join(" ");
+        wizardStatus.textContent = draftErrorText(error, byokPreset);
       } finally {
         activeDraftJobId = null;
         draftCancelInFlight = false;
+        clearActiveJob("draft");
         setWizardBusy(false);
         wizardElapsedTimer.stop();
         if (cancelledView) wizardTopicInput.focus();
       }
+    }
+
+    function draftErrorText(error, byokPreset) {
+      // Подсказка зависит от пути: BYOK (свой API) не использует мост — не сбивать пользователя с толку.
+      const hint = byokPreset
+        ? "Проверь Base URL, название модели и ключ своего API."
+        : "Проверь, что мост browser-ai-bridge запущен (:8788) и провайдер залогинен.";
+      return ["Не удалось собрать черновик.", `Ошибка: ${error.message || "unknown"}`, hint].join(" ");
+    }
+
+    // Переподключение к draft-job после reload (id сохранён в localStorage).
+    async function resumeDraftJob(jobId) {
+      if (activeDraftJobId) return;
+      let data;
+      try {
+        data = await fetchJson(`/api/local-media/draft/${encodeURIComponent(jobId)}`);
+      } catch {
+        clearActiveJob("draft"); // 404/вычищен — тихо сбрасываем
+        return;
+      }
+      const job = data.job || {};
+      if (job.status !== "queued" && job.status !== "running") {
+        clearActiveJob("draft"); // терминальный — не авто-применяем: пользователь мог менять доску
+        return;
+      }
+      activeDraftJobId = jobId;
+      setWizardBusy(true);
+      wizardElapsedTimer.start(Date.parse(job.createdAt));
+      wizardStatus.textContent = "Продолжаю прежнюю сборку… можно отменить.";
+      await settleDraftJob(jobId, null);
     }
 
     async function cancelDraftJob() {
@@ -2660,8 +2718,9 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       localRenderArtifacts.replaceChildren();
       localRenderStatus.textContent = "Проверяю board и ставлю локальный render в очередь…";
       localRenderElapsedTimer.start();
+      let data;
       try {
-        const data = await fetchJson("/api/local-media/render", {
+        data = await fetchJson("/api/local-media/render", {
           method: "POST",
           headers: {
             "content-type": "application/json",
@@ -2673,26 +2732,73 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
             platform
           })
         });
-        activeLocalRenderJobId = data.job.id;
-        cancelLocalRenderButton.disabled = false;
-        renderLocalJobStatus(data.job);
-        const completed = await pollLocalRenderJob(data.job.id, pollToken);
+      } catch (error) {
+        localRenderStatus.textContent = renderErrorText(error);
+        if (pollToken === localRenderPollToken) {
+          renderLocalVideoButton.disabled = false;
+          localRenderPlatform.disabled = false;
+          cancelLocalRenderButton.disabled = true;
+          localRenderElapsedTimer.stop();
+        }
+        return;
+      }
+      activeLocalRenderJobId = data.job.id;
+      persistActiveJob("render", activeLocalRenderJobId);
+      cancelLocalRenderButton.disabled = false;
+      renderLocalJobStatus(data.job);
+      await settleRenderJob(data.job.id, pollToken);
+    }
+
+    // Опрос и финализация render-job. Общее для запуска и reconnect после reload.
+    async function settleRenderJob(jobId, pollToken) {
+      try {
+        const completed = await pollLocalRenderJob(jobId, pollToken);
         if (completed?.status === "completed") renderLocalArtifactLinks(completed);
       } catch (error) {
-        localRenderStatus.textContent = [
-          "Локальный worker недоступен или render отклонён.",
-          `Ошибка: ${error.message || "unknown"}`,
-          "Запусти `npm run dev` локально либо используй `npm run render:project -- --input board.json --platform youtube_video`."
-        ].join("\n");
+        localRenderStatus.textContent = renderErrorText(error);
       } finally {
         if (pollToken === localRenderPollToken) {
           activeLocalRenderJobId = null;
           renderLocalVideoButton.disabled = false;
           localRenderPlatform.disabled = false;
           cancelLocalRenderButton.disabled = true;
+          clearActiveJob("render");
           localRenderElapsedTimer.stop();
         }
       }
+    }
+
+    function renderErrorText(error) {
+      return [
+        "Локальный worker недоступен или render отклонён.",
+        `Ошибка: ${error.message || "unknown"}`,
+        "Запусти `npm run dev` локально либо используй `npm run render:project -- --input board.json --platform youtube_video`."
+      ].join("\n");
+    }
+
+    // Переподключение к render-job после reload (id сохранён в localStorage).
+    async function resumeRenderJob(jobId) {
+      if (activeLocalRenderJobId) return;
+      let data;
+      try {
+        data = await fetchJson(`/api/local-media/jobs/${encodeURIComponent(jobId)}`);
+      } catch {
+        clearActiveJob("render");
+        return;
+      }
+      const job = data.job || {};
+      if (job.status !== "queued" && job.status !== "running") {
+        clearActiveJob("render");
+        return;
+      }
+      const pollToken = ++localRenderPollToken;
+      activeLocalRenderJobId = jobId;
+      renderLocalVideoButton.disabled = true;
+      localRenderPlatform.disabled = true;
+      cancelLocalRenderButton.disabled = false;
+      localRenderElapsedTimer.start(Date.parse(job.createdAt));
+      renderLocalJobStatus(job);
+      await settleRenderJob(jobId, pollToken);
     }
 
     async function pollLocalRenderJob(jobId, pollToken) {
@@ -3339,6 +3445,13 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       });
     }
 
+    // Переподключение к незавершённым задачам после reload (id из localStorage).
+    function resumeActiveJobs() {
+      const active = readActiveJobs();
+      if (active.draft) void resumeDraftJob(active.draft);
+      if (active.render) void resumeRenderJob(active.render);
+    }
+
     render();
     renderApiProviderControls();
     syncAiSettingsForm();
@@ -3346,3 +3459,4 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     checkLocalMediaStatus();
     setTimeout(fitView, 80);
     initOnboarding();
+    resumeActiveJobs();
