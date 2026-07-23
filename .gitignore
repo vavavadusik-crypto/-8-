@@ -13,3 +13,4 @@ npm-debug.log*
 *.mov
 *.log
 .vercel
+node_modules
