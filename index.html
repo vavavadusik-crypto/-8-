@@ -127,6 +127,48 @@
       .job-elapsed::before { animation: none; opacity: .85; }
     }
 
+    .render-analytics {
+      margin-top: 10px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(94, 234, 212, .22);
+      background: rgba(6, 16, 28, .55);
+    }
+
+    .render-analytics[hidden] { display: none; }
+
+    .render-analytics h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: #dffcff;
+    }
+
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 4px 12px;
+      margin: 0;
+      font-size: 12px;
+    }
+
+    .analytics-grid dt { color: var(--muted, #9fb4c6); }
+
+    .analytics-grid dd {
+      margin: 0;
+      color: var(--text);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
+    }
+
+    .render-analytics .analytics-copy {
+      margin-top: 10px;
+      height: 32px;
+      width: auto;
+      padding: 0 12px;
+      font-size: 12px;
+    }
+
     .welcome-overlay {
       position: fixed;
       inset: 0;
@@ -1008,6 +1050,7 @@
           <div class="auth-status" id="localRenderStatus" role="status" aria-live="polite">Проверяю local media worker…</div>
           <span class="job-elapsed" id="localRenderElapsed" aria-hidden="true" hidden></span>
           <div class="artifact-list" id="localRenderArtifacts" aria-live="polite"></div>
+          <section class="render-analytics" id="localRenderAnalytics" aria-label="Аналитика ролика" hidden></section>
         </div>
         <div class="field">
           <label><span>Сценарий озвучки</span></label>

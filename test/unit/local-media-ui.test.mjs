@@ -69,6 +69,21 @@ test("board UI persists and resumes in-flight jobs across reload", async () => {
   assert.match(app, /Date\.parse\(job\.createdAt\)/);
 });
 
+test("board UI renders honest render analytics from job.analytics", async () => {
+  const html = await readFile("index.html", "utf8");
+  const app = await readFile("src/app.js", "utf8");
+  assert.match(html, /id="localRenderAnalytics"/);
+  assert.match(app, /function renderRenderAnalytics/);
+  assert.match(app, /job\.analytics/);
+  assert.match(app, /Аналитика ролика/);
+  assert.match(app, /LUFS/);
+  assert.match(app, /videoSha256/);
+  // аналитика отображается только на completed, не выдумывается для активных
+  assert.match(app, /renderRenderAnalytics\(completed\)/);
+  // безопасный DOM без innerHTML
+  assert.doesNotMatch(app, /localRenderAnalytics\.innerHTML/);
+});
+
 test("board UI manages BYOK provider keys without persisting them", async () => {
   const html = await readFile("index.html", "utf8");
   const app = await readFile("src/app.js", "utf8");
