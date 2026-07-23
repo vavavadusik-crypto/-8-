@@ -68,6 +68,7 @@ export function createLocalMediaJobManager({
       artifactPaths: new Map(),
       artifacts: [],
       candidate: null,
+      analytics: null,
       blockers: [],
       warnings: [],
       error: null
@@ -159,6 +160,9 @@ export function createLocalMediaJobManager({
       // не имеет права превратить cancelled в completed.
       if (isCancelled(record)) throw cancellationReason(record);
       record.status = "completed";
+      // Аналитика деривируется ТОЛЬКО на completed из уже верифицированного
+      // manifest (контракт docs/ANALYTICS_MILESTONE_HANDOFF.md).
+      record.analytics = deriveRenderAnalytics(record, result);
       // phase:"done" проставляет только сам менеджер и только на completed:
       // отменённый/упавший job не имеет права показывать ложный done.
       record.progress = { phase: "done" };
@@ -210,6 +214,7 @@ export function createLocalMediaJobManager({
     record.artifacts = [];
     record.artifactPaths.clear();
     record.candidate = null;
+    record.analytics = null;
     record.blockers = [];
     record.warnings = [];
     record.error = null;
@@ -450,7 +455,7 @@ function validateProject(project) {
 }
 
 function publicJob(record) {
-  return structuredClone({
+  const job = {
     id: record.id,
     status: record.status,
     platform: record.platform,
@@ -464,11 +469,88 @@ function publicJob(record) {
     blockers: record.blockers,
     warnings: record.warnings,
     error: record.error
-  });
+  };
+  // analytics — аддитивное поле и появляется ТОЛЬКО у completed-job:
+  // queued/running/failed/cancelled не показывают ложную аналитику.
+  if (record.status === "completed" && record.analytics) job.analytics = record.analytics;
+  return structuredClone(job);
+}
+
+// Аналитика ролика (docs/ANALYTICS_MILESTONE_HANDOFF.md, «Общий API-контракт»):
+// честная сводка ТОЛЬКО из уже прошедшего QC result.manifest и публичных
+// артефактов. Отсутствующее значение → null/0, ничего не выдумывается; наружу
+// уходят числа, короткие санитизированные строки и хеши — ни путей, ни stack.
+function deriveRenderAnalytics(record, result) {
+  try {
+    const manifest = result?.manifest && typeof result.manifest === "object" ? result.manifest : {};
+    const tts = isPlainObject(manifest.tools?.tts) ? manifest.tools.tts : {};
+    const loudness = isPlainObject(manifest.qc?.loudness) ? manifest.qc.loudness : {};
+    const manifestArtifacts = Array.isArray(manifest.artifacts) ? manifest.artifacts : [];
+    const expectedVideoName = `${record.recipeId}.mp4`;
+    const manifestVideo =
+      manifestArtifacts.find(artifact => artifact?.name === expectedVideoName && artifact?.type === "video/mp4")
+      || manifestArtifacts.find(artifact => artifact?.type === "video/mp4")
+      || null;
+    const storyboardArtifact = manifestArtifacts.find(artifact => artifact?.name === "storyboard.json") || null;
+    const publicVideo =
+      record.artifacts.find(artifact => artifact.name === expectedVideoName && artifact.type === "video/mp4")
+      || record.artifacts.find(artifact => artifact.type === "video/mp4")
+      || null;
+    return {
+      durationSeconds: finiteNumberOrNull(manifestVideo?.probe?.durationSeconds)
+        ?? finiteNumberOrNull(tts.durationSeconds),
+      integratedLufs: finiteNumberOrNull(loudness.integratedLufs),
+      loudnessRangeLu: finiteNumberOrNull(loudness.loudnessRangeLu),
+      voice: sanitizeInlineText(tts.voice, MAX_ANALYTICS_TEXT_CHARS),
+      language: sanitizeInlineText(tts.language, MAX_ANALYTICS_TEXT_CHARS),
+      recipeId: record.recipeId,
+      sceneCount: deriveSceneCount(storyboardArtifact, manifest.footage),
+      musicUsed: isPlainObject(manifest.music),
+      artifactCount: record.artifacts.length,
+      totalBytes: record.artifacts.reduce((total, artifact) => total + byteCount(artifact.bytes), 0),
+      videoBytes: byteCount(publicVideo?.bytes),
+      videoSha256: sha256OrNull(publicVideo?.sha256)
+    };
+  } catch {
+    // Диагностическая сводка не имеет права уронить готовый рендер.
+    return null;
+  }
+}
+
+// Достоверный источник числа сцен: probe storyboard.json (scenes пишет сам
+// renderer), иначе — число различных sceneIndex в footage (нижняя граница).
+function deriveSceneCount(storyboardArtifact, footage) {
+  const scenes = storyboardArtifact?.probe?.scenes;
+  if (Number.isSafeInteger(scenes) && scenes >= 0) return scenes;
+  if (!Array.isArray(footage)) return 0;
+  const sceneIndexes = new Set();
+  for (const clip of footage) {
+    const sceneIndex = clip?.sceneIndex;
+    if (Number.isSafeInteger(sceneIndex) && sceneIndex >= 0) sceneIndexes.add(sceneIndex);
+  }
+  return sceneIndexes.size;
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function finiteNumberOrNull(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function byteCount(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function sha256OrNull(value) {
+  const sha256 = String(value || "").trim().toLowerCase();
+  return /^[a-f0-9]{64}$/.test(sha256) ? sha256 : null;
 }
 
 const ADAPTER_PROGRESS_PHASES = new Set(["preflight", "scenes", "audio", "encode", "finalize"]);
 const MAX_PROGRESS_LABEL_CHARS = 120;
+const MAX_ANALYTICS_TEXT_CHARS = 80;
 const MAX_PROGRESS_SCENE_TOTAL = 10000;
 
 function sanitizeProgressUpdate(update) {
@@ -492,9 +574,14 @@ function sanitizeProgressUpdate(update) {
   return progress;
 }
 
-// label человекочитаем и безопасен: абсолютные пути редактируются, управляющие
-// символы (включая многострочные stack) схлопываются в пробел, длина ≤ 120.
 function sanitizeProgressLabel(value) {
+  return sanitizeInlineText(value, MAX_PROGRESS_LABEL_CHARS);
+}
+
+// Короткий текст человекочитаем и безопасен: абсолютные пути редактируются,
+// управляющие символы (включая многострочные stack) схлопываются в пробел,
+// длина ограничена maxChars. Общая основа для progress.label и analytics.
+function sanitizeInlineText(value, maxChars) {
   if (typeof value !== "string") return null;
   const sanitized = value
     .replace(/[A-Za-z]:\\[^\s"'<>]+/gu, "<path>")
@@ -502,7 +589,7 @@ function sanitizeProgressLabel(value) {
     .replace(/[\u0000-\u001f\u007f]/gu, " ")
     .replace(/\s+/gu, " ")
     .trim()
-    .slice(0, MAX_PROGRESS_LABEL_CHARS);
+    .slice(0, maxChars);
   return sanitized || null;
 }
 
