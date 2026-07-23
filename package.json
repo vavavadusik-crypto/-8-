@@ -20,7 +20,8 @@
     "verify:live": "node scripts/live-verify.mjs",
     "render:project": "node scripts/render-project.mjs",
     "test:media": "node --test test/integration/render-project.test.mjs",
-    "check": "npm run validate && npm run test:unit && npm run smoke:api && npm run test:media && npm run build && npm run smoke"
+    "test:publish": "node --test test/integration/publish-webhook-smoke.test.mjs",
+    "check": "npm run validate && npm run test:unit && npm run smoke:api && npm run test:media && npm run test:publish && npm run build && npm run smoke"
   },
   "devDependencies": {
     "vite": "^7.0.0"
