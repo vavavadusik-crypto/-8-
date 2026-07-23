@@ -557,3 +557,27 @@ export async function assertEmptyOutputDirectory(outputDir) {
   if (entries.length > 0) throw new TypeError("Render output directory must be empty");
   return outputDir;
 }
+
+export async function runBrollCascade({ providers, request, onWarning = () => {} }) {
+  let lastError = null;
+  for (const provider of providers) {
+    try {
+      const result = await provider.fetchMedia(request);
+      if (result === null) {
+        onWarning(`${provider.id}: no match for request`);
+        continue;
+      }
+      return {
+        ...result,
+        assetType: provider.kind
+      };
+    } catch (error) {
+      lastError = error;
+      onWarning(`${provider.id} failed: ${error.message}`);
+      if (error?.name === "AbortError" || request.signal?.aborted) {
+        throw error;
+      }
+    }
+  }
+  return null;
+}
