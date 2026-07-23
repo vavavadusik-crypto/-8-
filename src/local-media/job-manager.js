@@ -160,6 +160,9 @@ export function createLocalMediaJobManager({
       // не имеет права превратить cancelled в completed.
       if (isCancelled(record)) throw cancellationReason(record);
       record.status = "completed";
+      // completedAt фиксируется в момент перехода в completed, ДО деривации
+      // сводки: analytics.completedAt обязан отражать реальное завершение.
+      record.completedAt = now();
       // Аналитика деривируется ТОЛЬКО на completed из уже верифицированного
       // manifest (контракт docs/ANALYTICS_MILESTONE_HANDOFF.md).
       record.analytics = deriveRenderAnalytics(record, result);
@@ -496,20 +499,32 @@ function deriveRenderAnalytics(record, result) {
       record.artifacts.find(artifact => artifact.name === expectedVideoName && artifact.type === "video/mp4")
       || record.artifacts.find(artifact => artifact.type === "video/mp4")
       || null;
+    const resolution = deriveResolution(manifestVideo);
     return {
       durationSeconds: finiteNumberOrNull(manifestVideo?.probe?.durationSeconds)
         ?? finiteNumberOrNull(tts.durationSeconds),
       integratedLufs: finiteNumberOrNull(loudness.integratedLufs),
       loudnessRangeLu: finiteNumberOrNull(loudness.loudnessRangeLu),
+      truePeakDbtp: finiteNumberOrNull(loudness.truePeakDbtp),
       voice: sanitizeInlineText(tts.voice, MAX_ANALYTICS_TEXT_CHARS),
       language: sanitizeInlineText(tts.language, MAX_ANALYTICS_TEXT_CHARS),
       recipeId: record.recipeId,
+      recipeHash: sha256OrNull(manifest.recipeSha256),
       sceneCount: deriveSceneCount(storyboardArtifact, manifest.footage),
+      footageCount: Array.isArray(manifest.footage) ? manifest.footage.length : 0,
       musicUsed: isPlainObject(manifest.music),
       artifactCount: record.artifacts.length,
       totalBytes: record.artifacts.reduce((total, artifact) => total + byteCount(artifact.bytes), 0),
       videoBytes: byteCount(publicVideo?.bytes),
-      videoSha256: sha256OrNull(publicVideo?.sha256)
+      videoSha256: sha256OrNull(publicVideo?.sha256),
+      videoName: analyticsArtifactNameOrNull(publicVideo?.name),
+      videoType: mimeTypeOrNull(publicVideo?.type),
+      resolution,
+      aspectRatio: deriveAspectRatio(resolution),
+      qcPassed: isPlainObject(manifest.qc) ? manifest.qc.passed === true : null,
+      blockers: sanitizeAnalyticsList(record.blockers),
+      warnings: sanitizeAnalyticsList(record.warnings),
+      completedAt: isoTimestampOrNull(record.completedAt)
     };
   } catch {
     // Диагностическая сводка не имеет права уронить готовый рендер.
@@ -529,6 +544,68 @@ function deriveSceneCount(storyboardArtifact, footage) {
     if (Number.isSafeInteger(sceneIndex) && sceneIndex >= 0) sceneIndexes.add(sceneIndex);
   }
   return sceneIndexes.size;
+}
+
+// Разрешение берётся строго из ffprobe-раздела видеопотока
+// (probe.video.{width,height}, НЕ probe.{width,height}); частично измеренное
+// или неправдоподобное разрешение честно деградирует в null целиком.
+function deriveResolution(manifestVideo) {
+  const video = isPlainObject(manifestVideo?.probe?.video) ? manifestVideo.probe.video : null;
+  const width = pixelDimensionOrNull(video?.width);
+  const height = pixelDimensionOrNull(video?.height);
+  if (width === null || height === null) return null;
+  return { width, height };
+}
+
+function pixelDimensionOrNull(value) {
+  return Number.isSafeInteger(value) && value > 0 && value <= MAX_ANALYTICS_PIXEL_DIMENSION
+    ? value
+    : null;
+}
+
+// "W:H" в наименьших целых (сокращение через gcd): 1920×1080 → "16:9",
+// 1080×1920 → "9:16". Без разрешения соотношение не выдумывается.
+function deriveAspectRatio(resolution) {
+  if (!resolution) return null;
+  const divisor = greatestCommonDivisor(resolution.width, resolution.height);
+  return `${resolution.width / divisor}:${resolution.height / divisor}`;
+}
+
+function greatestCommonDivisor(left, right) {
+  while (right !== 0) {
+    const rest = left % right;
+    left = right;
+    right = rest;
+  }
+  return left;
+}
+
+// Имя артефакта уже прошло safeArtifactName, но analytics перепроверяет
+// собственный инвариант (короткое безопасное имя файла), не доверяя записи.
+function analyticsArtifactNameOrNull(value) {
+  const name = typeof value === "string" ? value : "";
+  return /^[A-Za-z0-9_.-]{1,200}$/.test(name) && name !== "." && name !== ".." ? name : null;
+}
+
+function mimeTypeOrNull(value) {
+  const type = String(value || "").trim().toLowerCase();
+  return type.length <= 100 && /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(type) ? type : null;
+}
+
+function isoTimestampOrNull(value) {
+  if (typeof value !== "string" || value.length > 64) return null;
+  return Number.isFinite(Date.parse(value)) ? value : null;
+}
+
+// Диагностические списки наружу уходят ограниченными и санитизированными:
+// не больше MAX_ANALYTICS_LIST_ITEMS строк, каждая ≤ 200 символов, без путей,
+// секретов и многострочных stack (общая основа — sanitizeInlineText).
+function sanitizeAnalyticsList(values) {
+  if (!Array.isArray(values)) return [];
+  return values
+    .slice(0, MAX_ANALYTICS_LIST_ITEMS)
+    .map(value => sanitizeInlineText(typeof value === "string" ? value : String(value), MAX_ANALYTICS_LIST_TEXT_CHARS))
+    .filter(Boolean);
 }
 
 function isPlainObject(value) {
@@ -551,6 +628,9 @@ function sha256OrNull(value) {
 const ADAPTER_PROGRESS_PHASES = new Set(["preflight", "scenes", "audio", "encode", "finalize"]);
 const MAX_PROGRESS_LABEL_CHARS = 120;
 const MAX_ANALYTICS_TEXT_CHARS = 80;
+const MAX_ANALYTICS_LIST_ITEMS = 20;
+const MAX_ANALYTICS_LIST_TEXT_CHARS = 200;
+const MAX_ANALYTICS_PIXEL_DIMENSION = 100000;
 const MAX_PROGRESS_SCENE_TOTAL = 10000;
 
 function sanitizeProgressUpdate(update) {
