@@ -29,6 +29,7 @@ import { composeSceneFrames, describeSceneComposerAvailability } from "./scene-f
 import { createPexelsBrollAdapter, describeBrollAvailability } from "./broll-source.js";
 import { createDefaultImageSourceCascade, hasKeyedImageProvider } from "./image-source.js";
 import { createCachedImageAdapter } from "./asset-cache.js";
+import { createBrollProviderRegistry } from "./broll-providers.js";
 
 const DEFAULT_STYLE_PRESET = "cinematic dark tech aesthetic, deep blue and teal palette, volumetric light, high detail, no text, no watermark";
 const MAX_GENERATED_BACKGROUNDS = 8;
@@ -69,6 +70,7 @@ export async function renderProject({
   const project = projectInput === undefined
     ? await preflightBoardInput(inputPath)
     : validateBoardProject(projectInput);
+  const brollMode = validateBrollMode(project?.brief?.brollMode);
   const estimatedStoryboard = buildStoryboard(project);
   const narration = buildNarrationScript(estimatedStoryboard);
   const recipe = getPlatformRecipe(platform);
@@ -188,89 +190,80 @@ export async function renderProject({
     const footageWarnings = [];
     let musicTrack = null;
     if (composerAvailability.status === "executable") {
-      const brollAvailability = describeBrollAvailability();
+      const brollRegistry = createBrollProviderRegistry({ onWarning: msg => footageWarnings.push(msg) });
+      const brollProviders = brollRegistry.buildCascade(brollMode);
       const brollClips = [];
-      if (brollAvailability.status === "executable") {
-        const brollAdapter = createPexelsBrollAdapter();
-        const brollOrientation = recipe.height > recipe.width ? "portrait" : "landscape";
-        for (const [sceneIndex, scene] of storyboard.scenes.entries()) {
-          if (sceneIndex === 0) continue;
-          const clipFile = path.join(runDir, `broll-${String(sceneIndex + 1).padStart(3, "0")}.mp4`);
-          try {
-            const clip = await brollAdapter.fetchClip({
-              keywords: [project?.brief?.topic, scene.title].filter(Boolean),
-              orientation: brollOrientation,
-              minDurationSeconds: scene.durationMs / 1000,
-              outputPath: clipFile,
-              signal
-            });
-            if (clip) {
-              brollClips[sceneIndex] = clip;
-              footage.push({
-                sceneIndex,
-                license: clip.license,
-                sha256: clip.sha256,
-                provenance: clip.provenance
-              });
-            } else {
-              footageWarnings.push(`no b-roll footage matched scene ${sceneIndex + 1}`);
-            }
-          } catch (error) {
-            footageWarnings.push(`b-roll fetch failed for scene ${sceneIndex + 1}: ${error.message}`);
-          }
+      const brollOrientation = recipe.height > recipe.width ? "portrait" : "landscape";
+
+      for (const [sceneIndex, scene] of storyboard.scenes.entries()) {
+        if (sceneIndex === 0) continue;
+        const clipFile = path.join(runDir, `broll-${String(sceneIndex + 1).padStart(3, "0")}.mp4`);
+        const result = await runBrollCascade({
+          providers: brollProviders.filter(p => p.kind === "stock-footage"),
+          request: {
+            keywords: [project?.brief?.topic, scene.title].filter(Boolean),
+            orientation: brollOrientation,
+            minDurationSeconds: scene.durationMs / 1000,
+            outputPath: clipFile,
+            signal
+          },
+          onWarning: msg => footageWarnings.push(`scene ${sceneIndex + 1}: ${msg}`)
+        });
+        if (result) {
+          brollClips[sceneIndex] = result;
+          footage.push({
+            sceneIndex,
+            assetType: result.assetType,
+            license: result.license,
+            sha256: result.sha256,
+            provenance: result.provenance
+          });
         }
-      } else {
-        footageWarnings.push(brollAvailability.reason);
       }
       const backgroundImages = [];
       const scenesWithoutFootage = storyboard.scenes.filter(
         (_scene, sceneIndex) => sceneIndex > 0 && !brollClips[sceneIndex]
       ).length;
-      // Генерация фонов — opt-in: явный флаг проекта (бесплатный Pollinations)
-      // ИЛИ настроенный платный ключ. По умолчанию рендер детерминирован и без сети.
-      const generateVisuals = project?.brief?.generateVisuals === true || hasKeyedImageProvider();
-      if (scenesWithoutFootage > 0 && generateVisuals) {
-        {
-          const imageAdapter = createCachedImageAdapter({
-            adapter: createDefaultImageSourceCascade({
-              onWarning: message => footageWarnings.push(message)
-            }),
-            onWarning: message => footageWarnings.push(message)
+
+      if (scenesWithoutFootage > 0 && brollMode !== "deterministic") {
+        const imageProviders = brollProviders.filter(p => p.kind === "generated-image");
+        const projectSeed = Number.parseInt(hashJson(project).slice(0, 8), 16);
+        const stylePreset = typeof project?.brief?.stylePreset === "string" && project.brief.stylePreset.trim()
+          ? project.brief.stylePreset.trim()
+          : DEFAULT_STYLE_PRESET;
+        let generatedCount = 0;
+
+        for (const [sceneIndex, scene] of storyboard.scenes.entries()) {
+          if (sceneIndex === 0 || brollClips[sceneIndex]) continue;
+          if (generatedCount >= MAX_GENERATED_BACKGROUNDS) {
+            footageWarnings.push(`generated background budget of ${MAX_GENERATED_BACKGROUNDS} reached`);
+            break;
+          }
+          const backgroundFile = path.join(runDir, `bg-${String(sceneIndex + 1).padStart(3, "0")}.png`);
+          const result = await runBrollCascade({
+            providers: imageProviders,
+            request: {
+              prompt: [project?.brief?.topic, scene.title, scene.narration.split(/(?<=[.!?…])\s+/)[0]]
+                .filter(Boolean).join(". "),
+              stylePreset,
+              width: recipe.width,
+              height: recipe.height,
+              seed: projectSeed + sceneIndex,
+              outputPath: backgroundFile,
+              signal
+            },
+            onWarning: msg => footageWarnings.push(`scene ${sceneIndex + 1}: ${msg}`)
           });
-          const projectSeed = Number.parseInt(hashJson(project).slice(0, 8), 16);
-          const stylePreset = typeof project?.brief?.stylePreset === "string" && project.brief.stylePreset.trim()
-            ? project.brief.stylePreset.trim()
-            : DEFAULT_STYLE_PRESET;
-          let generatedCount = 0;
-          for (const [sceneIndex, scene] of storyboard.scenes.entries()) {
-            if (sceneIndex === 0 || brollClips[sceneIndex]) continue;
-            if (generatedCount >= MAX_GENERATED_BACKGROUNDS) {
-              footageWarnings.push(`generated background budget of ${MAX_GENERATED_BACKGROUNDS} reached`);
-              break;
-            }
-            const backgroundFile = path.join(runDir, `bg-${String(sceneIndex + 1).padStart(3, "0")}.png`);
-            try {
-              const image = await imageAdapter.generateImage({
-                prompt: [project?.brief?.topic, scene.title, scene.narration.split(/(?<=[.!?…])\s+/)[0]]
-                  .filter(Boolean).join(". "),
-                stylePreset,
-                width: recipe.width,
-                height: recipe.height,
-                seed: projectSeed + sceneIndex,
-                outputPath: backgroundFile,
-                signal
-              });
-              backgroundImages[sceneIndex] = image;
-              generatedCount += 1;
-              footage.push({
-                sceneIndex,
-                license: image.license,
-                sha256: image.sha256,
-                provenance: image.provenance
-              });
-            } catch (error) {
-              footageWarnings.push(`background generation failed for scene ${sceneIndex + 1}: ${error.message}`);
-            }
+          if (result) {
+            backgroundImages[sceneIndex] = result;
+            generatedCount += 1;
+            footage.push({
+              sceneIndex,
+              assetType: result.assetType,
+              license: result.license,
+              sha256: result.sha256,
+              provenance: result.provenance
+            });
           }
         }
       }
@@ -299,6 +292,23 @@ export async function renderProject({
       });
       sceneFrameCommands = composition.commands;
       sceneComposer = composition.composer;
+
+      // Deterministic fallback: для сцен без footage добавляем synthetic entry
+      for (const [sceneIndex] of storyboard.scenes.entries()) {
+        const hasFootage = footage.some(f => f.sceneIndex === sceneIndex);
+        if (!hasFootage) {
+          footage.push({
+            sceneIndex,
+            assetType: "deterministic",
+            license: "n/a",
+            sha256: "0".repeat(64),
+            provenance: {
+              source: "deterministic",
+              provider: "hermest-board-scene-composer"
+            }
+          });
+        }
+      }
       renderCommand = {
         id: "render-composed",
         tool: "ffmpeg",

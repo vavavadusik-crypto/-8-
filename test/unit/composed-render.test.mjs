@@ -288,12 +288,14 @@ test("footage records keep generated-image lineage", () => {
     lineage: {},
     footage: [{
       sceneIndex: 2,
+      assetType: "generated-image",
       license: "fal-generated",
       sha256: "c".repeat(64),
       provenance: { source: "generated", provider: "fal", model: "fal-ai/flux/schnell", promptSha256: "d".repeat(64) }
     }],
     artifacts: [{ name: "a.mp4", type: "video/mp4", bytes: 10, sha256: "a".repeat(64) }]
   });
+  assert.equal(generated.footage[0].assetType, "generated-image");
   assert.equal(generated.footage[0].model, "fal-ai/flux/schnell");
   assert.equal(generated.footage[0].promptSha256, "d".repeat(64));
   assert.equal(generated.footage[0].source, "generated");
@@ -318,6 +320,7 @@ test("manifest accepts the b-roll composed schema and footage provenance", () =>
     lineage: { parents: [], children: [] },
     footage: [{
       sceneIndex: 1,
+      assetType: "stock-footage",
       license: "pexels",
       sha256: "b".repeat(64),
       provenance: { source: "stock", provider: "pexels", author: "Автор", url: "https://www.pexels.com/video/101/" }
@@ -325,6 +328,7 @@ test("manifest accepts the b-roll composed schema and footage provenance", () =>
     artifacts: [{ name: "a.mp4", type: "video/mp4", bytes: 10, sha256: "a".repeat(64) }]
   });
   assert.equal(manifest.footage.length, 1);
+  assert.equal(manifest.footage[0].assetType, "stock-footage");
   assert.equal(manifest.footage[0].provider, "pexels");
   assert.equal(manifest.footage[0].url, "https://www.pexels.com/video/101/");
   assert.throws(() => buildRenderManifest({
@@ -337,7 +341,7 @@ test("manifest accepts the b-roll composed schema and footage provenance", () =>
     blockers: [],
     warnings: [],
     lineage: {},
-    footage: [{ sceneIndex: 1, license: "", sha256: "b".repeat(64) }],
+    footage: [{ sceneIndex: 1, assetType: "stock-footage", license: "", sha256: "b".repeat(64), provenance: {} }],
     artifacts: [{ name: "a.mp4", type: "video/mp4", bytes: 10, sha256: "a".repeat(64) }]
   }), /without a license/);
 });
