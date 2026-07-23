@@ -60,6 +60,8 @@ export function buildRenderManifest({
 }) {
   const normalizedRecipe = sortValue(structuredClone(recipe || {}));
   const verifiedArtifacts = (Array.isArray(artifacts) ? artifacts : []).map(normalizeArtifact);
+  const normalizedFootage = normalizeFootage(footage);
+  const scenes = buildSceneManifest(storyboard, normalizedFootage);
   return {
     schemaVersion: 1,
     renderer: "hermest-board-media-r1",
@@ -75,7 +77,8 @@ export function buildRenderManifest({
     blockers: uniqueText(blockers),
     warnings: uniqueText(warnings),
     lineage: normalizeLineage(lineage),
-    footage: normalizeFootage(footage),
+    footage: normalizedFootage,
+    scenes,
     music: normalizeMusic(music),
     artifacts: verifiedArtifacts
   };
@@ -150,6 +153,17 @@ function sanitizeFootageUrl(value) {
   if (!url) return "";
   if (!/^https:\/\/[^\s"'<>@]+$/.test(url)) return "";
   return url;
+}
+
+function buildSceneManifest(storyboard, normalizedFootage) {
+  const storyboardScenes = storyboard?.scenes;
+  if (!Array.isArray(storyboardScenes)) return [];
+  const footageByScene = new Map(normalizedFootage.map(f => [f.sceneIndex, f.assetType]));
+  return storyboardScenes.map((scene, sceneIndex) => ({
+    sceneIndex,
+    title: safeText(scene?.title) || `Scene ${sceneIndex}`,
+    assetType: footageByScene.get(sceneIndex) || "deterministic"
+  }));
 }
 
 function normalizeArtifact(artifact) {
