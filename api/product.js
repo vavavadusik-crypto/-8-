@@ -19,6 +19,7 @@ import {
   listRecords,
   saveRecord
 } from "./_lib/storage.js";
+import { createWorkspaceStore } from "../src/workspace/workspace-store.js";
 
 const JOB_STATUSES = new Set([
   "queued",
@@ -189,6 +190,11 @@ export default async function handler(request, response) {
       if (!requireMethods(request, response, ["POST"])) return;
       const body = await readJson(request);
       sendJson(response, 200, buildAgentPlan(body.publishPack || body.pack || body));
+      return;
+    }
+
+    if (path[0] === "workspace") {
+      await handleWorkspace(request, response, path.slice(1));
       return;
     }
 
@@ -1016,4 +1022,246 @@ function normalizeAssetRightsStatus(value) {
   error.code = "invalid_asset_rights_status";
   error.note = `Asset rightsStatus must be one of: ${[...ASSET_RIGHTS_STATUSES].join(", ")}.`;
   throw error;
+}
+
+async function handleWorkspace(request, response, path) {
+  const store = createWorkspaceStore();
+
+  try {
+    if (path[0] === "clients" && !path[1]) {
+      if (request.method === "GET") {
+        const filters = {
+          workspace_id: request.query?.workspace_id || "workspace_local",
+          search: request.query?.search,
+          status: request.query?.status,
+          limit: parseInt(request.query?.limit || "50", 10),
+          offset: parseInt(request.query?.offset || "0", 10)
+        };
+        const clients = store.listClients(filters);
+        sendJson(response, 200, { ok: true, clients, total: clients.length });
+        return;
+      }
+      if (request.method === "POST") {
+        const body = await readJson(request);
+        const client = store.createClient({ ...body, workspace_id: body.workspace_id || "workspace_local" });
+        sendJson(response, 201, { ok: true, client });
+        return;
+      }
+    }
+
+    if (path[0] === "clients" && path[1]) {
+      if (request.method === "GET") {
+        const client = store.getClient(path[1]);
+        if (!client) {
+          sendJson(response, 404, { ok: false, error: "client_not_found", id: path[1] });
+          return;
+        }
+        sendJson(response, 200, { ok: true, client });
+        return;
+      }
+      if (request.method === "PATCH") {
+        const body = await readJson(request);
+        const client = store.updateClient(path[1], body);
+        sendJson(response, 200, { ok: true, client });
+        return;
+      }
+      if (request.method === "DELETE") {
+        const result = store.deleteClient(path[1]);
+        sendJson(response, 200, result);
+        return;
+      }
+    }
+
+    if (path[0] === "projects" && !path[1]) {
+      if (request.method === "GET") {
+        const filters = {
+          workspace_id: request.query?.workspace_id || "workspace_local",
+          client_id: request.query?.client_id,
+          search: request.query?.search,
+          status: request.query?.status,
+          limit: parseInt(request.query?.limit || "50", 10),
+          offset: parseInt(request.query?.offset || "0", 10)
+        };
+        const projects = store.listProjects(filters);
+        sendJson(response, 200, { ok: true, projects, total: projects.length });
+        return;
+      }
+      if (request.method === "POST") {
+        const body = await readJson(request);
+        const project = store.createProject({ ...body, workspace_id: body.workspace_id || "workspace_local" });
+        sendJson(response, 201, { ok: true, project });
+        return;
+      }
+    }
+
+    if (path[0] === "projects" && path[1]) {
+      if (request.method === "GET") {
+        const project = store.getProject(path[1]);
+        if (!project) {
+          sendJson(response, 404, { ok: false, error: "project_not_found", id: path[1] });
+          return;
+        }
+        sendJson(response, 200, { ok: true, project });
+        return;
+      }
+      if (request.method === "PATCH") {
+        const body = await readJson(request);
+        const project = store.updateProject(path[1], body);
+        sendJson(response, 200, { ok: true, project });
+        return;
+      }
+      if (request.method === "DELETE") {
+        const result = store.deleteProject(path[1]);
+        sendJson(response, 200, result);
+        return;
+      }
+    }
+
+    if (path[0] === "campaigns" && !path[1]) {
+      if (request.method === "GET") {
+        const filters = {
+          workspace_id: request.query?.workspace_id || "workspace_local",
+          project_id: request.query?.project_id,
+          search: request.query?.search,
+          status: request.query?.status,
+          limit: parseInt(request.query?.limit || "50", 10),
+          offset: parseInt(request.query?.offset || "0", 10)
+        };
+        const campaigns = store.listCampaigns(filters);
+        sendJson(response, 200, { ok: true, campaigns, total: campaigns.length });
+        return;
+      }
+      if (request.method === "POST") {
+        const body = await readJson(request);
+        const campaign = store.createCampaign({ ...body, workspace_id: body.workspace_id || "workspace_local" });
+        sendJson(response, 201, { ok: true, campaign });
+        return;
+      }
+    }
+
+    if (path[0] === "campaigns" && path[1] && path[2] === "content") {
+      if (request.method === "GET") {
+        const filters = {
+          campaign_id: path[1],
+          limit: parseInt(request.query?.limit || "50", 10),
+          offset: parseInt(request.query?.offset || "0", 10)
+        };
+        const content_items = store.listContentItems(filters);
+        sendJson(response, 200, { ok: true, content_items });
+        return;
+      }
+    }
+
+    if (path[0] === "campaigns" && path[1]) {
+      if (request.method === "GET") {
+        const campaign = store.getCampaign(path[1]);
+        if (!campaign) {
+          sendJson(response, 404, { ok: false, error: "campaign_not_found", id: path[1] });
+          return;
+        }
+        sendJson(response, 200, { ok: true, campaign });
+        return;
+      }
+      if (request.method === "PATCH") {
+        const body = await readJson(request);
+        const campaign = store.updateCampaign(path[1], body);
+        sendJson(response, 200, { ok: true, campaign });
+        return;
+      }
+      if (request.method === "DELETE") {
+        const result = store.deleteCampaign(path[1]);
+        sendJson(response, 200, result);
+        return;
+      }
+    }
+
+    if (path[0] === "content" && !path[1]) {
+      if (request.method === "GET") {
+        const filters = {
+          workspace_id: request.query?.workspace_id || "workspace_local",
+          campaign_id: request.query?.campaign_id,
+          search: request.query?.search,
+          status: request.query?.status,
+          limit: parseInt(request.query?.limit || "50", 10),
+          offset: parseInt(request.query?.offset || "0", 10)
+        };
+        const content_items = store.listContentItems(filters);
+        sendJson(response, 200, { ok: true, content_items });
+        return;
+      }
+      if (request.method === "POST") {
+        const body = await readJson(request);
+        const content_item = store.createContentItem({ ...body, workspace_id: body.workspace_id || "workspace_local" });
+        sendJson(response, 201, { ok: true, content_item });
+        return;
+      }
+    }
+
+    if (path[0] === "content" && path[1]) {
+      if (request.method === "GET") {
+        const content_item = store.getContentItem(path[1]);
+        if (!content_item) {
+          sendJson(response, 404, { ok: false, error: "content_item_not_found", id: path[1] });
+          return;
+        }
+        sendJson(response, 200, { ok: true, content_item });
+        return;
+      }
+      if (request.method === "PATCH") {
+        const body = await readJson(request);
+        const content_item = store.updateContentItem(path[1], body);
+        sendJson(response, 200, { ok: true, content_item });
+        return;
+      }
+      if (request.method === "DELETE") {
+        const result = store.deleteContentItem(path[1]);
+        sendJson(response, 200, result);
+        return;
+      }
+    }
+
+    if (path[0] === "link" && !path[1]) {
+      if (request.method === "POST") {
+        const body = await readJson(request);
+        const result = store.linkRenderJob(body.content_item_id, body.render_job_id);
+        sendJson(response, 200, result);
+        return;
+      }
+    }
+
+    if (path[0] === "activity" && !path[1]) {
+      if (request.method === "GET") {
+        const filters = {
+          workspace_id: request.query?.workspace_id || "workspace_local",
+          entity_type: request.query?.entity_type,
+          entity_id: request.query?.entity_id,
+          limit: parseInt(request.query?.limit || "100", 10)
+        };
+        const activity = store.getActivity(filters);
+        sendJson(response, 200, { ok: true, activity });
+        return;
+      }
+    }
+
+    if (path[0] === "export" && !path[1]) {
+      if (request.method === "POST") {
+        const exported = store.exportJson();
+        sendJson(response, 200, { ok: true, export: exported });
+        return;
+      }
+    }
+
+    if (path[0] === "import" && !path[1]) {
+      if (request.method === "POST") {
+        const body = await readJson(request);
+        const imported = store.importJson(body);
+        sendJson(response, 200, { ok: true, imported });
+        return;
+      }
+    }
+
+    sendJson(response, 404, { ok: false, error: "workspace_route_not_found", path: path.join("/") });
+  } finally {
+    store.close();
+  }
 }
