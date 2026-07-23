@@ -5,8 +5,25 @@
 > Протокол непрерывности: `docs/MASTER_PLAN_2026-07-19.md`, раздел 8.6.
 > Обновляется в начале каждой задачи и после каждого коммита. Это часть Definition of Done.
 
-UPDATED: 2026-07-23 (девятая сессия — RC + draft-cancel + render-cancel + progress закрыты в main)
-ACTIVE PHASE: четыре milestone в main @ 34c8421 (RC 0ef4d86, draft-cancel acf3ff3, render-cancel 7afda71, progress 34c8421).
+UPDATED: 2026-07-23 (девятая сессия — RC + draft-cancel + render-cancel + progress + resume закрыты в main)
+ACTIVE PHASE: пять milestone в main @ 88cad83 (RC 0ef4d86, draft-cancel acf3ff3, render-cancel 7afda71, progress 34c8421, resume 88cad83).
+
+## Milestone «resume in-flight задач после reload» 2026-07-23 — ✅ ЗАКРЫТ (main @ 88cad83)
+Контракт: docs/RESUME_MILESTONE_HANDOFF.md. Ветки feat/resume-ux (я) + feat/resume-runtime (терм. claude).
+- ПОЛОСА A (я): персист id активных draft/render в localStorage (ключ hermest-board:active-jobs:v1) при submit, очистка на терминале;
+  на загрузке resumeActiveJobs → GET по id: running/queued → восстановить busy-UI (кнопка отмены, elapsed от createdAt) + re-poll;
+  терминальный/404/evicted → тихо очистить (НЕ авто-применять — юзер мог менять доску). Рефактор submit-путей: общие settleDraftJob/
+  settleRenderJob/draftErrorText/renderErrorText для запуска и reconnect (DRY). +2 UI-теста. Коммит в merge.
+- ПОЛОСА B (терм. claude соло, 8e948f6+ba0c0f2): НАЙДЕН+ИСПРАВЛЕН реальный баг — draft-TTL считался от createdAt → завершённый
+  long-draft вычищался следующим submit'ом, reconnect терял результат; теперь markFinished фиксирует finishedAt, eviction = finishedAt+ttl
+  (терминал+TTL). Активные job уже были защищены (закреплено тестом). createdAt уже отдавался обоими publicJob. +9 unit. Только backend.
+- ИНТЕГРАЦИЯ: merge → main 88cad83. Дифф ревьюил фактически (markFinished корректен, late-result сохранён). src/media НЕ тронут →
+  лёгкий gate: validate ok · 333 unit (0 fail) · smoke:api ok · build ok. Живой smoke: персист при run/очистка на завершении;
+  boot-reconnect фейковых id → 404 → очистка без залипания UI; консоль чистая. Терм. claude завершился штатно (exit 0). Push НЕ делал.
+  ОГРАНИЧЕНИЕ: running-restore-через-reload не прогнан E2E (мок не переживает reload); проверены персист, boot-wiring, 404-очистка,
+  а сам restore переиспользует протестированные settle*-пути + unit-греп на проводку.
+NEXT MILESTONE (кандидат, gap-аудит): визуальный прогресс-бар поверх текстового прогресса (job.progress даёт sceneIndex/sceneTotal →
+  можно полосу %); ИЛИ защита доски перед draft-перезаписью (applyProjectDocument затирает борд — снапшот/undo). Один bounded.
 
 ## Milestone «прогресс-фидбэк длинной генерации» 2026-07-23 — ✅ ЗАКРЫТ (main @ 34c8421)
 Контракт: docs/PROGRESS_MILESTONE_HANDOFF.md. Ветки feat/progress-ux (я) + feat/progress-runtime (терм. claude).
