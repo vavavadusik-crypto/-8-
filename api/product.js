@@ -13,6 +13,7 @@ import { getPlatformPublishingStatus, getPlatformStatus } from "../src/publishin
 import {
   appendAudit,
   createId,
+  dataRoot,
   deleteRecord,
   getRecord,
   getStorageStatus,
@@ -20,6 +21,8 @@ import {
   saveRecord
 } from "./_lib/storage.js";
 import { createWorkspaceStore } from "../src/workspace/workspace-store.js";
+import { mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 const JOB_STATUSES = new Set([
   "queued",
@@ -1024,8 +1027,20 @@ function normalizeAssetRightsStatus(value) {
   throw error;
 }
 
+/**
+ * Each workspace request opens and closes its own store, so the database must live
+ * on disk — an in-memory default would drop every write the moment the request ends.
+ */
+function resolveWorkspaceDbPath() {
+  const configured = String(process.env.HERMEST_WORKSPACE_DB || "").trim();
+  if (configured === ":memory:") return configured;
+  const dbPath = configured || join(dataRoot(), "workspace.db");
+  mkdirSync(dirname(dbPath), { recursive: true });
+  return dbPath;
+}
+
 async function handleWorkspace(request, response, path) {
-  const store = createWorkspaceStore();
+  const store = createWorkspaceStore({ dbPath: resolveWorkspaceDbPath() });
 
   try {
     if (path[0] === "clients" && !path[1]) {

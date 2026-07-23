@@ -1,122 +1,193 @@
-import { describe, it } from "node:test";
+/**
+ * Integration test: workspace API (M4)
+ *
+ * Calls the api/product.js handler in-process (same pattern as scripts/smoke-api.mjs)
+ * instead of requiring a live dev server, so the quality gate is self-contained.
+ *
+ * Storage is exercised through the PRODUCT default (HERMEST_DATA_DIR only) — no
+ * HERMEST_WORKSPACE_DB override — because each request opens and closes its own
+ * store, so an in-memory default would silently drop every write.
+ */
+
+import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import product from "../../api/product.js";
 
-const API_BASE = process.env.HERMEST_API_BASE || "http://localhost:3000";
+const originalEnv = {
+  dataDir: process.env.HERMEST_DATA_DIR,
+  workspaceDb: process.env.HERMEST_WORKSPACE_DB,
+  vercel: process.env.VERCEL
+};
 
-async function fetchApi(path, options = {}) {
-  const url = `${API_BASE}/api/product?route=${encodeURIComponent(path)}`;
-  const response = await fetch(url, options);
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : {};
-  return { status: response.status, data };
+let dataDir = null;
+
+function mockResponse() {
+  return {
+    statusCode: 200,
+    headers: {},
+    payload: undefined,
+    setHeader(key, value) {
+      this.headers[key] = value;
+    },
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload) {
+      this.payload = payload;
+      return this;
+    }
+  };
+}
+
+async function callApi(route, { method = "GET", query = {}, body = null } = {}) {
+  const response = mockResponse();
+  const fullQuery = { route, ...query };
+  const search = new URLSearchParams(fullQuery).toString();
+  await product({
+    method,
+    query: fullQuery,
+    url: `/api/product?${search}`,
+    headers: body ? { "content-type": "application/json" } : {},
+    body
+  }, response);
+  return { status: response.statusCode, data: response.payload ?? {} };
+}
+
+function createClient(name, extra = {}) {
+  return callApi("workspace/clients", {
+    method: "POST",
+    body: { name, owner: "test_user", ...extra }
+  });
 }
 
 describe("workspace API", () => {
-  it("create client → project → campaign → content_item → link render_job → activity", async () => {
-    const { status: s1, data: d1 } = await fetchApi("workspace/clients", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Smoke Client", owner: "test_user", tags: ["smoke"] })
-    });
+  before(() => {
+    dataDir = mkdtempSync(join(tmpdir(), "hermest-workspace-api-"));
+    process.env.HERMEST_DATA_DIR = dataDir;
+    delete process.env.HERMEST_WORKSPACE_DB;
+    delete process.env.VERCEL;
+  });
+
+  after(() => {
+    if (originalEnv.dataDir === undefined) delete process.env.HERMEST_DATA_DIR;
+    else process.env.HERMEST_DATA_DIR = originalEnv.dataDir;
+    if (originalEnv.workspaceDb === undefined) delete process.env.HERMEST_WORKSPACE_DB;
+    else process.env.HERMEST_WORKSPACE_DB = originalEnv.workspaceDb;
+    if (originalEnv.vercel === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = originalEnv.vercel;
+    if (dataDir) rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it("persists a client across separate requests (default storage is durable)", async () => {
+    const { status: created, data: createdData } = await createClient("Persistence Client", { tags: ["smoke"] });
+    assert.equal(created, 201);
+    const clientId = createdData.client.id;
+
+    const { status, data } = await callApi(`workspace/clients/${clientId}`);
+    assert.equal(status, 200, "a client created by one request must be readable by the next one");
+    assert.equal(data.client.name, "Persistence Client");
+  });
+
+  it("create client → project → campaign → content_item → activity", async () => {
+    const { status: s1, data: d1 } = await createClient("Smoke Client", { tags: ["smoke"] });
     assert.equal(s1, 201);
     assert.ok(d1.client.id);
     const clientId = d1.client.id;
 
-    const { status: s2, data: d2 } = await fetchApi("workspace/projects", {
+    const { status: s2, data: d2 } = await callApi("workspace/projects", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Smoke Project", client_id: clientId, owner: "test_user", tags: ["smoke"] })
+      body: { name: "Smoke Project", client_id: clientId, owner: "test_user", tags: ["smoke"] }
     });
     assert.equal(s2, 201);
     assert.ok(d2.project.id);
     const projectId = d2.project.id;
 
-    const { status: s3, data: d3 } = await fetchApi("workspace/campaigns", {
+    const { status: s3, data: d3 } = await callApi("workspace/campaigns", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Smoke Campaign", project_id: projectId, owner: "test_user", tags: ["smoke"] })
+      body: { name: "Smoke Campaign", project_id: projectId, owner: "test_user", tags: ["smoke"] }
     });
     assert.equal(s3, 201);
     assert.ok(d3.campaign.id);
     const campaignId = d3.campaign.id;
 
-    const { status: s4, data: d4 } = await fetchApi("workspace/content", {
+    const { status: s4, data: d4 } = await callApi("workspace/content", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Smoke Content", campaign_id: campaignId, type: "video", owner: "test_user", tags: ["smoke"] })
+      body: { name: "Smoke Content", campaign_id: campaignId, type: "video", owner: "test_user", tags: ["smoke"] }
     });
     assert.equal(s4, 201);
     assert.ok(d4.content_item.id);
-    const contentItemId = d4.content_item.id;
 
-    const { status: s5, data: d5 } = await fetchApi("workspace/activity?limit=10", { method: "GET" });
+    const { status: s5, data: d5 } = await callApi("workspace/activity", { query: { limit: "10" } });
     assert.equal(s5, 200);
-    assert.ok(d5.activity.length >= 4);
-    assert.ok(d5.activity.some(a => a.action === "created" && a.entity_type === "client"));
+    assert.ok(d5.activity.length >= 4, `expected at least 4 activity rows, got ${d5.activity.length}`);
+    assert.ok(d5.activity.some(entry => entry.action === "created" && entry.entity_type === "client"));
   });
 
-  it("list clients with filters", async () => {
-    const { status, data } = await fetchApi("workspace/clients?status=active&limit=10", { method: "GET" });
+  it("lists clients with filters", async () => {
+    await createClient("Filterable Client", { status: "active" });
+
+    const { status, data } = await callApi("workspace/clients", {
+      query: { status: "active", limit: "10" }
+    });
     assert.equal(status, 200);
     assert.ok(Array.isArray(data.clients));
+    assert.ok(data.clients.length >= 1);
+    assert.ok(data.clients.every(client => client.status === "active"));
   });
 
-  it("update client", async () => {
-    const { data: d1 } = await fetchApi("workspace/clients", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Update Client", owner: "test_user" })
-    });
-    const clientId = d1.client.id;
+  it("updates a client", async () => {
+    const { data: created } = await createClient("Update Client");
+    const clientId = created.client.id;
 
-    const { status, data } = await fetchApi(`workspace/clients/${clientId}`, {
+    const { status, data } = await callApi(`workspace/clients/${clientId}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Updated Client", status: "archived" })
+      body: { name: "Updated Client", status: "archived" }
     });
     assert.equal(status, 200);
     assert.equal(data.client.name, "Updated Client");
     assert.equal(data.client.status, "archived");
   });
 
-  it("delete client (cascades to projects)", async () => {
-    const { data: d1 } = await fetchApi("workspace/clients", {
+  it("deletes a client (projects survive with a detached client_id)", async () => {
+    const { data: created } = await createClient("Delete Client");
+    const clientId = created.client.id;
+
+    const { data: projectData } = await callApi("workspace/projects", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Delete Client", owner: "test_user" })
+      body: { name: "Delete Project", client_id: clientId, owner: "test_user" }
     });
-    const clientId = d1.client.id;
+    const projectId = projectData.project.id;
 
-    const { data: d2 } = await fetchApi("workspace/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Delete Project", client_id: clientId, owner: "test_user" })
-    });
-    const projectId = d2.project.id;
+    const { status: deleted } = await callApi(`workspace/clients/${clientId}`, { method: "DELETE" });
+    assert.equal(deleted, 200);
 
-    const { status: s1 } = await fetchApi(`workspace/clients/${clientId}`, { method: "DELETE" });
-    assert.equal(s1, 200);
-
-    const { status: s2, data: d3 } = await fetchApi(`workspace/projects/${projectId}`, { method: "GET" });
-    assert.equal(s2, 200);
-    assert.equal(d3.project.client_id, null);
+    const { status, data } = await callApi(`workspace/projects/${projectId}`);
+    assert.equal(status, 200);
+    assert.equal(data.project.client_id, null);
   });
 
-  it("export → import (idempotent)", async () => {
-    const { status: s1, data: d1 } = await fetchApi("workspace/export", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" }
-    });
-    assert.equal(s1, 200);
-    assert.equal(d1.export.version, 1);
-    assert.ok(Array.isArray(d1.export.clients));
+  it("exports and re-imports the workspace idempotently", async () => {
+    await createClient("Export Client");
 
-    const { status: s2, data: d2 } = await fetchApi("workspace/import", {
+    const { status: exported, data: exportData } = await callApi("workspace/export", { method: "POST" });
+    assert.equal(exported, 200);
+    assert.equal(exportData.export.version, 1);
+    assert.ok(Array.isArray(exportData.export.clients));
+    assert.ok(exportData.export.clients.length >= 1, "export must contain persisted clients");
+
+    const { status: imported, data: importData } = await callApi("workspace/import", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(d1.export)
+      body: exportData.export
     });
-    assert.equal(s2, 200);
-    assert.ok(typeof d2.imported.clients === "number");
+    assert.equal(imported, 200);
+    assert.equal(typeof importData.imported.clients, "number");
+
+    const { data: afterImport } = await callApi("workspace/clients", { query: { limit: "100" } });
+    const ids = afterImport.clients.map(client => client.id);
+    assert.equal(new Set(ids).size, ids.length, "re-import must not duplicate clients");
   });
 });

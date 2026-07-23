@@ -145,7 +145,7 @@ function getStorageAdapter() {
   });
 }
 
-function dataRoot() {
+export function dataRoot() {
   return process.env.HERMEST_DATA_DIR || join(process.env.VERCEL ? tmpdir() : process.cwd(), ".data", "hermest-board");
 }
 
