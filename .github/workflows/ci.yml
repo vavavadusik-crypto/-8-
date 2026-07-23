@@ -1,0 +1,57 @@
+name: CI Gate
+
+# Полный quality gate на серверах GitHub (публичный репо = безлимит минут).
+# Снимает тяжёлый билд (ffmpeg-рендеры + 451 unit-тест) с локального ноутбука.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Show preinstalled media tools (ffmpeg / chrome)
+        run: |
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
+          (google-chrome --version || google-chrome-stable --version) 2>/dev/null | head -1
+
+      # ffmpeg/ffprobe/google-chrome предустановлены на ubuntu-latest.
+      # piper + голосовые модели кэшируем, чтобы качать один раз.
+      - name: Cache piper binary and voices
+        id: piper-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/opt/piper
+            ~/.local/share/piper/voices
+          key: piper-${{ runner.os }}-${{ hashFiles('scripts/install-piper-ci.sh') }}
+
+      - name: Install piper (TTS) + voices
+        run: bash scripts/install-piper-ci.sh
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run full quality gate
+        run: npm run check
+        env:
+          # Chrome на раннере ставится как google-chrome-stable → /usr/bin/google-chrome.
+          HERMEST_CHROME_PATH: /usr/bin/google-chrome
