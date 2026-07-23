@@ -101,6 +101,13 @@ export function validatePublishOptions(options = {}) {
     throw new TypeError("publish_mode_must_be_draft_or_live");
   }
 
+  // Fail-closed guard (master-prompt §PHASE 3 req 5): реальная публикация
+  // требует явного подтверждения. Draft — безопасный дефолт, confirm не нужен.
+  if (mode === "live" && options.confirm !== true) {
+    throw new TypeError("live_publish_requires_explicit_confirm");
+  }
+  const confirm = mode === "live";
+
   const idempotencyKey = String(options.idempotencyKey || "").trim();
   if (!idempotencyKey || !/^[a-z0-9_-]{8,128}$/i.test(idempotencyKey)) {
     throw new TypeError("publish_idempotency_key_required_8_to_128_chars");
@@ -111,7 +118,7 @@ export function validatePublishOptions(options = {}) {
     throw new TypeError("publish_signal_must_be_abort_signal_or_undefined");
   }
 
-  return { mode, idempotencyKey, signal };
+  return { mode, idempotencyKey, signal, confirm };
 }
 
 /**

@@ -182,6 +182,7 @@ describe("webhook-export adapter", () => {
 
       const receipt = await adapter.publish(validCandidate, {
         mode: "live",
+        confirm: true,
         idempotencyKey: "live_key_87654321"
       });
 
@@ -399,6 +400,7 @@ describe("webhook-export adapter", () => {
 
       await adapter.publish(validCandidate, {
         mode: "live",
+        confirm: true,
         idempotencyKey: "payload_test_key"
       });
 

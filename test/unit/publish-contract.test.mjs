@@ -113,10 +113,28 @@ describe("publish-contract", () => {
       assert.strictEqual(validated.idempotencyKey, "test_key_12345678");
     });
 
-    it("accepts valid live options", () => {
-      const options = { mode: "live", idempotencyKey: "live_key_87654321" };
+    it("accepts valid live options with explicit confirm", () => {
+      const options = { mode: "live", idempotencyKey: "live_key_87654321", confirm: true };
       const validated = validatePublishOptions(options);
       assert.strictEqual(validated.mode, "live");
+      assert.strictEqual(validated.confirm, true);
+    });
+
+    it("rejects live publish without explicit confirm (fail-closed)", () => {
+      assert.throws(
+        () => validatePublishOptions({ mode: "live", idempotencyKey: "live_key_87654321" }),
+        /live_publish_requires_explicit_confirm/
+      );
+      assert.throws(
+        () => validatePublishOptions({ mode: "live", idempotencyKey: "live_key_87654321", confirm: "yes" }),
+        /live_publish_requires_explicit_confirm/
+      );
+    });
+
+    it("draft mode ignores confirm and never requires it", () => {
+      const validated = validatePublishOptions({ mode: "draft", idempotencyKey: "draft_key_12345678" });
+      assert.strictEqual(validated.mode, "draft");
+      assert.strictEqual(validated.confirm, false);
     });
 
     it("defaults to draft mode", () => {
