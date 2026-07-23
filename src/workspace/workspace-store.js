@@ -12,6 +12,8 @@ export function createWorkspaceStore({ dbPath = process.env.HERMEST_WORKSPACE_DB
   db.exec("PRAGMA foreign_keys = ON");
   db.exec("PRAGMA journal_mode = WAL");
 
+  const MULTI_USER = process.env.HERMEST_WORKSPACE_MULTI_USER === "1";
+
   function migrate() {
     db.exec(`
       create table if not exists schema_version (
@@ -60,8 +62,11 @@ export function createWorkspaceStore({ dbPath = process.env.HERMEST_WORKSPACE_DB
     return getClient(id);
   }
 
-  function getClient(id) {
+  function getClient(id, options = {}) {
     const row = db.prepare("select * from clients where id = ?").get(id);
+    if (row && MULTI_USER && options.actor && row.owner !== options.actor) {
+      throw new Error("permission_denied");
+    }
     return row ? normalizeClient(row) : null;
   }
 
@@ -71,6 +76,10 @@ export function createWorkspaceStore({ dbPath = process.env.HERMEST_WORKSPACE_DB
     if (filters.workspace_id) {
       sql += " and workspace_id = ?";
       params.push(filters.workspace_id);
+    }
+    if (MULTI_USER && filters.actor) {
+      sql += " and owner = ?";
+      params.push(filters.actor);
     }
     if (filters.status) {
       sql += " and status = ?";

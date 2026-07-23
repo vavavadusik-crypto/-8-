@@ -229,4 +229,32 @@ describe("workspace-store", () => {
     assert.equal(projects.length, 0);
     store.close();
   });
+
+  it("permission: single-user mode (all rows same workspace_id)", () => {
+    const store = createWorkspaceStore({ dbPath: ":memory:" });
+    store.createClient({ name: "Client A", owner: "user_vadim" });
+    store.createClient({ name: "Client B", owner: "user_alice" });
+    const all = store.listClients();
+    assert.equal(all.length, 2);
+    assert.ok(all.every(c => c.workspace_id === "workspace_local"));
+    store.close();
+  });
+
+  it("permission: MULTI_USER mode (actor filter + NEGATIVE cross-user denied)", () => {
+    process.env.HERMEST_WORKSPACE_MULTI_USER = "1";
+    const store = createWorkspaceStore({ dbPath: ":memory:" });
+    const client = store.createClient({ name: "Client A", owner: "user_vadim" });
+    store.createClient({ name: "Client B", owner: "user_alice" });
+
+    const vadimClients = store.listClients({ actor: "user_vadim" });
+    assert.equal(vadimClients.length, 1);
+    assert.equal(vadimClients[0].owner, "user_vadim");
+
+    assert.throws(() => {
+      store.getClient(client.id, { actor: "user_alice" });
+    }, { message: "permission_denied" });
+
+    delete process.env.HERMEST_WORKSPACE_MULTI_USER;
+    store.close();
+  });
 });
