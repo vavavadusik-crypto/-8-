@@ -27,11 +27,24 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Show preinstalled media tools (ffmpeg / chrome)
+      - name: Link media tools to the paths the code expects (/usr/bin)
         run: |
-          ffmpeg -version | head -1
-          ffprobe -version | head -1
-          (google-chrome --version || google-chrome-stable --version) 2>/dev/null | head -1
+          # Код зашивает /usr/bin/{ffmpeg,ffprobe,google-chrome}; на раннере они
+          # лежат в другом месте PATH — делаем симлинки, чтобы окружение совпало
+          # с локальным без изменения кода/тестов.
+          for tool in ffmpeg ffprobe; do
+            real="$(command -v "$tool")"
+            [ -n "$real" ] || { echo "::error::$tool not found on runner"; exit 1; }
+            [ -e "/usr/bin/$tool" ] || sudo ln -sf "$real" "/usr/bin/$tool"
+            echo "$tool -> $(readlink -f /usr/bin/$tool)"
+          done
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -n "$chrome" ] && [ ! -e /usr/bin/google-chrome ]; then
+            sudo ln -sf "$chrome" /usr/bin/google-chrome
+          fi
+          /usr/bin/ffmpeg -version | head -1
+          /usr/bin/ffprobe -version | head -1
+          /usr/bin/google-chrome --version 2>/dev/null | head -1 || echo "chrome: fallback to legacy scenes if absent"
 
       # ffmpeg/ffprobe/google-chrome предустановлены на ubuntu-latest.
       # piper + голосовые модели кэшируем, чтобы качать один раз.
