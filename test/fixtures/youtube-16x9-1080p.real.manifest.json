@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 1,
+  "renderer": "hermest-board-media-r1",
+  "inputs": {
+    "projectSha256": "e486c1c8f989c0d77bbe378748580eaf7980557215cb7076aed89e94332e1a4f",
+    "storyboardSha256": "1a1002c7f6d2e462d40bcba8d35b04949c26cd77872c277a215454055dae6c4c"
+  },
+  "recipe": {
+    "adaptationMode": "master",
+    "audioChannels": 2,
+    "audioCodec": "aac",
+    "audioSampleRate": 48000,
+    "durationPolicy": "versioned_platform_policy",
+    "fps": 30,
+    "height": 1080,
+    "id": "youtube-16x9-1080p",
+    "label": "YouTube 16:9 master",
+    "loudnessTargetLufs": -16,
+    "maxDurationSeconds": 21600,
+    "pixelFormat": "yuv420p",
+    "platformId": "youtube_video",
+    "policyObservedAt": "2026-07-13",
+    "readinessBlockers": [],
+    "safeZones": {
+      "bottom": 54,
+      "left": 96,
+      "right": 96,
+      "top": 54
+    },
+    "schemaVersion": 1,
+    "segmentationStrategy": "master",
+    "subtitleLayout": {
+      "horizontalAlign": "center",
+      "maxLines": 2,
+      "mode": "burn_and_sidecar",
+      "verticalAnchor": "bottom_safe_zone"
+    },
+    "subtitleMode": "burn_and_sidecar",
+    "transitionPolicy": "cut_r1",
+    "version": "1.0.0",
+    "videoCodec": "libx264",
+    "width": 1920
+  },
+  "recipeSha256": "093d36f8d5f2b33d7c0240ae8e17b640af955f1549f1d44c56c4cd1bfacc13ed",
+  "tools": {
+    "ffmpeg": "ffmpeg version 8.0.1-3ubuntu2 Copyright (c) 2000-2025 the FFmpeg developers",
+    "ffprobe": "ffprobe version 8.0.1-3ubuntu2 Copyright (c) 2007-2025 the FFmpeg developers",
+    "renderer": "hermest-board-media-r1",
+    "tts": {
+      "provider": "ffmpeg-flite",
+      "model": "flite",
+      "voice": "slt",
+      "language": "en",
+      "durationSeconds": 15.96,
+      "sampleRate": 48000,
+      "channels": 1,
+      "codec": "pcm_s16le",
+      "scriptSha256": "b08628b227e69ea505a8a3d2a98a6b47db052db9c4fbcea6e07fd8c19152b278"
+    }
+  },
+  "commands": [
+    {
+      "id": "tts",
+      "tool": "ffmpeg",
+      "argv": [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-n",
+        "-f",
+        "lavfi",
+        "-i",
+        "flite=textfile=<run>/narration.txt:voice=slt",
+        "-ar",
+        "48000",
+        "-ac",
+        "1",
+        "-c:a",
+        "pcm_s16le",
+        "<run>/narration.partial.wav"
+      ]
+    },
+    {
+      "id": "render",
+      "tool": "ffmpeg",
+      "argv": [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-n",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=0x111827:s=1920x1080:r=30:d=15.960",
+        "-i",
+        "<run>/narration.wav",
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-vf",
+        "drawtext=textfile=<run>/scene-001.txt:font='DejaVu Sans':fontcolor=white:fontsize=60:x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.45:boxborderw=40:expansion=none:enable='between(t,0.000,3.852)',drawtext=textfile=<run>/scene-002.txt:font='DejaVu Sans':fontcolor=white:fontsize=60:x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.45:boxborderw=40:expansion=none:enable='between(t,3.852,10.506)',drawtext=textfile=<run>/scene-003.txt:font='DejaVu Sans':fontcolor=white:fontsize=60:x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.45:boxborderw=40:expansion=none:enable='between(t,10.506,15.960)',subtitles=filename=<run>/narration.srt:force_style='FontName=DejaVu Sans,Alignment=2,MarginV=80'",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "21",
+        "-pix_fmt",
+        "yuv420p",
+        "-r",
+        "30",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-ar",
+        "48000",
+        "-ac",
+        "2",
+        "-shortest",
+        "-movflags",
+        "+faststart",
+        "<run>/youtube-16x9-1080p.partial.mp4"
+      ]
+    }
+  ],
+  "qc": {
+    "passed": true,
+    "checks": [
+      "input_preflight",
+      "storyboard_schema",
+      "narration_audio_probe",
+      "subtitle_timeline",
+      "video_streams_codecs_dimensions_duration",
+      "artifact_hashes"
+    ]
+  },
+  "blockers": [],
+  "warnings": [],
+  "lineage": {
+    "parents": [
+      "project:e486c1c8f989c0d77bbe378748580eaf7980557215cb7076aed89e94332e1a4f"
+    ],
+    "children": [
+      "artifact:f21fe05a35b21f49ab587fe2f3b571f8997366a957cb523784b661b48e539643",
+      "artifact:18fdb6de857b6f845aa9fd7766f6fc916ed76f2244ec318d57b7b73a016498b9",
+      "artifact:ac21389af5a5a7a3a7dc55290e1154254c8f4455d1a3be5acd4ada6731cdb558",
+      "artifact:47a561427b190e4be0da9f8e2741178a5055f5d44477a7632f1f231132e4d612"
+    ]
+  },
+  "artifacts": [
+    {
+      "name": "storyboard.json",
+      "type": "application/json",
+      "bytes": 1660,
+      "sha256": "f21fe05a35b21f49ab587fe2f3b571f8997366a957cb523784b661b48e539643",
+      "probe": {
+        "scenes": 3,
+        "schemaVersion": 1
+      }
+    },
+    {
+      "name": "narration.wav",
+      "type": "audio/wav",
+      "bytes": 1532238,
+      "sha256": "18fdb6de857b6f845aa9fd7766f6fc916ed76f2244ec318d57b7b73a016498b9",
+      "probe": {
+        "audio": {
+          "channels": 1,
+          "codec": "pcm_s16le",
+          "sampleRate": 48000
+        },
+        "bytes": 1532238,
+        "durationSeconds": 15.96,
+        "video": null
+      }
+    },
+    {
+      "name": "narration.srt",
+      "type": "application/x-subrip",
+      "bytes": 348,
+      "sha256": "ac21389af5a5a7a3a7dc55290e1154254c8f4455d1a3be5acd4ada6731cdb558",
+      "probe": {
+        "durationSeconds": 15.96
+      }
+    },
+    {
+      "name": "youtube-16x9-1080p.mp4",
+      "type": "video/mp4",
+      "bytes": 523430,
+      "sha256": "47a561427b190e4be0da9f8e2741178a5055f5d44477a7632f1f231132e4d612",
+      "probe": {
+        "audio": {
+          "channels": 2,
+          "codec": "aac",
+          "sampleRate": 48000
+        },
+        "bytes": 523430,
+        "durationSeconds": 15.96,
+        "video": {
+          "codec": "h264",
+          "height": 1080,
+          "width": 1920
+        }
+      }
+    }
+  ]
+}
