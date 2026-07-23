@@ -16,6 +16,10 @@ const execFileAsync = promisify(execFile);
 // Полное окно build-in (84 кадра/сцена) слишком дорого для гейта: лимит
 // сохраняет анимированный путь (секвенция+tpad), но держит прогон быстрым.
 process.env.HERMEST_SCENE_BUILD_FRAME_LIMIT = "6";
+// Гейт герметичен: форсируем офлайн B-roll (без сети) — иначе живой Pollinations
+// даёт недетерминированный текст warning между repeat-рендерами и валит manifest-равенство.
+// Бесплатный сетевой путь покрыт unit-каскадом (mock fetch); офлайн-рендер — отдельным media-тестом.
+process.env.HERMEST_BROLL_MODE = "deterministic";
 
 const enFixture = path.resolve("test/fixtures/minimal-board.json");
 const ruFixture = path.resolve("test/fixtures/russian-board.json");

@@ -70,7 +70,12 @@ export async function renderProject({
   const project = projectInput === undefined
     ? await preflightBoardInput(inputPath)
     : validateBoardProject(projectInput);
-  const brollMode = validateBrollMode(project?.brief?.brollMode);
+  // Env-override делает рендер герметичным (для гейта/офлайна): форсирует режим
+  // без обращения к сети, не меняя продуктовый дефолт (auto с бесплатным Pollinations).
+  const brollModeOverride = typeof process.env.HERMEST_BROLL_MODE === "string" && process.env.HERMEST_BROLL_MODE
+    ? process.env.HERMEST_BROLL_MODE
+    : undefined;
+  const brollMode = validateBrollMode(brollModeOverride ?? project?.brief?.brollMode);
   const estimatedStoryboard = buildStoryboard(project);
   const narration = buildNarrationScript(estimatedStoryboard);
   const recipe = getPlatformRecipe(platform);
