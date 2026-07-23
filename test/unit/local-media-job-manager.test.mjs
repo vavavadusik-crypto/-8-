@@ -687,3 +687,77 @@ test("artifact resolution is allowlisted to completed job outputs", async () => 
   assert.throws(() => manager.resolveArtifact(job.id, "../secret"), /not available/);
   assert.throws(() => manager.resolveArtifact(job.id, "unknown.txt"), /not available/);
 });
+
+// Resume-контракт (docs/RESUME_MILESTONE_HANDOFF.md): активные job переживают
+// «отключение» отправителя — их нельзя вычистить, пока они не терминальны,
+// а publicJob отдаёт createdAt для восстановления elapsed при reconnect.
+
+function passingRenderResult(outputDir) {
+  return {
+    outputDir,
+    manifestPath: `${outputDir}/master.manifest.json`,
+    manifestHashPath: `${outputDir}/master.manifest.json.sha256`,
+    manifest: {
+      recipe: { id: "youtube-16x9-1080p" },
+      qc: { passed: true },
+      blockers: [],
+      warnings: [],
+      artifacts: []
+    }
+  };
+}
+
+test("active render jobs are never evicted by capacity pressure", async () => {
+  const gates = [];
+  const manager = createLocalMediaJobManager({
+    maxConcurrent: 1,
+    maxJobs: 2,
+    executeRender: () => {
+      const gate = deferred();
+      gates.push(gate);
+      return gate.promise;
+    }
+  });
+
+  const running = manager.submit({ project: { title: "One", cards: [{ id: "scene", text: "Renderable scene" }] }, platform: "youtube_video" });
+  const queued = manager.submit({ project: { title: "Two", cards: [{ id: "scene", text: "Renderable scene" }] }, platform: "youtube_video" });
+  await Promise.resolve();
+  assert.equal(manager.get(running.id).status, "running");
+  assert.equal(manager.get(queued.id).status, "queued");
+
+  // Capacity-давление отвечает 429 и НЕ трогает активные записи.
+  assert.throws(
+    () => manager.submit({ project: { title: "Three", cards: [{ id: "scene", text: "Renderable scene" }] }, platform: "youtube_video" }),
+    error => {
+      assert.equal(error.message, "local_media_jobs_capacity");
+      assert.equal(error.statusCode, 429);
+      return true;
+    }
+  );
+  assert.equal(manager.get(running.id).status, "running");
+  assert.equal(manager.get(queued.id).status, "queued");
+
+  gates[0].resolve(passingRenderResult("/tmp/private-run-one"));
+  await manager.waitFor(running.id);
+  await Promise.resolve();
+
+  // Терминальный job уступает место новому; активный (running) остаётся.
+  const accepted = manager.submit({ project: { title: "Four", cards: [{ id: "scene", text: "Renderable scene" }] }, platform: "youtube_video" });
+  assert.equal(manager.get(running.id), null, "terminal job is evicted at capacity");
+  assert.equal(manager.get(queued.id).status, "running");
+  assert.equal(manager.get(accepted.id).status, "queued");
+});
+
+test("public render job exposes createdAt as an ISO timestamp for reconnect", async () => {
+  const manager = createLocalMediaJobManager({
+    now: () => "2026-07-23T12:00:00.000Z",
+    executeRender: () => new Promise(() => {})
+  });
+
+  const submitted = manager.submit({ project: { title: "Resume", cards: [{ id: "scene", text: "Renderable scene" }] }, platform: "youtube_video" });
+  assert.equal(submitted.createdAt, "2026-07-23T12:00:00.000Z");
+
+  const polled = manager.get(submitted.id);
+  assert.equal(polled.createdAt, "2026-07-23T12:00:00.000Z");
+  assert.ok(Number.isFinite(Date.parse(polled.createdAt)), "createdAt must stay parseable ISO");
+});
