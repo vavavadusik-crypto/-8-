@@ -2907,7 +2907,20 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
     }
 
+    function analyticsResolutionText(analytics) {
+      const res = analytics.resolution;
+      if (!res || !Number.isFinite(res.width) || !Number.isFinite(res.height)) return "—";
+      return analytics.aspectRatio ? `${res.width}×${res.height} · ${analytics.aspectRatio}` : `${res.width}×${res.height}`;
+    }
+
+    function analyticsQcText(qcPassed) {
+      if (qcPassed === true) return "пройдена ✓";
+      if (qcPassed === false) return "не пройдена ✗";
+      return "—";
+    }
+
     // Аналитика ролика: честная сводка из job.analytics (backend деривирует из verified manifest).
+    // Пустое состояние — блок скрыт; отсутствующие значения показываются как «—», без undefined/NaN.
     function renderRenderAnalytics(job) {
       const analytics = job && typeof job.analytics === "object" ? job.analytics : null;
       if (!analytics) {
@@ -2917,15 +2930,25 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       }
       const rows = [
         ["Длительность", formatDurationSeconds(analytics.durationSeconds)],
-        ["Громкость", Number.isFinite(analytics.integratedLufs) ? `${analytics.integratedLufs} LUFS` : "—"],
-        ["Размер MP4", formatMediaBytes(analytics.videoBytes)],
-        ["Сцен", Number.isFinite(analytics.sceneCount) ? String(analytics.sceneCount) : "—"],
-        ["Голос · язык", [analytics.voice, analytics.language].filter(Boolean).join(" · ") || "—"],
+        ["Разрешение", analyticsResolutionText(analytics)],
         ["Формат", analytics.recipeId || "—"],
+        ["Проверка (QC)", analyticsQcText(analytics.qcPassed)],
+        ["Громкость", Number.isFinite(analytics.integratedLufs) ? `${analytics.integratedLufs} LUFS` : "—"]
+      ];
+      if (Number.isFinite(analytics.truePeakDbtp)) rows.push(["True Peak", `${analytics.truePeakDbtp} dBTP`]);
+      rows.push(
+        ["Размер MP4", formatMediaBytes(analytics.videoBytes)],
+        ["Сцен", Number.isFinite(analytics.sceneCount) ? String(analytics.sceneCount) : "—"]
+      );
+      if (Number.isFinite(analytics.footageCount) && analytics.footageCount > 0) {
+        rows.push(["B-roll клипов", String(analytics.footageCount)]);
+      }
+      rows.push(
+        ["Голос · язык", [analytics.voice, analytics.language].filter(Boolean).join(" · ") || "—"],
         ["Музыка", analytics.musicUsed ? "да" : "нет"],
         ["Артефактов", Number.isFinite(analytics.artifactCount) ? String(analytics.artifactCount) : "—"],
         ["SHA-256 (MP4)", typeof analytics.videoSha256 === "string" && analytics.videoSha256 ? `${analytics.videoSha256.slice(0, 16)}…` : "—"]
-      ];
+      );
       const heading = document.createElement("h3");
       heading.textContent = "Аналитика ролика";
       const grid = document.createElement("dl");
@@ -2937,12 +2960,36 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         detail.textContent = value;
         grid.append(term, detail);
       }
+      const children = [heading, grid];
+      // Блокеры/предупреждения — честно показываем, если worker их вернул.
+      const notices = [
+        ["Блокеры", "analytics-blockers", Array.isArray(analytics.blockers) ? analytics.blockers : []],
+        ["Предупреждения", "analytics-warnings", Array.isArray(analytics.warnings) ? analytics.warnings : []]
+      ];
+      for (const [label, className, items] of notices) {
+        if (!items.length) continue;
+        const caption = document.createElement("p");
+        caption.className = "analytics-notice-label";
+        caption.textContent = label;
+        const list = document.createElement("ul");
+        list.className = className;
+        for (const item of items) {
+          const li = document.createElement("li");
+          li.textContent = String(item);
+          list.append(li);
+        }
+        children.push(caption, list);
+      }
       const copyButton = document.createElement("button");
       copyButton.className = "analytics-copy";
       copyButton.type = "button";
       copyButton.textContent = "Скопировать сводку";
       copyButton.addEventListener("click", () => {
-        const text = rows.map(([label, value]) => `${label}: ${value}`).join("\n");
+        const lines = rows.map(([label, value]) => `${label}: ${value}`);
+        for (const [label, , items] of notices) {
+          if (items.length) lines.push(`${label}: ${items.join("; ")}`);
+        }
+        const text = lines.join("\n");
         if (navigator.clipboard?.writeText) {
           navigator.clipboard.writeText(text).then(
             () => { copyButton.textContent = "Скопировано"; },
@@ -2950,7 +2997,8 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
           );
         }
       });
-      localRenderAnalytics.replaceChildren(heading, grid, copyButton);
+      children.push(copyButton);
+      localRenderAnalytics.replaceChildren(...children);
       localRenderAnalytics.hidden = false;
     }
 

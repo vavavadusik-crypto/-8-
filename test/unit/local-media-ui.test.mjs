@@ -78,6 +78,14 @@ test("board UI renders honest render analytics from job.analytics", async () => 
   assert.match(app, /Аналитика ролика/);
   assert.match(app, /LUFS/);
   assert.match(app, /videoSha256/);
+  // расширенный контракт M1: разрешение/формат, QC, true peak, b-roll, warnings/blockers
+  assert.match(app, /analyticsResolutionText/);
+  assert.match(app, /Проверка \(QC\)/);
+  assert.match(app, /aspectRatio/);
+  assert.match(app, /truePeakDbtp/);
+  assert.match(app, /analytics\.footageCount/);
+  assert.match(app, /analytics\.warnings/);
+  assert.match(app, /analytics\.blockers/);
   // аналитика отображается только на completed, не выдумывается для активных
   assert.match(app, /renderRenderAnalytics\(completed\)/);
   // безопасный DOM без innerHTML
