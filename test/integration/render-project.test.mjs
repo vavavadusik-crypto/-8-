@@ -330,3 +330,51 @@ test("composed render applies runnable Ken Burns drift to static backgrounds", {
     createHash("sha256").update(secondBytes).digest("hex")
   );
 });
+
+test("renderProject in deterministic mode creates verified MP4 without external API calls", {
+  timeout: 300000
+}, async t => {
+  const outputRoot = await mkdtemp(path.join(os.tmpdir(), "hermest-board-deterministic-root-"));
+  t.after(() => rm(outputRoot, { recursive: true, force: true }));
+  const projectWithDeterministicMode = JSON.parse(await readFile(enFixture, "utf8"));
+  projectWithDeterministicMode.brief.brollMode = "deterministic";
+  const tmpProjectPath = path.join(outputRoot, "project-deterministic.json");
+  await writeFile(tmpProjectPath, JSON.stringify(projectWithDeterministicMode), "utf8");
+
+  const result = await renderProject({
+    inputPath: tmpProjectPath,
+    outputDir: outputRoot,
+    platform: "youtube_video"
+  });
+
+  const diskManifest = JSON.parse(await readFile(result.manifestPath, "utf8"));
+  const video = diskManifest.artifacts.find(artifact => artifact.type === "video/mp4");
+
+  assert.equal(result.platform, "youtube_video");
+  assert.equal(result.recipeId, "youtube-16x9-1080p");
+  assert.equal(video.probe.video.codec, "h264");
+  assert.equal(video.probe.audio.codec, "aac");
+  assert.equal(video.probe.video.width, 1920);
+  assert.equal(video.probe.video.height, 1080);
+  assert.ok(video.probe.durationSeconds > 0);
+
+  // Проверяем, что все сцены имеют assetType "deterministic"
+  assert.ok(Array.isArray(diskManifest.scenes), "manifest.scenes is array");
+  for (const scene of diskManifest.scenes) {
+    assert.equal(scene.assetType, "deterministic", `scene ${scene.sceneIndex} assetType is deterministic`);
+  }
+
+  // Проверяем, что footage пустой или все записи — deterministic
+  if (diskManifest.footage.length > 0) {
+    for (const footageEntry of diskManifest.footage) {
+      assert.equal(footageEntry.assetType, "deterministic", `footage entry ${footageEntry.sceneIndex} assetType is deterministic`);
+    }
+  }
+
+  const independent = await independentlyProbeArtifacts(result, {
+    width: 1920,
+    height: 1080,
+    narration: { provider: "piper", language: "en", voice: "en_US-lessac-medium" }
+  });
+  assert.ok(independent.videoDurationSeconds > 0, "video has duration");
+});

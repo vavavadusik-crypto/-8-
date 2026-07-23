@@ -326,3 +326,152 @@ test("render manifest rejects malformed Piper narration argv", () => {
     TypeError
   );
 });
+
+test("render manifest includes footage with assetType", () => {
+  const manifest = build({
+    footage: [
+      {
+        sceneIndex: 1,
+        assetType: "stock-footage",
+        license: "pexels",
+        sha256: "abc123def4567890123456789012345678901234567890123456789012345678",
+        provenance: {
+          source: "stock",
+          provider: "pexels",
+          clipId: "12345",
+          author: "John Doe",
+          url: "https://example.com/video"
+        }
+      },
+      {
+        sceneIndex: 2,
+        assetType: "generated-image",
+        license: "pollinations-generated",
+        sha256: "def456abc7890123456789012345678901234567890123456789012345678901",
+        provenance: {
+          source: "generated",
+          provider: "pollinations",
+          model: "flux",
+          promptSha256: "xyz7890123456789012345678901234567890123456789012345678901234567"
+        }
+      }
+    ]
+  });
+  assert.ok(Array.isArray(manifest.footage), "footage is array");
+  assert.equal(manifest.footage.length, 2, "two footage entries");
+  assert.equal(manifest.footage[0].sceneIndex, 1, "first scene index");
+  assert.equal(manifest.footage[0].assetType, "stock-footage", "first assetType is stock-footage");
+  assert.equal(manifest.footage[0].license, "pexels", "first license");
+  assert.equal(manifest.footage[0].provider, "pexels", "first provider");
+  assert.equal(manifest.footage[1].sceneIndex, 2, "second scene index");
+  assert.equal(manifest.footage[1].assetType, "generated-image", "second assetType is generated-image");
+  assert.equal(manifest.footage[1].license, "pollinations-generated", "second license");
+  assert.equal(manifest.footage[1].provider, "pollinations", "second provider");
+});
+
+test("render manifest rejects footage without assetType", () => {
+  assert.throws(
+    () => build({
+      footage: [
+        {
+          sceneIndex: 1,
+          license: "pexels",
+          sha256: "abc123def4567890123456789012345678901234567890123456789012345678",
+          provenance: { source: "stock", provider: "pexels" }
+        }
+      ]
+    }),
+    /assetType/i,
+    "footage without assetType throws"
+  );
+});
+
+test("render manifest rejects footage with invalid assetType", () => {
+  assert.throws(
+    () => build({
+      footage: [
+        {
+          sceneIndex: 1,
+          assetType: "unknown-type",
+          license: "pexels",
+          sha256: "abc123def4567890123456789012345678901234567890123456789012345678",
+          provenance: { source: "stock", provider: "pexels" }
+        }
+      ]
+    }),
+    /invalid assetType/i,
+    "footage with invalid assetType throws"
+  );
+});
+
+test("render manifest includes per-scene assetType array", () => {
+  const storyboard = {
+    schemaVersion: 1,
+    scenes: [
+      { id: "scene-0", title: "Intro", narration: "Welcome", durationMs: 2000 },
+      { id: "scene-1", title: "Main", narration: "Main content", durationMs: 3000 },
+      { id: "scene-2", title: "End", narration: "Bye", durationMs: 1500 }
+    ]
+  };
+  const manifest = build({
+    storyboard,
+    footage: [
+      {
+        sceneIndex: 0,
+        assetType: "deterministic",
+        license: "n/a",
+        sha256: "0".repeat(64),
+        provenance: { source: "deterministic", provider: "hermest-board-scene-composer" }
+      },
+      {
+        sceneIndex: 1,
+        assetType: "stock-footage",
+        license: "pexels",
+        sha256: "a".repeat(64),
+        provenance: { source: "stock", provider: "pexels" }
+      },
+      {
+        sceneIndex: 2,
+        assetType: "generated-image",
+        license: "pollinations-generated",
+        sha256: "b".repeat(64),
+        provenance: { source: "generated", provider: "pollinations" }
+      }
+    ]
+  });
+  assert.ok(Array.isArray(manifest.scenes), "manifest.scenes is array");
+  assert.equal(manifest.scenes.length, 3, "three scene entries");
+  assert.equal(manifest.scenes[0].sceneIndex, 0, "scene 0 index");
+  assert.equal(manifest.scenes[0].title, "Intro", "scene 0 title");
+  assert.equal(manifest.scenes[0].assetType, "deterministic", "scene 0 assetType");
+  assert.equal(manifest.scenes[1].sceneIndex, 1, "scene 1 index");
+  assert.equal(manifest.scenes[1].title, "Main", "scene 1 title");
+  assert.equal(manifest.scenes[1].assetType, "stock-footage", "scene 1 assetType");
+  assert.equal(manifest.scenes[2].sceneIndex, 2, "scene 2 index");
+  assert.equal(manifest.scenes[2].title, "End", "scene 2 title");
+  assert.equal(manifest.scenes[2].assetType, "generated-image", "scene 2 assetType");
+});
+
+test("render manifest fills missing scene assetType with deterministic", () => {
+  const storyboard = {
+    schemaVersion: 1,
+    scenes: [
+      { id: "scene-0", title: "Intro", narration: "Welcome", durationMs: 2000 },
+      { id: "scene-1", title: "Main", narration: "Main content", durationMs: 3000 }
+    ]
+  };
+  const manifest = build({
+    storyboard,
+    footage: [
+      {
+        sceneIndex: 1,
+        assetType: "stock-footage",
+        license: "pexels",
+        sha256: "a".repeat(64),
+        provenance: { source: "stock", provider: "pexels" }
+      }
+    ]
+  });
+  assert.equal(manifest.scenes[0].assetType, "deterministic", "scene 0 defaults to deterministic");
+  assert.equal(manifest.scenes[1].assetType, "stock-footage", "scene 1 from footage");
+});
