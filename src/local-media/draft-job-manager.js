@@ -39,6 +39,7 @@ export function createDraftJobManager({
       id: String(idFactory()),
       status: "queued",
       createdAt: now(),
+      finishedAt: null,
       controller: new AbortController(),
       board: null,
       warnings: [],
@@ -70,7 +71,7 @@ export function createDraftJobManager({
     if (record.status === "completed" || record.status === "failed") {
       return { outcome: "not_cancellable", job: publicJob(record) };
     }
-    record.status = "cancelled";
+    markFinished(record, "cancelled");
     record.controller.abort(new Error("draft_job_cancelled"));
     return { outcome: "cancelled", job: publicJob(record) };
   }
@@ -85,25 +86,35 @@ export function createDraftJobManager({
       if (record.status === "cancelled" || record.controller.signal.aborted) return;
       record.board = result?.board ?? null;
       record.warnings = stringList(result?.warnings);
-      record.status = "completed";
+      markFinished(record, "completed");
     } catch (error) {
       // Поздняя ошибка после отмены тоже отбрасывается: статус и публичное
       // сообщение отменённого job не меняются.
       if (record.status === "cancelled" || record.controller.signal.aborted) {
-        record.status = "cancelled";
+        markFinished(record, "cancelled");
         return;
       }
-      record.status = "failed";
+      markFinished(record, "failed");
       record.error = sanitizeErrorMessage(error);
     }
+  }
+
+  // Терминальный переход фиксирует finishedAt один раз: от него (а не от
+  // createdAt) считается TTL — long-draft, работавший дольше ttl, после
+  // завершения остаётся опрашиваемым ещё полный ttl (resume после reload).
+  function markFinished(record, status) {
+    record.status = status;
+    if (!record.finishedAt) record.finishedAt = now();
   }
 
   function evictJobs() {
     const deadline = Date.parse(now()) - ttlMs;
     for (const [id, record] of jobs) {
+      // Активные (queued|running) не вычищаются НИКОГДА — только терминальные,
+      // и только спустя ttl после их терминального перехода (терминал+TTL).
       if (!FINISHED_STATUSES.includes(record.status)) continue;
-      const createdAt = Date.parse(record.createdAt);
-      if (Number.isFinite(deadline) && Number.isFinite(createdAt) && createdAt > deadline) continue;
+      const finishedAt = Date.parse(record.finishedAt || record.createdAt);
+      if (Number.isFinite(deadline) && Number.isFinite(finishedAt) && finishedAt > deadline) continue;
       jobs.delete(id);
     }
     // Map хранит порядок вставки, поэтому первыми выбывают самые старые завершённые.

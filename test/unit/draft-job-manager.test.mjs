@@ -222,6 +222,73 @@ test("draft job manager evicts finished jobs past the ttl and at capacity", asyn
   assert.ok(manager.get(fourth.id));
 });
 
+test("draft job older than ttl survives eviction while running and lives ttl past its terminal transition", async () => {
+  let clock = Date.parse("2026-07-23T10:00:00.000Z");
+  const gates = new Map();
+  const manager = createDraftJobManager({
+    runDraft: ({ topic }) => new Promise(resolve => { gates.set(topic, resolve); }),
+    now: () => new Date(clock).toISOString(),
+    ttlMs: 60_000,
+    maxJobs: 8
+  });
+
+  const longRunning = manager.submit({ topic: "Long reasoning" });
+  await waitForStatus(manager, longRunning.id, ["running"]);
+
+  // Драфт работает втрое дольше ttl: чужие submit гоняют eviction, но активный
+  // job не имеет права исчезнуть, пока не станет терминальным.
+  clock += 180_000;
+  manager.submit({ topic: "Sweep while running" });
+  const stillRunning = manager.get(longRunning.id);
+  assert.ok(stillRunning, "running job must survive ttl eviction");
+  assert.equal(stillRunning.status, "running");
+
+  gates.get("Long reasoning")({ board: { title: "Late board" } });
+  await waitForStatus(manager, longRunning.id, ["completed"]);
+
+  // TTL отсчитывается от терминального перехода, а не от создания: фронт после
+  // reload обязан успеть забрать результат long-draft'а в течение полного ttl.
+  clock += 30_000;
+  manager.submit({ topic: "Sweep freshly finished" });
+  const freshlyFinished = manager.get(longRunning.id);
+  assert.ok(freshlyFinished, "job finished less than ttl ago must stay pollable");
+  assert.equal(freshlyFinished.status, "completed");
+
+  clock += 61_000;
+  manager.submit({ topic: "Sweep stale" });
+  assert.equal(manager.get(longRunning.id), null, "terminal job is evicted after ttl from its finish");
+});
+
+test("cancelled draft job lives ttl from cancellation, not from creation", async () => {
+  let clock = Date.parse("2026-07-23T10:00:00.000Z");
+  const gates = new Map();
+  const manager = createDraftJobManager({
+    runDraft: ({ topic, signal }) => new Promise((resolve, reject) => {
+      gates.set(topic, resolve);
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    }),
+    now: () => new Date(clock).toISOString(),
+    ttlMs: 60_000,
+    maxJobs: 8
+  });
+
+  const submitted = manager.submit({ topic: "Long reasoning" });
+  await waitForStatus(manager, submitted.id, ["running"]);
+
+  clock += 180_000;
+  assert.equal(manager.cancel(submitted.id).outcome, "cancelled");
+
+  clock += 30_000;
+  manager.submit({ topic: "Sweep freshly cancelled" });
+  const freshlyCancelled = manager.get(submitted.id);
+  assert.ok(freshlyCancelled, "job cancelled less than ttl ago must stay pollable");
+  assert.equal(freshlyCancelled.status, "cancelled");
+
+  clock += 61_000;
+  manager.submit({ topic: "Sweep stale" });
+  assert.equal(manager.get(submitted.id), null, "cancelled job is evicted after ttl from cancellation");
+});
+
 test("draft job manager refuses to queue past capacity while jobs are running", () => {
   const manager = createDraftJobManager({
     runDraft: ({ signal }) => new Promise((resolve, reject) => {
