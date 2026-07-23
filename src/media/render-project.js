@@ -581,3 +581,16 @@ export async function runBrollCascade({ providers, request, onWarning = () => {}
   }
   return null;
 }
+
+const VALID_BROLL_MODES = Object.freeze(["auto", "free", "premium", "deterministic"]);
+
+export function validateBrollMode(mode) {
+  if (mode === undefined) return "auto";
+  if (typeof mode !== "string") {
+    throw new TypeError("Invalid brollMode: must be a string");
+  }
+  if (!VALID_BROLL_MODES.includes(mode)) {
+    throw new RangeError(`Invalid brollMode: "${mode}" (allowed: ${VALID_BROLL_MODES.join(", ")})`);
+  }
+  return mode;
+}
