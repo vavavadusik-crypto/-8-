@@ -27,24 +27,23 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Link media tools to the paths the code expects (/usr/bin)
+      - name: Install ffmpeg + ensure media tools at /usr/bin
         run: |
-          # Код зашивает /usr/bin/{ffmpeg,ffprobe,google-chrome}; на раннере они
-          # лежат в другом месте PATH — делаем симлинки, чтобы окружение совпало
-          # с локальным без изменения кода/тестов.
-          for tool in ffmpeg ffprobe; do
-            real="$(command -v "$tool")"
-            [ -n "$real" ] || { echo "::error::$tool not found on runner"; exit 1; }
-            [ -e "/usr/bin/$tool" ] || sudo ln -sf "$real" "/usr/bin/$tool"
-            echo "$tool -> $(readlink -f /usr/bin/$tool)"
-          done
-          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
-          if [ -n "$chrome" ] && [ ! -e /usr/bin/google-chrome ]; then
-            sudo ln -sf "$chrome" /usr/bin/google-chrome
-          fi
+          # Код зашивает /usr/bin/{ffmpeg,ffprobe,google-chrome}. apt кладёт
+          # ffmpeg/ffprobe ровно в /usr/bin — окружение совпадает с локальным.
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          test -x /usr/bin/ffmpeg  || { echo "::error::/usr/bin/ffmpeg missing"; exit 1; }
+          test -x /usr/bin/ffprobe || { echo "::error::/usr/bin/ffprobe missing"; exit 1; }
           /usr/bin/ffmpeg -version | head -1
           /usr/bin/ffprobe -version | head -1
-          /usr/bin/google-chrome --version 2>/dev/null | head -1 || echo "chrome: fallback to legacy scenes if absent"
+          # Chrome для сцен-композера: на ubuntu-latest обычно /usr/bin/google-chrome;
+          # если нет — симлинкуем stable, иначе рендер честно падает на legacy-сцены.
+          if [ ! -e /usr/bin/google-chrome ]; then
+            chrome="$(command -v google-chrome-stable || true)"
+            [ -n "$chrome" ] && sudo ln -sf "$chrome" /usr/bin/google-chrome || true
+          fi
+          /usr/bin/google-chrome --version 2>/dev/null | head -1 || echo "chrome: legacy-scene fallback"
 
       # ffmpeg/ffprobe/google-chrome предустановлены на ubuntu-latest.
       # piper + голосовые модели кэшируем, чтобы качать один раз.
