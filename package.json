@@ -21,6 +21,7 @@
     "render:project": "node scripts/render-project.mjs",
     "test:media": "node --test test/integration/render-project.test.mjs",
     "test:publish": "node --test test/integration/publish-webhook-smoke.test.mjs",
+    "test:workspace": "node --test test/integration/workspace-api.test.mjs",
     "check": "npm run validate && npm run test:unit && npm run smoke:api && npm run test:media && npm run test:publish && npm run build && npm run smoke"
   },
   "devDependencies": {
