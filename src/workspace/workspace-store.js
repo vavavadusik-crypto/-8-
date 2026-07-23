@@ -194,7 +194,7 @@ export function createWorkspaceStore({ dbPath = process.env.HERMEST_WORKSPACE_DB
     const existing = getProject(id);
     if (!existing) throw new Error("project_not_found");
     const now = new Date().toISOString();
-    const tags = data.tags !== undefined ? JSON.stringify(data.tags) : existing.tags;
+    const tags = data.tags !== undefined ? JSON.stringify(data.tags) : JSON.stringify(existing.tags);
     db.prepare(`
       update projects set
         name = ?, status = ?, due_date = ?, owner = ?, tags = ?, updated_at = ?
@@ -278,7 +278,7 @@ export function createWorkspaceStore({ dbPath = process.env.HERMEST_WORKSPACE_DB
     const existing = getCampaign(id);
     if (!existing) throw new Error("campaign_not_found");
     const now = new Date().toISOString();
-    const tags = data.tags !== undefined ? JSON.stringify(data.tags) : existing.tags;
+    const tags = data.tags !== undefined ? JSON.stringify(data.tags) : JSON.stringify(existing.tags);
     db.prepare(`
       update campaigns set
         name = ?, status = ?, due_date = ?, owner = ?, tags = ?, updated_at = ?
@@ -362,7 +362,7 @@ export function createWorkspaceStore({ dbPath = process.env.HERMEST_WORKSPACE_DB
     const existing = getContentItem(id);
     if (!existing) throw new Error("content_item_not_found");
     const now = new Date().toISOString();
-    const tags = data.tags !== undefined ? JSON.stringify(data.tags) : existing.tags;
+    const tags = data.tags !== undefined ? JSON.stringify(data.tags) : JSON.stringify(existing.tags);
     db.prepare(`
       update content_items set
         name = ?, type = ?, status = ?, owner = ?, tags = ?, updated_at = ?

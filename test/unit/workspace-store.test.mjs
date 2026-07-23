@@ -257,4 +257,44 @@ describe("workspace-store", () => {
     delete process.env.HERMEST_WORKSPACE_MULTI_USER;
     store.close();
   });
+
+  it("activity log: every mutation appends activity (create, update, delete, link)", () => {
+    const store = createWorkspaceStore({ dbPath: ":memory:" });
+    const client = store.createClient({ name: "Test Client", owner: "user_vadim" });
+    store.updateClient(client.id, { name: "Updated Client" });
+
+    const project = store.createProject({ name: "Test Project", owner: "user_vadim" });
+    store.updateProject(project.id, { name: "Updated Project" });
+
+    const campaign = store.createCampaign({ project_id: project.id, name: "Test Campaign", owner: "user_vadim" });
+    store.updateCampaign(campaign.id, { name: "Updated Campaign" });
+
+    const content = store.createContentItem({ name: "Test Content", owner: "user_vadim" });
+    store.updateContentItem(content.id, { name: "Updated Content" });
+
+    store.db.prepare(`insert into render_jobs (id, workspace_id, status, created_at, updated_at) values (?, ?, ?, ?, ?)`).run("job_act", "workspace_local", "queued", new Date().toISOString(), new Date().toISOString());
+    store.linkRenderJob(content.id, "job_act");
+
+    store.deleteContentItem(content.id);
+    store.deleteCampaign(campaign.id);
+    store.deleteProject(project.id);
+    store.deleteClient(client.id);
+
+    const activity = store.getActivity({ limit: 100 });
+    assert.ok(activity.some(a => a.action === "created" && a.entity_type === "client"));
+    assert.ok(activity.some(a => a.action === "updated" && a.entity_type === "client"));
+    assert.ok(activity.some(a => a.action === "deleted" && a.entity_type === "client"));
+    assert.ok(activity.some(a => a.action === "created" && a.entity_type === "project"));
+    assert.ok(activity.some(a => a.action === "updated" && a.entity_type === "project"));
+    assert.ok(activity.some(a => a.action === "deleted" && a.entity_type === "project"));
+    assert.ok(activity.some(a => a.action === "created" && a.entity_type === "campaign"));
+    assert.ok(activity.some(a => a.action === "updated" && a.entity_type === "campaign"));
+    assert.ok(activity.some(a => a.action === "deleted" && a.entity_type === "campaign"));
+    assert.ok(activity.some(a => a.action === "created" && a.entity_type === "content_item"));
+    assert.ok(activity.some(a => a.action === "updated" && a.entity_type === "content_item"));
+    assert.ok(activity.some(a => a.action === "deleted" && a.entity_type === "content_item"));
+    assert.ok(activity.some(a => a.action === "render_job_linked"));
+
+    store.close();
+  });
 });
