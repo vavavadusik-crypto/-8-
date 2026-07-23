@@ -60,11 +60,11 @@ describe("workspace-store", () => {
     store.close();
   });
 
-  it("list with filters (search, status, limit)", () => {
+  it("list with filters (search, status, tag, limit)", () => {
     const store = createWorkspaceStore({ dbPath: ":memory:" });
-    store.createClient({ name: "Alpha Inc", status: "active", owner: "user_vadim" });
-    store.createClient({ name: "Beta LLC", status: "archived", owner: "user_vadim" });
-    store.createClient({ name: "Gamma Corp", status: "active", owner: "user_vadim" });
+    store.createClient({ name: "Alpha Inc", status: "active", owner: "user_vadim", tags: ["enterprise"] });
+    store.createClient({ name: "Beta LLC", status: "archived", owner: "user_vadim", tags: ["startup"] });
+    store.createClient({ name: "Gamma Corp", status: "active", owner: "user_vadim", tags: ["enterprise", "tech"] });
 
     const active = store.listClients({ status: "active" });
     assert.equal(active.length, 2);
@@ -72,6 +72,9 @@ describe("workspace-store", () => {
     const search = store.listClients({ search: "Beta" });
     assert.equal(search.length, 1);
     assert.equal(search[0].name, "Beta LLC");
+
+    const tagFiltered = store.listClients({ tag: "enterprise" });
+    assert.equal(tagFiltered.length, 2);
 
     const limited = store.listClients({ limit: 2 });
     assert.equal(limited.length, 2);

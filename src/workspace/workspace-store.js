@@ -80,6 +80,10 @@ export function createWorkspaceStore({ dbPath = process.env.HERMEST_WORKSPACE_DB
       sql += " and name like ?";
       params.push(`%${filters.search}%`);
     }
+    if (filters.tag) {
+      sql += " and tags like ?";
+      params.push(`%"${filters.tag}"%`);
+    }
     sql += " order by updated_at desc";
     if (filters.limit) {
       sql += " limit ?";
@@ -159,6 +163,10 @@ export function createWorkspaceStore({ dbPath = process.env.HERMEST_WORKSPACE_DB
     if (filters.search) {
       sql += " and name like ?";
       params.push(`%${filters.search}%`);
+    }
+    if (filters.tag) {
+      sql += " and tags like ?";
+      params.push(`%"${filters.tag}"%`);
     }
     sql += " order by updated_at desc";
     if (filters.limit) {
@@ -240,6 +248,10 @@ export function createWorkspaceStore({ dbPath = process.env.HERMEST_WORKSPACE_DB
       sql += " and name like ?";
       params.push(`%${filters.search}%`);
     }
+    if (filters.tag) {
+      sql += " and tags like ?";
+      params.push(`%"${filters.tag}"%`);
+    }
     sql += " order by updated_at desc";
     if (filters.limit) {
       sql += " limit ?";
@@ -319,6 +331,10 @@ export function createWorkspaceStore({ dbPath = process.env.HERMEST_WORKSPACE_DB
     if (filters.search) {
       sql += " and name like ?";
       params.push(`%${filters.search}%`);
+    }
+    if (filters.tag) {
+      sql += " and tags like ?";
+      params.push(`%"${filters.tag}"%`);
     }
     sql += " order by updated_at desc";
     if (filters.limit) {
