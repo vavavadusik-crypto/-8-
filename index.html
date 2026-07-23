@@ -1052,6 +1052,16 @@
           <label class="check-item"><input id="generateVisualsToggle" type="checkbox"> Генерировать фоны сцен (бесплатно, Pollinations)</label>
           <div class="mini-note">Без ключа: ИИ рисует фон под каждую сцену. Выключено — тёмный брендированный фон. Свой FAL-ключ (в настройках) даёт премиум-качество.</div>
           <div class="field">
+            <label><span>Фон сцен (B-roll)</span></label>
+            <select id="brollMode">
+              <option value="auto">Авто — бесплатно, приоритет</option>
+              <option value="free">Только бесплатно / локально</option>
+              <option value="premium">Разрешить платные ключи (BYOK)</option>
+              <option value="deterministic">Только композиция (offline)</option>
+            </select>
+          </div>
+          <div class="mini-note">Авто и «бесплатно» работают без единого ключа: сток/генерация из бесплатных источников, иначе — брендированная композиция. «BYOK» подключает ваши платные ключи как премиум. Это монтаж сцен, не «text-to-video».</div>
+          <div class="field">
             <label><span>Музыка</span></label>
             <select id="musicBed">
               <option value="">Авто — подложка приглушается под голос</option>

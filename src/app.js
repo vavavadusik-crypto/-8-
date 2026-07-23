@@ -101,6 +101,9 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
     const narrationProviderSelect = document.getElementById("narrationProvider");
     const musicBedSelect = document.getElementById("musicBed");
     const generateVisualsToggle = document.getElementById("generateVisualsToggle");
+    const brollModeSelect = document.getElementById("brollMode");
+    // Держим в синхроне с VALID_BROLL_MODES в src/media/render-project.js
+    const BROLL_MODES = ["auto", "free", "premium", "deterministic"];
     const narrationHint = document.getElementById("narrationHint");
 
     const NARRATION_LANGUAGES = [
@@ -226,7 +229,7 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         schemaVersion: CONTENT_VERSION,
         title: "Hermest: оболочка над ИИ-агентами",
         view: { x: -120, y: -120, zoom: 1 },
-        brief: { language: "ru", voice: "", narrationProvider: "", music: "", generateVisuals: false },
+        brief: { language: "ru", voice: "", narrationProvider: "", music: "", generateVisuals: false, brollMode: "auto" },
         plan: [
           "1. Объяснить проблему: один чат быстро превращается в хаос, если в нем смешаны роли, память, инструменты и задачи.",
           "2. Показать Hermest как оболочку: один управляемый слой над агентами, файлами, API, памятью и логами.",
@@ -518,7 +521,10 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       const generateVisuals = typeof source.generateVisuals === "boolean"
         ? source.generateVisuals
         : Boolean(fallback.generateVisuals);
-      return { language, voice, narrationProvider, music, generateVisuals };
+      const brollMode = BROLL_MODES.includes(source.brollMode)
+        ? source.brollMode
+        : (BROLL_MODES.includes(fallback.brollMode) ? fallback.brollMode : "auto");
+      return { language, voice, narrationProvider, music, generateVisuals, brollMode };
     }
 
     function normalizeServer(input, fallback) {
@@ -1364,6 +1370,9 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
         : "Piper синтезирует локально и бесплатно. Языку соответствует свой каталог голосов.";
       musicBedSelect.value = state.brief.music === "off" ? "off" : "";
       generateVisualsToggle.checked = state.brief.generateVisuals === true;
+      if (brollModeSelect) {
+        brollModeSelect.value = BROLL_MODES.includes(state.brief.brollMode) ? state.brief.brollMode : "auto";
+      }
     }
 
     narrationLanguageSelect.addEventListener("change", () => {
@@ -1410,6 +1419,16 @@ import { normalizeCardImageUrl, renderCardImage } from "./card-image.js";
       syncNarrationControls();
       saveState("Настройка музыки сохранена");
     });
+    if (brollModeSelect) {
+      brollModeSelect.addEventListener("change", () => {
+        state.brief = normalizeBrief(
+          { ...state.brief, brollMode: brollModeSelect.value },
+          state.brief
+        );
+        syncNarrationControls();
+        saveState("Режим B-roll сохранён");
+      });
+    }
     generateVisualsToggle.addEventListener("change", () => {
       state.brief = normalizeBrief(
         { ...state.brief, generateVisuals: generateVisualsToggle.checked },

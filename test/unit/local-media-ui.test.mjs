@@ -114,3 +114,24 @@ test("Vite local worker is wired only to loopback dev and preview", async () => 
   assert.match(config, /createLocalMediaVitePlugin\(\{/);
   assert.equal((config.match(/host: "127\.0\.0\.1"/g) || []).length, 2);
 });
+
+test("board UI exposes a truthful B-roll mode selector wired into the brief", async () => {
+  const html = await readFile("index.html", "utf8");
+  const app = await readFile("src/app.js", "utf8");
+
+  // Селектор существует со всеми 4 режимами, совпадающими с VALID_BROLL_MODES бэкенда.
+  assert.match(html, /id="brollMode"/);
+  for (const mode of ["auto", "free", "premium", "deterministic"]) {
+    assert.match(html, new RegExp(`value="${mode}"`));
+  }
+  // Честное позиционирование: это монтаж, не «text-to-video».
+  assert.match(html, /не «text-to-video»/i);
+
+  // brollMode есть в дефолтном brief и валидируется в normalizeBrief с фолбэком "auto".
+  assert.match(app, /brollMode: "auto"/);
+  assert.match(app, /BROLL_MODES\s*=\s*\["auto", "free", "premium", "deterministic"\]/);
+  assert.match(app, /BROLL_MODES\.includes\(source\.brollMode\)/);
+  assert.match(app, /brollModeSelect\.addEventListener\("change"/);
+  // brollMode доезжает до рендера через brief: buildProjectDocument -> brief: state.brief.
+  assert.match(app, /brief: state\.brief/);
+});
