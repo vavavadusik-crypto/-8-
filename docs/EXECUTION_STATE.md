@@ -5,8 +5,13 @@
 > Протокол непрерывности: `docs/MASTER_PLAN_2026-07-19.md`, раздел 8.6.
 > Обновляется в начале каждой задачи и после каждого коммита. Это часть Definition of Done.
 
-UPDATED: 2026-07-23 (девятая сессия — +аналитика M1, шесть milestone в main)
-ACTIVE PHASE: шесть milestone в main @ 101013c (RC 0ef4d86, draft-cancel acf3ff3, render-cancel 7afda71, progress 34c8421, resume 88cad83, analytics-M1 101013c).
+UPDATED: 2026-07-23 (десятая сессия — PHASE 1 M1-ext ЗАКРЫТ, PHASE 2 запущена терминальным claude)
+ACTIVE PHASE: PHASE 2 (master-prompt) — бесплатный AI B-roll + provider-neutral video pipeline. Двухполосно.
+РЕГЛАМЕНТ: ~/Загрузки/HERMES_BOARD_OPEN_SOURCE_COMPLETION_MASTER_PROMPT.md (12 фаз 0–11 → бесплатный open-source RC). Без субагентов/workflow; терминальный claude = backend-полоса; я = оркестрация + frontend-полоса + review/merge/gate. Без публичного push до разрешения Вадима.
+
+PHASE 1 (M1-ext аналитика) ✅ ЗАКРЫТ @ d5e7f2a: обе полосы слиты (backend af46c4e полный контракт deriveRenderAnalytics, frontend 04442d2 расширенный блок). Полный gate с реальным ffmpeg: 345 unit/0 + 5 media/0 + build + smoke, EXIT 0. Детали — docs/milestones/M1_ANALYTICS.md.
+
+PHASE 2 IN_PROGRESS: терминальный claude запущен (PID 884295, лог scratchpad/m2-terminal-claude.log) в worktree ../hermest-board-backend на ветке feat/m2-broll-runtime от 04442d2. Спека — scratchpad/m2-broll-spec.md: аудит существующих (broll-source/image-source-cascade/research-sources/asset-cache) → унифицированный provider-контракт (kind/costClass/health/timeout/retry/cancel/provenance) → fail-open каскад (generative→stock→image+motion→deterministic) → provenance+assetType в manifest → квоты/таймауты → тесты без платных кредитов → 1 реальный бесплатный smoke. НЕ трогает index.html/src/app.js (моя полоса). NEXT для меня: дождаться терм.claude → ревью диффа → merge → полный gate → frontend B-roll mode selector + per-scene assetType labels → закрыть Gate M2 → PHASE 3.
 
 ## Конкурент InMedia (Инмедиа, Баку / Silkway Accelerator / Astana Hub) — бенчмарк
 Из расшифровки TikTok-ролика (@astana_hub): единая AI-платформа — генерация текста/картинок/видео/озвучки + публикация + аналитика + CRM; «вместо десятков сервисов — одна экосистема». VC: $85k инвестиций, $150k Azure, $25k Cloudflare, раунд $250k.
