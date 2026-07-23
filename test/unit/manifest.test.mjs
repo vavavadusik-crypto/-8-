@@ -326,3 +326,80 @@ test("render manifest rejects malformed Piper narration argv", () => {
     TypeError
   );
 });
+
+test("render manifest includes footage with assetType", () => {
+  const manifest = build({
+    footage: [
+      {
+        sceneIndex: 1,
+        assetType: "stock-footage",
+        license: "pexels",
+        sha256: "abc123def4567890123456789012345678901234567890123456789012345678",
+        provenance: {
+          source: "stock",
+          provider: "pexels",
+          clipId: "12345",
+          author: "John Doe",
+          url: "https://example.com/video"
+        }
+      },
+      {
+        sceneIndex: 2,
+        assetType: "generated-image",
+        license: "pollinations-generated",
+        sha256: "def456abc7890123456789012345678901234567890123456789012345678901",
+        provenance: {
+          source: "generated",
+          provider: "pollinations",
+          model: "flux",
+          promptSha256: "xyz7890123456789012345678901234567890123456789012345678901234567"
+        }
+      }
+    ]
+  });
+  assert.ok(Array.isArray(manifest.footage), "footage is array");
+  assert.equal(manifest.footage.length, 2, "two footage entries");
+  assert.equal(manifest.footage[0].sceneIndex, 1, "first scene index");
+  assert.equal(manifest.footage[0].assetType, "stock-footage", "first assetType is stock-footage");
+  assert.equal(manifest.footage[0].license, "pexels", "first license");
+  assert.equal(manifest.footage[0].provider, "pexels", "first provider");
+  assert.equal(manifest.footage[1].sceneIndex, 2, "second scene index");
+  assert.equal(manifest.footage[1].assetType, "generated-image", "second assetType is generated-image");
+  assert.equal(manifest.footage[1].license, "pollinations-generated", "second license");
+  assert.equal(manifest.footage[1].provider, "pollinations", "second provider");
+});
+
+test("render manifest rejects footage without assetType", () => {
+  assert.throws(
+    () => build({
+      footage: [
+        {
+          sceneIndex: 1,
+          license: "pexels",
+          sha256: "abc123def4567890123456789012345678901234567890123456789012345678",
+          provenance: { source: "stock", provider: "pexels" }
+        }
+      ]
+    }),
+    /assetType/i,
+    "footage without assetType throws"
+  );
+});
+
+test("render manifest rejects footage with invalid assetType", () => {
+  assert.throws(
+    () => build({
+      footage: [
+        {
+          sceneIndex: 1,
+          assetType: "unknown-type",
+          license: "pexels",
+          sha256: "abc123def4567890123456789012345678901234567890123456789012345678",
+          provenance: { source: "stock", provider: "pexels" }
+        }
+      ]
+    }),
+    /invalid assetType/i,
+    "footage with invalid assetType throws"
+  );
+});

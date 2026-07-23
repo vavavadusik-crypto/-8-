@@ -100,6 +100,13 @@ function normalizeMusic(music) {
   };
 }
 
+const VALID_ASSET_TYPES = Object.freeze([
+  "generative-clip",
+  "stock-footage",
+  "generated-image",
+  "deterministic"
+]);
+
 function normalizeFootage(footage) {
   if (!Array.isArray(footage)) return [];
   return footage.map((clip, clipIndex) => {
@@ -107,10 +114,15 @@ function normalizeFootage(footage) {
       throw new TypeError(`Invalid footage record at index ${clipIndex}`);
     }
     const sceneIndex = Number(clip.sceneIndex);
+    const assetType = safeText(clip.assetType);
     const license = safeText(clip.license);
     const sha256 = String(clip.sha256 || "");
     if (!Number.isSafeInteger(sceneIndex) || sceneIndex < 0) {
       throw new TypeError(`Invalid footage scene index at ${clipIndex}`);
+    }
+    if (!assetType) throw new TypeError(`Footage without assetType at index ${clipIndex}`);
+    if (!VALID_ASSET_TYPES.includes(assetType)) {
+      throw new TypeError(`Invalid assetType "${assetType}" at index ${clipIndex}`);
     }
     if (!license) throw new TypeError(`Footage without a license record at index ${clipIndex}`);
     if (!SHA256_PATTERN.test(sha256)) throw new TypeError(`Footage without a verified sha256 at index ${clipIndex}`);
@@ -120,6 +132,7 @@ function normalizeFootage(footage) {
     const promptSha256 = String(provenance.promptSha256 || "");
     return {
       sceneIndex,
+      assetType,
       license,
       sha256,
       source: safeText(provenance.source) || "unknown",
