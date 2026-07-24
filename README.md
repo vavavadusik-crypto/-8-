@@ -1,6 +1,7 @@
 # Hermes Board
 
 [![CI Gate](https://github.com/vavavadusik-crypto/-8-/actions/workflows/ci.yml/badge.svg)](https://github.com/vavavadusik-crypto/-8-/actions/workflows/ci.yml)
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg)](LICENSE)
 
 AI content studio: **topic → research → source cards → script/storyboard → live voiceover → real MP4 (16:9 + 9:16) → publish pack**. The local board is the creative control plane; the media worker deterministically assembles real videos via FFmpeg, while browser-based and BYOK AI models write scripts and draw visuals.
 
@@ -198,7 +199,7 @@ npm run check        # полный гейт (перед коммитом/рел
   требования площадок · `docs/PUBLIC_APIS.md` — публичные/free API и правила безопасности;
 - `docs/STORAGE_AND_AGENT_API.md`, `docs/DATABASE_SCHEMA_DRAFT.md`, `db/postgres-schema.sql` —
   storage-контракт и черновик Postgres · `docs/SECURITY_REVIEW.md`, `SECURITY.md` — безопасность;
-- `CHANGELOG.md` — история изменений · `LICENSE` — all rights reserved до решения владельца.
+- `CHANGELOG.md` — история изменений · `LICENSE` — GNU AGPL-3.0-or-later (сетевой copyleft).
 
 ---
 
@@ -210,3 +211,18 @@ npm run check        # полный гейт (перед коммитом/рел
 - **Durable-хранилище/мультитенант-auth** — есть guarded Postgres-фундамент и account-auth роуты
   (по умолчанию выключены); полноценное SaaS-ядро — отдельный этап.
 - **Semantic shorts** — вертикальный рендер по aspect ratio есть; смысловой перемонтаж — следующий срез.
+
+---
+
+## License
+
+Hermes Board is licensed under the **GNU Affero General Public License v3.0 or later** (`AGPL-3.0-or-later`). See [`LICENSE`](LICENSE).
+
+**What this means in practice:**
+
+- ✅ **Free to use** for any purpose, including commercial (done-for-you services, paid SaaS tiers, usage packs).
+- ✅ **Free to modify and self-host.**
+- 🔒 **Network copyleft:** if you deploy a modified version as a public/hosted service, you **must** make your modified source available to its users. Improvements to the hosted product stay open — a competitor cannot fork Hermes Board, close the source, and resell it as a proprietary SaaS.
+- 📎 All bundled dependencies are permissive (MIT/ISC/BSD-3-Clause/CC0) and AGPL-compatible — see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+The rationale (AGPL vs Apache-2.0) is documented in [`LICENSE_DECISION.md`](LICENSE_DECISION.md).

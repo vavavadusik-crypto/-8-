@@ -1,7 +1,9 @@
 # License Decision — Hermes Board
 
-**Status:** AWAITING OWNER DECISION (Vadim)  
+**Status:** ✅ DECIDED — AGPL-3.0-or-later (owner: Vadim, 2026-07-24)  
 **Date:** 2026-07-24 (Gate M6)
+
+> **Outcome:** The owner chose **AGPL-3.0-or-later**. The canonical license text is committed as `LICENSE`, `package.json` declares `"license": "AGPL-3.0-or-later"`, and the README documents the practical implications. The analysis below is retained as the rationale for the decision.
 
 ---
 

@@ -3,6 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
+  "license": "AGPL-3.0-or-later",
   "description": "Interactive AI-agent board for learning videos, scripts, roadmaps, voiceover, and publish packs.",
   "engines": {
     "node": ">=20.11 <23"
