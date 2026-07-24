@@ -1,4 +1,5 @@
 import { readJson, requireMethods, sendJson } from "../_lib/http.js";
+import { validateOutboundUrl } from "../../src/media/ssrf-guard.js";
 
 const AI_PROVIDERS = {
   openai: {
@@ -84,6 +85,9 @@ export default async function handler(request, response) {
       else upstreamPayload.max_tokens = maxOutputTokens;
     }
 
+    // AI_PROVIDERS endpoints are fixed, hard-coded https hosts (not user-supplied).
+    // Validate as defense-in-depth so no provider config can ever reach a private/internal target.
+    validateOutboundUrl(providerConfig.url);
     const upstream = await fetch(providerConfig.url, {
       method: "POST",
       headers: providerHeaders(provider, apiKey),
