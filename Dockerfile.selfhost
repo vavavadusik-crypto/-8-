@@ -42,6 +42,10 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/vite.config.mjs ./
 COPY --from=build /app/src ./src
+# api/ нужен рантайму: vite.config → src/local-media/candidate-persistence.js
+# импортирует api/_lib/{storage,publish-candidates}.js; без него preview-сервер
+# не грузит конфиг и не стартует. (api/_lib тянет обратно только в src/ — уже есть.)
+COPY --from=build /app/api ./api
 COPY --from=build /app/scripts/install-piper-ci.sh ./scripts/install-piper-ci.sh
 
 # npm ci (preview нуждается в devDeps для vite)
