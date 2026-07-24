@@ -123,3 +123,16 @@ We appreciate responsible disclosure from security researchers and users. Contri
 - **`SECURITY.md` Hall of Fame** (if you'd like to be listed)
 
 Thank you for helping keep Hermes Board secure! 🔒
+
+## Deployment trust model
+
+Hermes Board self-host is **single-tenant by default**. Understand the actor modes before exposing an instance to more than one person:
+
+- **`signed-session`** — a real logged-in account. Per-record ownership (workspace / tenant isolation) is enforced: an actor only sees records in its own workspace.
+- **`owner-token` / `development`** — the single operator of a self-hosted or local instance. These modes **intentionally bypass** per-record ownership: the operator owns every record. This is correct for a private, single-operator deployment.
+
+**Do not** expose an `owner-token` or `development` actor on a shared, multi-user deployment — it would grant access to all records. A multi-tenant deployment must run with account auth (`HERMEST_ACCOUNT_AUTH=1`, durable storage, a session secret) so that every request resolves to a `signed-session` actor.
+
+### Cookies over HTTPS
+
+Session cookies are marked `Secure` automatically on Vercel, when the request arrives over HTTPS (`X-Forwarded-Proto: https`, e.g. behind a TLS-terminating reverse proxy), or when `HERMEST_FORCE_SECURE_COOKIES=1` is set. If you self-host over HTTPS without a proxy that sets `X-Forwarded-Proto`, set `HERMEST_FORCE_SECURE_COOKIES=1` so the session cookie is never sent in the clear.

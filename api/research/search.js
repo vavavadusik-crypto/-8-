@@ -4,6 +4,7 @@ import {
   searchOpenLibrarySource,
   searchWikipediaSource
 } from "../../src/media/research-sources.js";
+import { validateOutboundUrl } from "../../src/media/ssrf-guard.js";
 
 const MAX_RESULTS_PER_SOURCE = 4;
 const REQUEST_TIMEOUT_MS = 7000;
@@ -184,6 +185,9 @@ async function fetchWithTimeout(url, options = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
+    // Research hosts are fixed (wikipedia/crossref/arxiv/openlibrary). Validate as
+    // defense-in-depth against non-https / private-IP targets before the request goes out.
+    validateOutboundUrl(url.toString());
     return await fetch(url, { ...options, signal: controller.signal });
   } catch (error) {
     if (error?.name === "AbortError") throw new Error(`${url.hostname}:timeout`);

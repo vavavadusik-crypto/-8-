@@ -225,7 +225,7 @@ async function handleAuthSignup(request, response) {
   if (!requireMethods(request, response, ["POST"])) return;
   const body = await readJson(request);
   const account = await createAccount(body);
-  const session = issueAccountSession(response, account, body.ttlSeconds);
+  const session = issueAccountSession(request, response, account, body.ttlSeconds);
   await appendAudit("account.created", {
     workspaceId: account.workspaceId,
     ownerUserId: account.id,
@@ -245,7 +245,7 @@ async function handleAuthLogin(request, response) {
   if (!requireMethods(request, response, ["POST"])) return;
   const body = await readJson(request);
   const account = await verifyAccountCredentials(body);
-  const session = issueAccountSession(response, account, body.ttlSeconds);
+  const session = issueAccountSession(request, response, account, body.ttlSeconds);
   await appendAudit("account.login", {
     workspaceId: account.workspaceId,
     ownerUserId: account.id,
@@ -264,7 +264,7 @@ async function handleAuthLogin(request, response) {
 async function handleAuthLogout(request, response) {
   if (!requireMethods(request, response, ["POST"])) return;
   const actor = getRequestActor(request);
-  clearSessionCookie(response);
+  clearSessionCookie(request, response);
   if (actor.authenticated) {
     await appendAudit("account.logout", {
       workspaceId: actor.workspaceId,
@@ -325,7 +325,7 @@ async function handleSessionBootstrap(request, response) {
   });
 }
 
-function issueAccountSession(response, account, ttlSecondsInput) {
+function issueAccountSession(request, response, account, ttlSecondsInput) {
   const ttlSeconds = clampTtlSeconds(ttlSecondsInput || 86_400);
   const now = Math.floor(Date.now() / 1000);
   const exp = now + ttlSeconds;
@@ -335,7 +335,7 @@ function issueAccountSession(response, account, ttlSecondsInput) {
     iat: now,
     exp
   });
-  setSessionCookie(response, token, ttlSeconds);
+  setSessionCookie(request, response, token, ttlSeconds);
   return {
     actor: {
       authenticated: true,
@@ -347,13 +347,22 @@ function issueAccountSession(response, account, ttlSecondsInput) {
   };
 }
 
-function setSessionCookie(response, token, maxAge) {
-  const secure = process.env.VERCEL ? "; Secure" : "";
+// Secure flag: on Vercel, when explicitly forced, or when the request arrived over
+// HTTPS (honoring X-Forwarded-Proto behind a TLS-terminating proxy). Without this a
+// self-host HTTPS deployment would send the session cookie in the clear.
+function secureCookieFlag(request) {
+  if (process.env.VERCEL || process.env.HERMEST_FORCE_SECURE_COOKIES === "1") return "; Secure";
+  const proto = String(request?.headers?.["x-forwarded-proto"] || "").split(",")[0].trim().toLowerCase();
+  return proto === "https" ? "; Secure" : "";
+}
+
+function setSessionCookie(request, response, token, maxAge) {
+  const secure = secureCookieFlag(request);
   response.setHeader("Set-Cookie", `hermest_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure}`);
 }
 
-function clearSessionCookie(response) {
-  const secure = process.env.VERCEL ? "; Secure" : "";
+function clearSessionCookie(request, response) {
+  const secure = secureCookieFlag(request);
   response.setHeader("Set-Cookie", `hermest_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure}`);
 }
 

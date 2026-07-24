@@ -21,6 +21,13 @@ export function canAccessRecord(record, actor) {
   return Boolean(actorWorkspaceId && recordWorkspaceId && actorWorkspaceId === recordWorkspaceId);
 }
 
+// Per-record ownership (workspace / tenant isolation) is enforced ONLY for
+// signed-session actors — real logged-in accounts in a multi-user deployment.
+// The "owner-token" and "development" actor modes intentionally bypass ownership:
+// they represent the single operator of a self-hosted / local instance who owns
+// every record by definition. This is safe for single-tenant self-host, but an
+// owner-token / development actor MUST NOT be exposed on a shared multi-tenant
+// deployment. See SECURITY.md → "Deployment trust model".
 function actorRequiresOwnership(actor) {
   return actor?.mode === "signed-session";
 }
