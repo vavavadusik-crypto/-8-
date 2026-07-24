@@ -5,8 +5,15 @@
 > Протокол непрерывности: `docs/MASTER_PLAN_2026-07-19.md`, раздел 8.6.
 > Обновляется в начале каждой задачи и после каждого коммита. Это часть Definition of Done.
 
-UPDATED: 2026-07-23 (десятая сессия — PHASE 1 M1-ext ЗАКРЫТ, PHASE 2 запущена терминальным claude)
-ACTIVE PHASE: PHASE 2 (master-prompt) — бесплатный AI B-roll + provider-neutral video pipeline. Двухполосно.
+UPDATED: 2026-07-24 (одиннадцатая сессия — Gate M4 + M6 ЗАКРЫТЫ, лицензия AGPL-3.0 принята Вадимом)
+ACTIVE PHASE: между фазами. Закрыты 1–4 (аналитика/B-roll/publishing/workspace) + 6 (open-source legal) + 9 (CI offload). NEXT: PHASE 7 (install/deploy — one-command self-host, Docker) двухполосно через терминального claude.
+
+## Gate M4 (workspace runtime) ✅ ЗАКРЫТ @ 1d03b2c (CI SUCCESS, облако)
+Терм. claude на feat/m4-workspace-runtime: SQLite (node:sqlite DatabaseSync) workspace store (clients/projects/campaigns/content/assets/render+publish jobs/notes/activity-log), API-роуты /api/product?route=workspace/*, миграции 0001, JSON import/export. ПО ХОДУ НАЙДЕН+ИСПРАВЛЕН реальный баг: in-memory БД теряла записи между запросами → persist на диск (1d03b2c). Полный CI-гейт в облаке (467 unit + 6 media реальный ffmpeg + publish + workspace-integration + build + smoke), EXIT 0. Ноут холодный — весь тяжёлый гейт ушёл на серверы GitHub (публичный репо = безлимит минут). Vercel deploy тоже SUCCESS.
+
+## Gate M6 (open-source legal/governance) ✅ ЗАКРЫТ @ 3e75d93 (merge) + 52e8f1e (license)
+Терм. claude на feat/m6-opensource-docs (31956bd): community-файлы (CONTRIBUTING/CODE_OF_CONDUCT/SECURITY/SUPPORT/GOVERNANCE/ROADMAP/CHANGELOG), issue/PR-шаблоны, THIRD_PARTY_NOTICES + docs/licenses.json (реальные депы pg 8.22.0 + vite 7.0.0, все пермиссивные MIT/ISC/BSD-3/CC0), README на EN с ЧЕСТНОЙ feature-matrix (VERIFIED/PARTIAL/PLANNED — auto-publish честно PARTIAL), CI-badge. LICENSE_DECISION: AGPL-3.0-or-later (рекоменд.) vs Apache-2.0. Ревьюил: фейк-успеха нет, LICENSE НЕ был закоммичен (ждал владельца).
+РЕШЕНИЕ ВЛАДЕЛЬЦА (Вадим, 2026-07-24): **AGPL-3.0-or-later** — защита клина free/open/BYOK/local/transparent сетевым copyleft (хостинг-форки обязаны открывать улучшения); коммерция (done-for-you, платные SaaS-тарифы) разрешена. Реализовано @ 52e8f1e: каноничный текст LICENSE (sha256 0d96a4ff…, 661 строк), package.json "license", README License-секция+badge, LICENSE_DECISION → DECIDED. `validate: ok`. CI прогоняет полный гейт с лицензией.
 РЕГЛАМЕНТ: ~/Загрузки/HERMES_BOARD_OPEN_SOURCE_COMPLETION_MASTER_PROMPT.md (12 фаз 0–11 → бесплатный open-source RC). Без субагентов/workflow; терминальный claude = backend-полоса; я = оркестрация + frontend-полоса + review/merge/gate. Без публичного push до разрешения Вадима.
 
 PHASE 1 (M1-ext аналитика) ✅ ЗАКРЫТ @ d5e7f2a: обе полосы слиты (backend af46c4e полный контракт deriveRenderAnalytics, frontend 04442d2 расширенный блок). Полный gate с реальным ffmpeg: 345 unit/0 + 5 media/0 + build + smoke, EXIT 0. Детали — docs/milestones/M1_ANALYTICS.md.
