@@ -1,37 +1,71 @@
-# Hermest Board
+# Hermes Board
 
-AI-студия контента: **тема → исследование → карточки-источники → сценарий/раскадровка →
-живая озвучка → настоящий MP4 (16:9 + 9:16) → пакет для публикации**. Локальная доска
-остаётся творческим control plane; media-worker детерминированно собирает реальные видео
-через FFmpeg, а браузерные и BYOK ИИ-модели пишут сценарий и рисуют визуалы.
+[![CI Gate](https://github.com/vavavadusik-crypto/-8-/actions/workflows/ci.yml/badge.svg)](https://github.com/vavavadusik-crypto/-8-/actions/workflows/ci.yml)
 
-Один проект = одна доска. Данные живут в браузере (`localStorage`); экспорт/импорт — JSON.
+AI content studio: **topic → research → source cards → script/storyboard → live voiceover → real MP4 (16:9 + 9:16) → publish pack**. The local board is the creative control plane; the media worker deterministically assembles real videos via FFmpeg, while browser-based and BYOK AI models write scripts and draw visuals.
+
+One project = one board. Data lives in the browser (`localStorage`); export/import as JSON.
+
+**Wedge:** Research-grounded content with citations (vs. competitors' black-box prompts) + BYOK economics (bring your own API keys, no per-"minute" markup) + transparent pipeline with human approval + locally runnable (privacy + truly free tier).
+
+Russian UI/docs below. Full English docs: `docs/` directory.
 
 ---
 
-## Быстрый старт
+## Quick Start
 
-Нужен **Node.js 20.11+** (проверено на 22) и `ffmpeg`/`ffprobe` в системе (для рендера видео).
+**Local setup** (requires Node.js 20.11+ and `ffmpeg`/`ffprobe` on your system):
 
 ```bash
 npm install
-npm run dev          # локальный dev-сервер + media-worker на 127.0.0.1:5173
+npm run dev          # local dev server + media worker on 127.0.0.1:5173
 ```
 
-Открой напечатанный адрес в браузере. Именно `npm run dev` (а не открытие `index.html`
-файлом) поднимает локальный worker, без которого не работают рендер видео и wizard
-«тема → видео».
+Open the printed address in your browser. `npm run dev` (not opening `index.html` as a file) starts the local worker, without which video rendering and the "topic → video" wizard won't work.
 
-**Первый запуск.** При первом открытии появляется приветствие «Из темы — в готовое видео»:
-введи тему и нажми «Начать» — она сразу попадёт в wizard. В любой момент главный сценарий
-открывается кнопкой **«🎬 Тема → видео»** в шапке (открывает панель, подставляет и фокусирует
-поле темы). Приветствие показывается один раз (флаг в `localStorage`).
+**GitHub Codespaces** (zero laptop load, cloud dev environment):
 
-Полная проверка перед коммитом/деплоем (включает реальный FFmpeg-рендер):
+1. Click **Code** → **Codespaces** → **Create codespace on main**
+2. Wait for container build (~2 min, includes ffmpeg)
+3. Terminal auto-runs `npm run dev`
+4. Click the forwarded port link (Ports tab, port 5173) → opens Hermes Board in browser
+
+**First run:** On first open, a welcome overlay "From topic to finished video" appears — enter a topic and click "Start" to jump into the wizard. Anytime, the main flow opens via the **"🎬 Topic → Video"** button in the header (opens panel, prefills and focuses the topic field). Welcome shown once (`localStorage` flag).
+
+Full check before commit/deploy (includes real FFmpeg renders):
 
 ```bash
-npm run check        # validate · unit · smoke:api · media (2 реальных MP4) · build · render smoke
+npm run check        # validate · unit · smoke:api · media (2 real MP4s) · build · render smoke
 ```
+
+---
+
+## Feature Matrix (Honest Statuses)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Interactive board (drag/rotate/scale cards, links, photos) | ✅ VERIFIED | Live in browser, auto-save to `localStorage` |
+| Topic → source cards wizard (async draft, cancel) | ✅ VERIFIED | Browser AI bridge (ChatGPT/Gemini/DeepSeek/Perplexity) or any OpenAI-compatible API (Ollama local free, OpenRouter, Groq, Together, etc.) |
+| Multilingual voiceover (Piper RU/EN/ES/DE/FR, ElevenLabs BYOK 29+ languages) | ✅ VERIFIED | Language is a project parameter, not hardcoded; timeline/SRT from measured audio duration; loudness normalization (loudnorm) |
+| Free visual generation (Pollinations, no key) | ✅ VERIFIED | Opt-in toggle "Generate backgrounds (free, Pollinations)" in render panel |
+| Premium visuals (FAL BYOK) + stock fallback (Pexels BYOK) | ✅ VERIFIED | Honest fail-open cascade: FAL → Pollinations → Pexels, each source yields to next with warning in manifest |
+| Deterministic FFmpeg render (H.264/AAC MP4, 1920×1080 + 1080×1920, SRT, thumbnails, manifest with hashes/provenance, SHA-256 sidecar) | ✅ VERIFIED | Every render goes to a private directory under physical `/tmp`; worker deliberately absent on public Vercel |
+| Premium motion composition (branded motion frames, Ken Burns drift, b-roll under transparent overlay, music with auto-ducking under voice) | ✅ VERIFIED | Procedural CC0 music in `assets/music/` |
+| BYOK provider keys (ElevenLabs / FAL / Pexels) | ✅ VERIFIED | Keys live only in local worker memory (`process.env`), never in project/`localStorage`/manifest |
+| Separate BYOK AI assistant (OpenAI-compatible providers) | ✅ VERIFIED | For queries about current board |
+| Service worker (network-first, aggressively caches only hashed `/assets/`) | ✅ VERIFIED | UI updates reach all devices; `/src/` and `/` always fresh |
+| Resume in-flight jobs after reload | ✅ VERIFIED | Active draft/render IDs persisted in `localStorage`, reconnect on boot |
+| Analytics block (duration/LUFS/size/scenes/voice/format/artifacts/SHA-256, copy summary) | ✅ VERIFIED | Shown on completed renders, hidden without analytics, mobile 375px |
+| Workspace storage (SQLite node:sqlite, clients/projects/campaigns/content/assets/jobs/notes) | ✅ VERIFIED | Durable across restarts, JSON import/export intact |
+| CI Gate (451 unit + 6 media real FFmpeg + build + smoke, all exit 0) | ✅ VERIFIED | GitHub Actions on every push/PR, public repo = unlimited minutes |
+| Docker image (serves SPA via static file server) | ✅ VERIFIED | `Dockerfile` + `.dockerignore`, build tested, HTTP 200 |
+| Semantic shorts (meaning-based scene selection, not just time crop) | ⏳ PLANNED | Vertical render by aspect ratio exists; semantic remixing next slice |
+| Multilingual editions (one project → same scenes in N languages, structured-contract translation) | ⏳ PLANNED | Architecture ready (language is edition property, not project) |
+| Auto-publish to social platforms (OAuth token exchange/refresh/revoke) | 🚧 PARTIAL | Skeleton exists, token exchange not implemented: requires durable storage, encrypted tokens, platform review. Board prepares publish pack and action queue; actual publishing after account connections |
+| Durable storage / multi-tenant auth | 🚧 PARTIAL | Guarded Postgres foundation + account-auth routes (disabled by default); full SaaS core is separate phase |
+| Billing / quotas / metering | ⏳ PLANNED | Not started |
+
+Legend: ✅ VERIFIED (tested, works) · 🚧 PARTIAL (skeleton/foundation exists, core missing) · ⏳ PLANNED (architecture ready, not implemented)
 
 ---
 

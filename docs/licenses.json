@@ -1,0 +1,176 @@
+{
+  "project": "hermest-board",
+  "version": "0.3.0",
+  "scannedAt": "2026-07-24",
+  "runtime": [
+    {
+      "name": "@esbuild/linux-x64",
+      "version": "0.28.1",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "@rollup/rollup-linux-x64-gnu",
+      "version": "4.62.2",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "@rollup/rollup-linux-x64-musl",
+      "version": "4.62.2",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "@types/estree",
+      "version": "1.0.9",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "esbuild",
+      "version": "0.28.1",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "fdir",
+      "version": "6.5.0",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "nanoid",
+      "version": "3.3.15",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "pg-cloudflare",
+      "version": "1.4.0",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "pg-connection-string",
+      "version": "2.14.0",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "pg-int8",
+      "version": "1.0.1",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "pg-pool",
+      "version": "3.14.0",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "pg-protocol",
+      "version": "1.15.0",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "pg-types",
+      "version": "2.2.0",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "pg",
+      "version": "8.22.0",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "pgpass",
+      "version": "1.0.5",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "picocolors",
+      "version": "1.1.1",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "picomatch",
+      "version": "4.0.5",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "postcss",
+      "version": "8.5.16",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "postgres-array",
+      "version": "2.0.0",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "postgres-bytea",
+      "version": "1.0.1",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "postgres-date",
+      "version": "1.0.7",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "postgres-interval",
+      "version": "1.2.0",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "rollup",
+      "version": "4.62.2",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "source-map-js",
+      "version": "1.2.1",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "split2",
+      "version": "4.2.0",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "tinyglobby",
+      "version": "0.2.17",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "vite",
+      "version": "7.3.6",
+      "license": "UNKNOWN",
+      "dev": false
+    },
+    {
+      "name": "xtend",
+      "version": "4.0.2",
+      "license": "UNKNOWN",
+      "dev": false
+    }
+  ],
+  "devtime": []
+}
