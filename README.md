@@ -15,7 +15,16 @@ Russian UI/docs below. Full English docs: `docs/` directory.
 
 ## Quick Start
 
-**Local setup** (requires Node.js 20.11+ and `ffmpeg`/`ffprobe` on your system):
+**Self-host (full, real MP4 rendering)** — Docker Compose (one command):
+
+```bash
+docker compose up
+# Open http://localhost:8080
+```
+
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for full self-host instructions (Docker + bare-metal).
+
+**Local dev** (requires Node.js 20.11+ and `ffmpeg`/`ffprobe` on your system):
 
 ```bash
 npm install
@@ -59,7 +68,8 @@ npm run check        # validate · unit · smoke:api · media (2 real MP4s) · b
 | Analytics block (duration/LUFS/size/scenes/voice/format/artifacts/SHA-256, copy summary) | ✅ VERIFIED | Shown on completed renders, hidden without analytics, mobile 375px |
 | Workspace storage (SQLite node:sqlite, clients/projects/campaigns/content/assets/jobs/notes) | ✅ VERIFIED | Durable across restarts, JSON import/export intact |
 | CI Gate (451 unit + 6 media real FFmpeg + build + smoke, all exit 0) | ✅ VERIFIED | GitHub Actions on every push/PR, public repo = unlimited minutes |
-| Docker image (serves SPA via static file server) | ✅ VERIFIED | `Dockerfile` + `.dockerignore`, build tested, HTTP 200 |
+| Docker image (static SPA) | ✅ VERIFIED | `Dockerfile` — frontend only, NO worker (nginx static); [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) |
+| Self-host image (full, real MP4 render) | ✅ VERIFIED | `Dockerfile.selfhost` + compose — ffmpeg/chromium/piper worker, all features; CI build proof |
 | Semantic shorts (meaning-based scene selection, not just time crop) | ⏳ PLANNED | Vertical render by aspect ratio exists; semantic remixing next slice |
 | Multilingual editions (one project → same scenes in N languages, structured-contract translation) | ⏳ PLANNED | Architecture ready (language is edition property, not project) |
 | Auto-publish to social platforms (OAuth token exchange/refresh/revoke) | 🚧 PARTIAL | Skeleton exists, token exchange not implemented: requires durable storage, encrypted tokens, platform review. Board prepares publish pack and action queue; actual publishing after account connections |

@@ -9,7 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added (M6 — Open-Source Preparation, 2026-07-24, IN PROGRESS)
+### Added (M7 — Self-Host Install/Deploy, 2026-07-24, IN PROGRESS)
+- **Self-host image** (`Dockerfile.selfhost`) — full worker with ffmpeg, chromium, piper TTS — real MP4 rendering, all features.
+- **Docker Compose** one-command quickstart (`docker-compose.yml`) — named volumes, BYOK env passthrough.
+- **Bare-metal installer** (`scripts/install.sh`) — idempotent Debian/Ubuntu install (ffmpeg + chromium + piper + build).
+- **Deploy mode matrix** in `docs/DEPLOYMENT.md` — honest comparison: self-host (full) vs frontend-only (static) vs Vercel (API skeleton).
+- **CI proof** (`.github/workflows/selfhost-image.yml`) — cloud-builds + smokes the self-host image (offload, no local Docker build).
+- **README.md** — self-host quickstart pointer, honest Docker Feature Matrix row (static vs full).
+
+### Added (M6 — Open-Source Preparation, 2026-07-24, COMPLETE)
 - **Community files** for public open-source release:
   - `CONTRIBUTING.md` (quickstart, PR workflow, first-time contributor guide, TDD rules, architecture invariants)
   - `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1)
@@ -19,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ROADMAP.md` (derived from MASTER_PLAN phases P0-P7, honest statuses)
   - `THIRD_PARTY_NOTICES.md` (full dependency tree + honest licenses)
   - `docs/licenses.json` (machine-readable license report)
-  - `LICENSE_DECISION.md` (AGPL-3.0-or-later vs Apache-2.0 recommendation, awaiting owner decision)
+  - `LICENSE` (AGPL-3.0-or-later adopted, owner decision 2026-07-24)
 - **README.md** honest feature matrix (VERIFIED/PARTIAL/PLANNED statuses), CI Gate badge, quickstart for GitHub Codespaces + local, architecture summary.
 
 ### Changed
