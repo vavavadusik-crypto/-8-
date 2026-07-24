@@ -47,4 +47,15 @@ describe("spawn safety — command injection guards", () => {
       error => error.message.includes("exited") || error.message.includes("No such file")
     );
   });
+
+  it("filename with newline injection stays literal", async () => {
+    // Тест: если бы spawn использовал shell, newline мог бы внедрить вторую команду.
+    // С array-форматом — это просто невалидное имя файла.
+    const maliciousFilename = "video.mp4\nrm -rf /tmp";
+    await assert.rejects(
+      async () => runMediaTool("ffprobe", ["-v", "error", maliciousFilename], { timeoutMs: 3000 }),
+      // ffprobe вернёт ошибку: нет файла с \n в имени, команда rm НЕ выполняется
+      error => error.message.includes("exited") || error.message.includes("No such file")
+    );
+  });
 });
