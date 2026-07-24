@@ -221,7 +221,10 @@ function extractOutputText(data) {
 
 function sanitizeProviderMessage(message) {
   return String(message || "")
-    .replace(/sk-proj-[a-zA-Z0-9_-]+/g, "[redacted_api_key]")
-    .replace(/sk-[a-zA-Z0-9_-]+/g, "[redacted_api_key]")
+    .replace(/sk-proj-[a-zA-Z0-9_-]+/g, "[REDACTED_KEY]")
+    .replace(/sk-[a-zA-Z0-9_-]{20,}/g, "[REDACTED_KEY]")
+    .replace(/Bearer\s+[a-zA-Z0-9_.-]{20,}/gi, "Bearer [REDACTED]")
+    .replace(/(fal|elevenlabs|pexels)[_-]?[a-zA-Z0-9_-]{20,}/gi, "[REDACTED_KEY]")
+    .replace(/(api[_-]?key|token|secret)[:\s=]+["']?[a-zA-Z0-9_.-]{20,}["']?/gi, "$1=[REDACTED]")
     .slice(0, 1200);
 }

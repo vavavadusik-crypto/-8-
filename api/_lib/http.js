@@ -19,14 +19,31 @@ export function methodNotAllowed(response, methods) {
 
 export function handleApiError(response, error) {
   const status = Number(error?.status || 500);
+  const message = error?.code || error?.message || "internal_error";
+
+  // Redact secrets from error messages
+  const sanitized = sanitizeErrorMessage(message);
+
   sendJson(response, status, {
     ok: false,
-    error: error?.code || error?.message || "internal_error",
-    note: error?.note || undefined,
+    error: sanitized,
+    note: error?.note ? sanitizeErrorMessage(error.note) : undefined,
     auth: error?.auth || undefined,
     storage: error?.storage || undefined,
     accountAuth: error?.accountAuth || undefined
   });
+}
+
+function sanitizeErrorMessage(message) {
+  if (typeof message !== "string") return message;
+
+  return message
+    .replace(/sk-proj-[a-zA-Z0-9_-]+/g, "[REDACTED_KEY]")
+    .replace(/sk-[a-zA-Z0-9_-]{20,}/g, "[REDACTED_KEY]")
+    .replace(/Bearer\s+[a-zA-Z0-9_.-]{20,}/gi, "Bearer [REDACTED]")
+    .replace(/api[_-]?key[:\s=]+["']?[a-zA-Z0-9_-]{8,}["']?/gi, "api_key=[REDACTED]")
+    .replace(/\b([A-Z_]+(?:API_KEY|_KEY|_SECRET))[=:\s]+["']?[^\s"']{8,}["']?/gi, "$1=[REDACTED]")
+    .slice(0, 1200);
 }
 
 export function requireMethods(request, response, methods) {
