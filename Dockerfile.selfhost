@@ -70,6 +70,8 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:${PORT}/ || exit 1
 
-# Runtime: npm run preview с --host 0.0.0.0 (переопределяет CLI-флаг из package.json)
-# --port читается из ENV PORT
-CMD ["sh", "-c", "npm run preview -- --host 0.0.0.0 --port ${PORT}"]
+# Runtime: vite preview напрямую, чтобы избежать конфликта --host из package.json
+# (npm run preview зашивает --host 127.0.0.1; двойной --host мог биндить только на
+# loopback, и порт-маппинг контейнера был бы недоступен). Здесь единственный --host
+# 0.0.0.0 гарантирует доступность снаружи. --port читается из ENV PORT.
+CMD ["sh", "-c", "npx vite preview --host 0.0.0.0 --port ${PORT}"]
