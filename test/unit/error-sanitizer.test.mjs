@@ -65,3 +65,55 @@ describe("error sanitizer — secret redaction", () => {
     assert.strictEqual(sanitizeLogContext(null), null);
   });
 });
+
+describe("error sanitizer — round 2 hardening", () => {
+  it("redacts secrets nested inside objects (recursion)", () => {
+    const context = {
+      provider: "fal",
+      user: { name: "vadim", apiKey: "fal_secret_nested_12345" }
+    };
+    const sanitized = sanitizeLogContext(context);
+    assert.strictEqual(sanitized.provider, "fal");
+    assert.strictEqual(sanitized.user.name, "vadim");
+    assert.strictEqual(sanitized.user.apiKey, "[REDACTED]");
+    assert.ok(!JSON.stringify(sanitized).includes("fal_secret_nested_12345"));
+  });
+
+  it("redacts secret-looking strings inside arrays", () => {
+    const context = {
+      logs: ["all good", "Authorization: Bearer sk-proj-arraysecrettoken1234567890"]
+    };
+    const sanitized = sanitizeLogContext(context);
+    assert.strictEqual(sanitized.logs[0], "all good");
+    assert.ok(!JSON.stringify(sanitized).includes("sk-proj-arraysecrettoken1234567890"));
+    assert.ok(sanitized.logs[1].includes("[REDACTED_SECRET]"));
+  });
+
+  it("caps recursion depth without throwing", () => {
+    let deep = { apiKey: "fal_deep_secret_value_123" };
+    for (let i = 0; i < 30; i += 1) deep = { nested: deep };
+    assert.doesNotThrow(() => sanitizeLogContext(deep));
+  });
+
+  it("survives circular references", () => {
+    const context = { name: "root", token: "fal_circular_secret_123456" };
+    context.self = context;
+    let sanitized;
+    assert.doesNotThrow(() => { sanitized = sanitizeLogContext(context); });
+    assert.strictEqual(sanitized.token, "[REDACTED]");
+  });
+
+  it("redacts base64 bearer tokens containing + / = (widened charset)", () => {
+    const message = "Authorization failed: Bearer YWJjZGVm+Z2hp/jklmZ29=abcdEFGHij";
+    const sanitized = sanitizeError(message);
+    assert.ok(!sanitized.includes("YWJjZGVm+Z2hp/jklmZ29=abcdEFGHij"));
+    assert.ok(sanitized.includes("[REDACTED_SECRET]"));
+  });
+
+  it("redacts base64 token= values containing + / =", () => {
+    const message = "token=YWJjZGVm+Z2hp/jklmZ29=abcdEFGHij failed";
+    const sanitized = sanitizeError(message);
+    assert.ok(!sanitized.includes("YWJjZGVm+Z2hp/jklmZ29=abcdEFGHij"));
+    assert.ok(sanitized.includes("[REDACTED_SECRET]"));
+  });
+});

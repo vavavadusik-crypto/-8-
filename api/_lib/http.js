@@ -37,10 +37,13 @@ export function handleApiError(response, error) {
 function sanitizeErrorMessage(message) {
   if (typeof message !== "string") return message;
 
+  // Bearer/token charsets include base64 (+ / =) so base64/base64url tokens
+  // do not slip past the redactor (Phase 8 round 2).
   return message
     .replace(/sk-proj-[a-zA-Z0-9_-]+/g, "[REDACTED_KEY]")
     .replace(/sk-[a-zA-Z0-9_-]{20,}/g, "[REDACTED_KEY]")
-    .replace(/Bearer\s+[a-zA-Z0-9_.-]{20,}/gi, "Bearer [REDACTED]")
+    .replace(/Bearer\s+[A-Za-z0-9_.+/=-]{20,}/gi, "Bearer [REDACTED]")
+    .replace(/token[:\s=]+["']?[A-Za-z0-9_.+/=-]{20,}["']?/gi, "token=[REDACTED]")
     .replace(/api[_-]?key[:\s=]+["']?[a-zA-Z0-9_-]{8,}["']?/gi, "api_key=[REDACTED]")
     .replace(/\b([A-Z_]+(?:API_KEY|_KEY|_SECRET))[=:\s]+["']?[^\s"']{8,}["']?/gi, "$1=[REDACTED]")
     .slice(0, 1200);

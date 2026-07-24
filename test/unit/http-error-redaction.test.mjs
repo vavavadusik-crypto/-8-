@@ -45,6 +45,20 @@ describe("http error handler — secret redaction", () => {
     assert.ok(payload.note.includes("[REDACTED]"));
   });
 
+  it("redacts base64 Bearer tokens containing + / = (widened charset)", () => {
+    const mockResponse = createMockResponse();
+    const error = {
+      status: 401,
+      message: "Authorization failed: Bearer YWJjZGVm+Z2hp/jklmZ29=abcdEFGHij"
+    };
+
+    handleApiError(mockResponse, error);
+
+    const payload = mockResponse.lastPayload;
+    assert.ok(!payload.error.includes("YWJjZGVm+Z2hp/jklmZ29=abcdEFGHij"));
+    assert.ok(payload.error.includes("Bearer [REDACTED]"));
+  });
+
   it("preserves non-secret error details", () => {
     const mockResponse = createMockResponse();
     const error = {
