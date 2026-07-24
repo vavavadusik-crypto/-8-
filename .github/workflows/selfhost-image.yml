@@ -1,0 +1,67 @@
+name: Self-host image build proof
+
+on:
+  push:
+    paths:
+      - 'Dockerfile.selfhost'
+      - 'docker-compose.yml'
+      - 'scripts/install*.sh'
+      - '.github/workflows/selfhost-image.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.selfhost
+          tags: hermes-board:selfhost-ci
+          push: false
+          load: true
+
+      - name: Start container
+        run: |
+          docker run -d -p 8080:8080 --name hermes-board-smoke hermes-board:selfhost-ci
+
+      - name: Wait for server (smoke test)
+        run: |
+          timeout=60
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if curl -f -s http://localhost:8080/ >/dev/null 2>&1; then
+              echo "✅ Server is up at http://localhost:8080"
+              exit 0
+            fi
+            echo "⏳ Waiting for server... ($elapsed/$timeout s)"
+            sleep 2
+            elapsed=$((elapsed + 2))
+          done
+          echo "❌ Server did not respond after ${timeout}s"
+          exit 1
+
+      - name: Verify HTTP 200
+        run: |
+          curl -f http://localhost:8080/ || {
+            echo "❌ Server returned non-200"
+            exit 1
+          }
+          echo "✅ HTTP 200 OK"
+
+      - name: Logs (on failure)
+        if: failure()
+        run: docker logs hermes-board-smoke
+
+      - name: Teardown
+        if: always()
+        run: |
+          docker stop hermes-board-smoke || true
+          docker rm hermes-board-smoke || true

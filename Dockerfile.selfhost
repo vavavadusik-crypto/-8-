@@ -1,0 +1,75 @@
+# Hermest Board — самостоятельный self-host образ с РЕАЛЬНЫМ рендером MP4
+# (ffmpeg + chromium + piper + vite preview worker). Frontend + media worker,
+# полный стек. Без внешних ключей генерация детерминистична (офлайн-готова).
+
+FROM node:22-bookworm AS build
+
+# ========== Этап 1: сборка приложения ==========
+WORKDIR /app
+
+# Dependencies: devDeps нужны для vite build, НЕ удаляем
+COPY package*.json ./
+RUN npm ci
+
+# Исходники → build
+COPY . .
+RUN npm run build
+
+# ========== Этап 2: runtime с полным стеком медиа-инструментов ==========
+FROM node:22-bookworm
+
+# Установка ffmpeg + chromium (apt, bookworm репо)
+RUN apt-get update -qq && \
+    apt-get install -y -qq --no-install-recommends \
+      ffmpeg \
+      chromium \
+      curl \
+      ca-certificates && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Проверка: ffmpeg/ffprobe должны быть в /usr/bin
+RUN test -x /usr/bin/ffmpeg || { echo "ffmpeg missing"; exit 1; }
+RUN test -x /usr/bin/ffprobe || { echo "ffprobe missing"; exit 1; }
+
+# Chromium в bookworm → /usr/bin/chromium; симлинк, чтобы env HERMEST_CHROME_PATH=/usr/bin/chromium работал
+RUN test -x /usr/bin/chromium || { echo "chromium missing"; exit 1; }
+
+WORKDIR /app
+
+# Копируем сборку и установщик piper
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/package*.json ./
+COPY --from=build /app/vite.config.mjs ./
+COPY --from=build /app/src ./src
+COPY --from=build /app/scripts/install-piper-ci.sh ./scripts/install-piper-ci.sh
+
+# npm ci (preview нуждается в devDeps для vite)
+RUN npm ci
+
+# Установка piper + voices (в HOME образа — /root)
+# install-piper-ci.sh кладёт в ~/.local/opt/piper/piper + ~/.local/share/piper/voices
+RUN bash scripts/install-piper-ci.sh
+
+# Проверка piper binary
+RUN test -x /root/.local/opt/piper/piper || { echo "piper binary missing"; exit 1; }
+
+# Non-root user для runtime (опционально; оставляем root для упрощения)
+# Если требуется non-root — создать пользователя, chown /app и HOME пути.
+# Сейчас — root, для доступа к /root/.local/opt/piper и /root/.local/share/piper.
+
+# Env defaults
+ENV PORT=8080
+ENV HERMEST_CHROME_PATH=/usr/bin/chromium
+ENV NODE_ENV=production
+
+# Expose
+EXPOSE 8080
+
+# Health check (preview server отдаёт index.html на /)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:${PORT}/ || exit 1
+
+# Runtime: npm run preview с --host 0.0.0.0 (переопределяет CLI-флаг из package.json)
+# --port читается из ENV PORT
+CMD ["sh", "-c", "npm run preview -- --host 0.0.0.0 --port ${PORT}"]
