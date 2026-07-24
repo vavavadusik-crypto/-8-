@@ -64,6 +64,64 @@ describe("error sanitizer — secret redaction", () => {
     assert.strictEqual(sanitizeError(undefined), "unknown_error");
     assert.strictEqual(sanitizeLogContext(null), null);
   });
+
+  it("redacts Bearer tokens containing base64 +/= characters", () => {
+    const sanitized = sanitizeError("Authorization: Bearer abc+/=def");
+    assert.ok(!sanitized.includes("abc+/=def"));
+    assert.ok(sanitized.includes("[REDACTED_SECRET]"));
+  });
+});
+
+describe("error sanitizer — nested context redaction", () => {
+  it("redacts secret fields nested inside objects", () => {
+    const context = {
+      provider: "fal",
+      user: { name: "vadim", apiKey: "fal_secret_key_12345" },
+      status: "failed"
+    };
+    const sanitized = sanitizeLogContext(context);
+    assert.strictEqual(sanitized.provider, "fal");
+    assert.strictEqual(sanitized.user.name, "vadim");
+    assert.strictEqual(sanitized.user.apiKey, "[REDACTED]");
+    assert.strictEqual(sanitized.status, "failed");
+  });
+
+  it("redacts secret fields nested inside arrays", () => {
+    const context = {
+      accounts: [
+        { id: 1, token: "sk-proj-dangerous123456789" },
+        { id: 2, label: "safe" }
+      ]
+    };
+    const sanitized = sanitizeLogContext(context);
+    assert.strictEqual(sanitized.accounts[0].id, 1);
+    assert.strictEqual(sanitized.accounts[0].token, "[REDACTED]");
+    assert.strictEqual(sanitized.accounts[1].label, "safe");
+  });
+
+  it("redacts secret-looking string values nested in arrays", () => {
+    const context = {
+      headers: ["Content-Type: application/json", "Bearer sk-proj-leaky1234567890abc"]
+    };
+    const sanitized = sanitizeLogContext(context);
+    assert.strictEqual(sanitized.headers[0], "Content-Type: application/json");
+    assert.ok(!sanitized.headers[1].includes("sk-proj-leaky1234567890abc"));
+    assert.ok(sanitized.headers[1].includes("[REDACTED"));
+  });
+
+  it("survives circular references without throwing", () => {
+    const context = { safe: "ok" };
+    context.self = context;
+    const sanitized = sanitizeLogContext(context);
+    assert.strictEqual(sanitized.safe, "ok");
+  });
+
+  it("caps recursion depth on deeply nested objects", () => {
+    let deep = { apiKey: "fal_secret_deep_12345" };
+    for (let i = 0; i < 50; i++) deep = { nested: deep };
+    // Should not throw (stack overflow / hang) on pathological nesting
+    assert.doesNotThrow(() => sanitizeLogContext(deep));
+  });
 });
 
 describe("error sanitizer — round 2 hardening", () => {

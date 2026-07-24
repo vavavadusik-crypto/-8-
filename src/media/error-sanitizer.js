@@ -5,7 +5,9 @@
 const API_KEY_PATTERNS = [
   /sk-proj-[a-zA-Z0-9_-]+/g,
   /sk-[a-zA-Z0-9_-]{20,}/g,
-  /Bearer\s+[A-Za-z0-9_.+/=-]{20,}/gi,
+  // "Bearer " is itself a strong secret signal, so redact even short tokens
+  // (the credential after the scheme is never meant to appear in a log).
+  /Bearer\s+[A-Za-z0-9_.+/=-]{3,}/gi,
   /api[_-]?key[:\s=]+["']?[a-zA-Z0-9_-]{8,}["']?/gi,
   /token[:\s=]+["']?[A-Za-z0-9_.+/=-]{20,}["']?/gi,
   /fal_[a-zA-Z0-9_-]{8,}/gi,
