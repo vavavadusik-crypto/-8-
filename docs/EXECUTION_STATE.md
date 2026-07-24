@@ -173,3 +173,8 @@ BLOCKERS: (1) Вадим слушает ru-fullstack-{aterna,george}.mp4 и вы
 ## Журнал чекпоинтов (новые сверху)
 
 - 2026-07-19 · Fable 5 · Мастер-план финализирован (мультиязычность, конкурентный анализ, бэклог B1–B11 включён в фазы), скопирован в репо, создан EXECUTION_STATE. Начата P0.
+
+## PHASE 4 ✅ GATE M4 ЗАКРЫТ @ 1d03b2c (CI Gate SUCCESS в облаке)
+SQLite (node:sqlite) workspace: clients/projects/campaigns/content/assets/render+publish jobs/notes + миграции + JSON import/export + backup/delete cascade + поиск/фильтры + tenant/permission (single+multi-user, negative-тест cross-user) + activity-log. 467 unit + workspace integration в гейте. Терминальный claude поймал реальный баг (in-memory БД теряла записи) → 1d03b2c persist-on-disk + self-contained тест. Merge ccf2edd, gate wiring 6f73371, fix 1d03b2c. Offload полностью: гейт гоняется в GitHub Actions, ноут холодный.
+
+## PHASE 6 IN_PROGRESS (open-source legal/docs): терминальный claude на feat/m6-opensource-docs. Спека scratchpad/m6-opensource-spec.md: license audit (только pg в проде; assets/music=CC0; голоса/визуалы качаются в runtime, не в репо) + THIRD_PARTY_NOTICES + LICENSE_DECISION (рекоменд. AGPL-3.0, но LICENSE НЕ коммитим — единственное решение Вадима) + community files (README с честной feature-matrix + CI-badge, CONTRIBUTING/CoC/SECURITY/SUPPORT/GOVERNANCE/ROADMAP/CHANGELOG, issue/PR-шаблоны). TEXT-ONLY, ноут холодный. NEXT: ревью → merge → Gate M6 → PHASE 7 (установка/деплой) → 8 (security) → 10 (доки) → 11 (RC).
